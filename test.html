@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+<head>
+    <script src="quill.js"></script>
+    <script>
+
+    const print = thing => console.log(thing);
+
+    const sources = {
+        "test.quill": `
+
+// fun fib(n: int) -> int {
+//     if n <= 1 { return n }
+//     return fib(n - 1) + fib(n - 2)
+// }
+
+fun fib(n: int) -> int =
+    if n <= 1 { n }
+    else { fib(n - 1) + fib(n - 2) }
+
+fun pow2(n: float) -> float = n * n
+
+fun main() {
+    print(fib(15))
+}
+
+        `
+    };
+
+    const compiled = quill.compile(sources);
+    console.log(compiled);
+    eval(compiled);
+    main();
+
+    </script>
+</head>
+<body></body>
+</html>
