@@ -7,6 +7,7 @@
     const print = thing => console.log(thing);
     const add = (a, b) => a + b;
     const sqrt = x => Math.sqrt(x);
+    const PI = Math.PI;
 
     const sources = {
         "test.quill": `
@@ -22,12 +23,15 @@ fun fib(n: Int) -> Int =
     else { fib(n - 1) + fib(n - 2) }
 
 fun main() {
-    print_int(fib(15))
-    print_int(add_int(5, 10))
-    print_float(sqrt(25))
+    print_float(TAU)
 }
 
-fun test(a: Int) -> Int = a * 2
+ext val PI: Float = PI
+
+fun double(a: Float) -> Float = a * 2.0
+
+val TAU: Float = double(PI)
+
         `
     };
 

@@ -1,8 +1,8 @@
 
 /*
- * - [*] External Functions
+ * - ...
  * - [*] More useful errors
- * - [ ] External Variables
+ * - [*] External functions and variables
  * - [ ] Module System
  * - [ ] Lambdas and Anonymous Functions
  * - [ ] Custom Types (Records)
@@ -666,108 +666,134 @@ const quill = (function() {
                 );
             }
         };
-        switch(state.curr().type) {
-            case TokenType.KeywordFun: 
-            case TokenType.KeywordExt: {
-                assertTopLevel(true);
-                const start = state.curr();
-                const isExternal = start.type === TokenType.KeywordExt;
-                if(isExternal) {
+        const start = state.curr();
+        const parseFunction = isExternal => {
+            assertTopLevel(true);
+            state.assertType(TokenType.KeywordFun);
+            state.next();
+            state.assertType(TokenType.Identifier);
+            const name = state.curr().content;
+            state.next();
+            const args = parseArgumentList(state);
+            let returnType;
+            if(isExternal) {
+                state.assertType(
+                    TokenType.ArrowRight, TokenType.Equal
+                );
+            } else {
+                state.assertType(
+                    TokenType.ArrowRight,
+                    TokenType.BraceOpen, TokenType.Equal
+                );
+            }
+            if(state.curr().type == TokenType.ArrowRight) {
+                state.assertType(TokenType.ArrowRight);
+                state.next();
+                returnType = parseType(state);
+            } else {
+                returnType = {
+                    type: NodeType.Identifier, value: "Unit",
+                    path: start.path, start: start.start, end: start.end
+                };
+            }
+            let body = null;
+            let externalName = null;
+            let end = returnType.end;
+            if(!isExternal) {
+                state.assertType(
+                    TokenType.BraceOpen, TokenType.Equal
+                );
+                if(state.curr().type == TokenType.Equal) {
                     state.next();
-                    state.assertType(TokenType.KeywordFun);
+                    const value = parseExpression(state);
+                    body = [
+                        {
+                            type: NodeType.Return, value,
+                            path: value.path, start: value.start,
+                            end: value.end
+                        }
+                    ];
+                    end = value.end;
+                } else {
+                    state.assertType(TokenType.BraceOpen);
+                    state.next();
+                    body = parseStatementList(state);
+                    state.assertType(TokenType.BraceClose);
+                    end = state.curr().end;
+                    state.next();
                 }
+            } else {
+                state.assertType(TokenType.Equal);
                 state.next();
                 state.assertType(TokenType.Identifier);
-                const name = state.curr().content;
+                externalName = state.curr().content;
                 state.next();
-                const args = parseArgumentList(state);
-                let returnType;
-                if(isExternal) {
-                    state.assertType(
-                        TokenType.ArrowRight, TokenType.Equal
-                    );
+            }
+            return {
+                type: NodeType.Function, isExternal, 
+                name, args, returnType, body, externalName,
+                path: start.path, start: start.start, end
+            };
+        };
+        const parseVariable = isExternal => {
+            const isMutable = state.curr().type 
+                == TokenType.KeywordMut;
+            state.next();
+            state.assertType(TokenType.Identifier);
+            const name = state.curr().content;
+            state.next();
+            if(!isExternal) {
+                state.assertType(TokenType.Equal, TokenType.Colon);
+            } else {
+                state.assertType(TokenType.Colon);
+            }
+            let valueType = null;
+            if(state.curr().type === TokenType.Colon) {
+                state.next();
+                valueType = parseType(state);
+            }
+            state.assertType(TokenType.Equal);
+            state.next();
+            let value = null;
+            let externalName = null;
+            let end;
+            if(!isExternal) {
+                value = parseExpression(state);
+                end = value.end;
+            } else {
+                state.assertType(TokenType.Identifier);
+                externalName = state.curr().content;
+                end = state.curr().end;
+                state.next();
+            }
+            return {
+                type: NodeType.Variable, isExternal, isMutable, 
+                name, valueType, value, externalName,
+                path: start.path, start: start.start, end
+            };
+        };
+        switch(state.curr().type) {
+            case TokenType.KeywordExt: {
+                state.next();
+                state.assertType(
+                    TokenType.KeywordFun,
+                    TokenType.KeywordVal, TokenType.KeywordMut
+                );
+                if(state.curr().type === TokenType.KeywordFun) {
+                    return parseFunction(true);    
                 } else {
-                    state.assertType(
-                        TokenType.ArrowRight,
-                        TokenType.BraceOpen, TokenType.Equal
-                    );
+                    return parseVariable(true);
                 }
-                if(state.curr().type == TokenType.ArrowRight) {
-                    state.assertType(TokenType.ArrowRight);
-                    state.next();
-                    returnType = parseType(state);
-                } else {
-                    returnType = {
-                        type: NodeType.Identifier, value: "Unit",
-                        path: start.path, start: start.start, end: start.end
-                    };
-                }
-                let body = null;
-                let externalName = null;
-                let end = returnType.end;
-                if(!isExternal) {
-                    state.assertType(
-                        TokenType.BraceOpen, TokenType.Equal
-                    );
-                    if(state.curr().type == TokenType.Equal) {
-                        state.next();
-                        const value = parseExpression(state);
-                        body = [
-                            {
-                                type: NodeType.Return, value,
-                                path: value.path, start: value.start,
-                                end: value.end
-                            }
-                        ];
-                        end = value.end;
-                    } else {
-                        state.assertType(TokenType.BraceOpen);
-                        state.next();
-                        body = parseStatementList(state);
-                        state.assertType(TokenType.BraceClose);
-                        end = state.curr().end;
-                        state.next();
-                    }
-                } else {
-                    state.assertType(TokenType.Equal);
-                    state.next();
-                    state.assertType(TokenType.Identifier);
-                    externalName = state.curr().content;
-                    state.next();
-                }
-                return {
-                    type: NodeType.Function, isExternal, 
-                    name, args, returnType, body, externalName,
-                    path: start.path, start: start.start, end
-                };
+            }
+            case TokenType.KeywordFun: {
+                return parseFunction(false);
             }
             case TokenType.KeywordVal:
             case TokenType.KeywordMut: {
-                const start = state.curr();
-                const isMutable = state.curr().type 
-                    == TokenType.KeywordMut;
-                state.next();
-                state.assertType(TokenType.Identifier);
-                const name = state.curr().content;
-                state.next();
-                state.assertType(TokenType.Equal, TokenType.Colon);
-                let valueType = null;
-                if(state.curr().type === TokenType.Colon) {
-                    state.next();
-                    valueType = parseType(state);
-                }
-                state.assertType(TokenType.Equal);
-                state.next();
-                const value = parseExpression(state);
-                return {
-                    type: NodeType.Variable, isMutable, name, 
-                    valueType, value,
-                    path: start.path, start: start.start, end: value.end
-                };
+                return parseVariable(false);
             }
             case TokenType.KeywordReturn: {
                 assertTopLevel(false);
-                const start = state.curr();
                 state.next();
                 const value = parseExpression(state);
                 return {
@@ -777,7 +803,6 @@ const quill = (function() {
             }
             case TokenType.KeywordIf: {
                 assertTopLevel(false);
-                const start = state.curr();
                 state.next();
                 const cond = parseExpression(state);
                 state.assertType(TokenType.BraceOpen);
@@ -841,6 +866,7 @@ const quill = (function() {
     function createCheckerState() {
         return {
             functions: {},
+            variables: {},
             types: {},
             scopes: [],
 
@@ -860,7 +886,7 @@ const quill = (function() {
                 this.scopes = [];
             },
 
-            findVariable: function(name) {
+            findLocalVariable: function(name) {
                 for(let i = this.scopes.length - 1; i >= 0; i -= 1) {
                     const scope = this.scopes[i];
                     const variable = scope.variables[name];
@@ -876,6 +902,9 @@ const quill = (function() {
                     if(returnType !== null) { return returnType; }
                 }
                 return null;
+            },
+            isBase: function() {
+                return this.scopes.length === 0;
             }
         };
     }
@@ -918,6 +947,14 @@ const quill = (function() {
     }
 
     function collectSymbols(statements, state) {
+        // collect all types
+        for(const node of statements) {
+            switch(node.type) {
+                // case NodeType.Record:
+                    // todo - add to 'state.types'
+            }
+        }
+        // collect all symbols, fully collect types
         for(const node of statements) {
             switch(node.type) {
                 case NodeType.Function: {
@@ -933,8 +970,16 @@ const quill = (function() {
                     };
                     continue;
                 }
+                case NodeType.Variable: {
+                    const type = node.valueType === null? null
+                        : typeFromNode(node.valueType, state);
+                    state.variables[node.name] = {
+                        node, type, isMutable: node.isMutable
+                    };
+                    continue;
+                }
                 // case NodeType.Record: ...
-                //     (add to state.types)
+                //     (update from state.types)
             }
         }
     }
@@ -988,17 +1033,24 @@ const quill = (function() {
         const check = () => {
             switch(node.type) {
                 case NodeType.Identifier: {
-                    const variable = state.findVariable(node.value);
+                    const assertImmutable = variable => {
+                        if(!assignment || variable.isMutable) { return; }
+                        throw message.from(
+                            message.error(`Assignment to immutable variable '${node.value}'`),
+                            message.code(node),
+                            message.note(`'${node.value}' is defined here:`),
+                            message.code(variable.node)
+                        );
+                    };
+                    const variable = state.findLocalVariable(node.value);
                     if(variable !== null) {
-                        if(assignment && !variable.isMutable) {
-                            throw message.from(
-                                message.error(`Assignment to immutable variable '${node.value}'`),
-                                message.code(node),
-                                message.note(`'${node.value}' is defined here:`),
-                                message.code(variable.node)
-                            );
-                        }
+                        assertImmutable(variable);
                         return variable.type;
+                    }
+                    const global = state.variables[node.value];
+                    if(global !== undefined) {
+                        assertImmutable(global);
+                        return global.type;
                     }
                     assertReadOnly();
                     // TODO: NON-VARIABLE ACCESSES
@@ -1093,15 +1145,22 @@ const quill = (function() {
                 }
 
                 case NodeType.Variable: {
-                    const scope = state.scope();
-                    const type = checkTypes(node.value, state);
-                    if(node.valueType !== null) {
-                        const exp = typeFromNode(node.valueType, state);
-                        assertTypesEqual(exp, type, node);
+                    const got = node.value === null? null
+                        : checkTypes(node.value, state);
+                    const exp = node.valueType === null? null
+                        : typeFromNode(node.valueType, state);
+                    if(got !== null && exp !== null) {
+                        assertTypesEqual(exp, got, node);
                     }
-                    scope.variables[node.name] = {
-                        type, isMutable: node.isMutable, node
-                    };
+                    const type = got !== null? got : exp;
+                    if(state.isBase()) {
+                        state.variables[node.name].type = type;
+                    } else {
+                        const scope = state.scope();
+                        scope.variables[node.name] = {
+                            type, isMutable: node.isMutable, node
+                        };
+                    }
                     return null;
                 }
                 case NodeType.Assignment: {
@@ -1167,6 +1226,20 @@ const quill = (function() {
         state.exitScope();
     }
 
+    function checkVariables(statements, state) {
+        for(const node of statements) {
+            if(node.type !== NodeType.Variable) { continue; }
+            checkTypes(node, state);
+        }
+    }
+
+    function checkSymbols(statements, state) {
+        for(const node of statements) {
+            if(node.type === NodeType.Variable) { continue; }
+            checkTypes(node, state);
+        }
+    }
+
 
 
     // Codegen 
@@ -1221,7 +1294,9 @@ const quill = (function() {
                     state.scope().output += `${into} = ${value};\n`;
                     return into;
                 }
-                return node.value;
+                const read = state.checker.variables[node.value];
+                return read !== undefined && read.node.isExternal
+                    ? read.node.externalName : node.value;
             }
             case NodeType.IntLiteral:
                 const out = intoOrAlloc();
@@ -1300,10 +1375,12 @@ const quill = (function() {
                 return out;
             }
             case NodeType.Variable: {
-                const value = generateCode(node.value, state);
+                if(node.isExternal) { return null; }
                 if(state.isBase()) {
-                    state.scope().vars += `let ${node.name} = ${value};\n`;
+                    const value = generateCode(node.value, state);
+                    state.scope().output += `let ${node.name} = ${value};\n`;
                 } else {
+                    const value = generateCode(node.value, state);
                     state.scope().aliases[node.name] = value;
                 }
                 return null;
@@ -1358,6 +1435,28 @@ const quill = (function() {
         const vars = state.exitScope();
         return vars + body;
     }
+
+    function generateVariables(statements, state) {
+        state.enterScope();
+        for(const node of statements) {
+            if(node.type !== NodeType.Variable) { continue; }
+            generateCode(node, state);
+        }
+        const body = state.scope().output;
+        const vars = state.exitScope();
+        return vars + body;
+    }
+
+    function generateSymbols(statements, state) {
+        state.enterScope();
+        for(const node of statements) {
+            if(node.type === NodeType.Variable) { continue; }
+            generateCode(node, state);
+        }
+        const body = state.scope().output;
+        const vars = state.exitScope();
+        return vars + body;   
+    }
     
 
 
@@ -1374,6 +1473,7 @@ const quill = (function() {
         let code = "";
         const checker = createCheckerState();
         let nodes = {};
+        // tokenizing, parsing and symbol collection
         for(const path in sources) {
             const text = sources[path];
             if(text.length == 0) { continue; }
@@ -1389,22 +1489,49 @@ const quill = (function() {
             }
         }
         if(errors.length > 0) { return makeError(errors); }
+        // type checking of variables
+        // -> variable decl might not specify a type,
+        //    therefore we have to check all of them first
+        //    to figure those out :/
         for(const path in nodes) {
             const statements = nodes[path];
             checker.reset();
             try {
-                checkBlock(statements, checker);
+                checkVariables(statements, checker);
             } catch(error) {
                 if(error.sections === undefined) { throw error; }
                 errors.push(error);
             }
         }
         if(errors.length > 0) { return makeError(errors); }
+        // type checking of everything else
+        for(const path in nodes) {
+            const statements = nodes[path];
+            checker.reset();
+            try {
+                checkSymbols(statements, checker);
+            } catch(error) {
+                if(error.sections === undefined) { throw error; }
+                errors.push(error);
+            }
+        }
+        if(errors.length > 0) { return makeError(errors); }
+        // code generation
         for(const path in nodes) {
             const statements = nodes[path];
             const generator = createGeneratorState(checker);
             try {
-                code += generateBlock(statements, generator);
+                code += generateVariables(statements, generator);
+            } catch(error) {
+                if(error.sections === undefined) { throw error; }
+                errors.push(error);
+            }
+        }
+        for(const path in nodes) {
+            const statements = nodes[path];
+            const generator = createGeneratorState(checker);
+            try {
+                code += generateSymbols(statements, generator);
             } catch(error) {
                 if(error.sections === undefined) { throw error; }
                 errors.push(error);
