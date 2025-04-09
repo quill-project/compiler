@@ -5,33 +5,43 @@
     <script>
 
     const print = thing => console.log(thing);
+    const add = (a, b) => a + b;
+    const sqrt = x => Math.sqrt(x);
 
     const sources = {
         "test.quill": `
 
-// fun fib(n: int) -> int {
-//     if n <= 1 { return n }
-//     return fib(n - 1) + fib(n - 2)
-// }
+ext fun print_int(n: Int) = print
+ext fun print_float(x: Float) = print
+ext fun add_int(a: Int, b: Int) -> Int = add
+ext fun add_float(a: Float, b: Float) -> Float = add
+ext fun sqrt(x: Float) -> Float = sqrt
 
-fun fib(n: int) -> int =
+fun fib(n: Int) -> Int =
     if n <= 1 { n }
     else { fib(n - 1) + fib(n - 2) }
 
-fun pow2(n: float) -> float = n * n
-
 fun main() {
-    print(fib(15))
+    print_int(fib(15))
+    print_int(add_int(5, 10))
+    print_float(sqrt(25))
 }
 
+fun test(a: Int) -> Int = a * 2
         `
     };
 
-    const compiled = quill.compile(sources);
-    console.log(compiled);
-    eval(compiled);
-    main();
-
+    const result = quill.compile(sources);
+    if(result.success) {
+        console.log(result.code);
+        eval(result.code);
+        main();
+    } else {
+        console.log(result.errors
+            .map(e => quill.message.display(e, sources))
+            .join("\n\n")
+        );
+    }
     </script>
 </head>
 <body></body>

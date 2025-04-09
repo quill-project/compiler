@@ -1,12 +1,30 @@
 
 /*
+ * - [*] External Functions
+ * - [*] More useful errors
+ * - [ ] External Variables
+ * - [ ] Module System
+ * - [ ] Lambdas and Anonymous Functions
+ * - [ ] Custom Types (Records)
+ * - [ ] Strings
+ * - [ ] Arrays
+ * - [ ] Templates / Generics
+ * - [ ] Method calls (UFCS / Pipes)
+ */
 
-record Cat(name: str, age: int, hunger: float)
+/*
+
 union Option<T>(Some: T, None: unit)
 enum Role(Guest, User, Moderator, Admin)
 
 fun add<T>(a: T, b: T) -> T {
     return a + b
+}
+
+record Cat(name: String, age: Int, hunger: Float)
+
+fun feed(self: Cat, amount: Int) {
+    self.hunger -= amount
 }
 
 */
@@ -27,6 +45,116 @@ const quill = (function() {
 
 
 
+    // Errors and Warnings
+
+    const message = (function() {
+        const Section = makeEnum(
+            "Error",
+            "Warning",
+            "Note",
+            "Code"
+        );
+
+        function error(text) {
+            return { type: Section.Error, text };
+        }
+        function warning(text) {
+            return { type: Section.Warning, text };
+        }
+        function note(text) {
+            return { type: Section.Note, text };
+        }
+        function code(origin) {
+            return { type: Section.Code, origin };
+        }
+        
+        function from(...sections) {
+            return {
+                sections 
+            };        
+        }
+
+        function internalError(text) {
+            return from(error("(INTERNAL ERROR) " + text));
+        }
+
+        function lineOf(file, offset) {
+            let line = 1;
+            for(let i = 0; i < offset; i += 1) {
+                if(file[i] === "\n") { line += 1; }
+            }
+            return line;
+        }
+
+        function columnOf(file, offset) {
+            let column = 1;
+            for(let i = 0; i < offset; i += 1) {
+                if(file[i] === "\n") { column = 1; }
+                else { column += 1; }
+            }
+            return column;
+        }
+
+        function display(message, sources) {
+            let output = "";
+            for(const section of message.sections) {
+                if(output.length > 0) {
+                    output += "\n";
+                }
+                switch(section.type) {
+                    case Section.Error: {
+                        output += `[error] ${section.text}`;
+                        break;
+                    }
+                    case Section.Warning: {
+                        output += `<warning> ${section.text}`;
+                        break;
+                    }
+                    case Section.Note: {
+                        output += `note: ${section.text}`;
+                        break;
+                    }
+                    case Section.Code: {
+                        const o = section.origin;
+                        const file = sources[o.path];
+                        output += `-> ${o.path}`;
+                        if(file !== undefined) {
+                            const lines = file.split("\n");
+                            const startLine = lineOf(file, o.start);
+                            const startCol = columnOf(file, o.start);
+                            const endLine = lineOf(file, o.end - 1);
+                            const endCol = columnOf(file, o.end - 1);
+                            const lineCW = String(endLine).length;
+                            output += `:${startLine}:${startCol}`;
+                            for(let l = startLine; l <= endLine; l += 1) {
+                                if((l - 1) >= lines.length) { break; }
+                                const line = lines[l - 1];
+                                const lineC = String(l)
+                                    .padStart(lineCW, " ");
+                                output += `\n ${lineC}   ${line}`;
+                                output += `\n ${" ".repeat(lineCW)}   `;
+                                for(let c = 1; c <= endCol; c += 1) {
+                                    output += c >= startCol? "^" : " ";
+                                }
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+            return output;
+        }
+        
+        return {
+            Section,
+            error, warning, note, code,
+            from, internalError,
+            lineOf, columnOf, display
+        };
+    })();
+
+
+
     // Tokenizer / Lexer
 
     const TokenType = makeEnum(
@@ -39,6 +167,7 @@ const quill = (function() {
         "LessThanEqual",
         "GreaterThanEqual",
         "DoubleEqual",
+        "NotEqual",
         "ArrowRight",
         "DoubleAmpersand",
         "DoublePipe",
@@ -57,9 +186,11 @@ const quill = (function() {
         "Slash",
         "Colon",
         "Comma",
+        "ExclamationMark",
 
         "KeywordIf",
         "KeywordElse",
+        "KeywordExt",
         "KeywordFun",
         "KeywordReturn",
         "KeywordVal",
@@ -72,6 +203,7 @@ const quill = (function() {
         "<=": TokenType.LessThanEqual,
         ">=": TokenType.GreaterThanEqual,
         "==": TokenType.DoubleEqual,
+        "!=": TokenType.NotEqual,
         "->": TokenType.ArrowRight,
         "&&": TokenType.DoubleAmpersand,
         "||": TokenType.DoublePipe,
@@ -90,9 +222,11 @@ const quill = (function() {
         "/": TokenType.Slash,
         ":": TokenType.Colon,
         ",": TokenType.Comma,
+        "!": TokenType.ExclamationMark,
 
         "if": TokenType.KeywordIf,
         "else": TokenType.KeywordElse,
+        "ext": TokenType.KeywordExt,
         "fun": TokenType.KeywordFun,
         "return": TokenType.KeywordReturn,
         "val": TokenType.KeywordVal,
@@ -102,6 +236,52 @@ const quill = (function() {
         "false": TokenType.BoolLiteral,
         "unit": TokenType.UnitLiteral
     });
+
+    function tokenDescription(tokenType) {
+        switch(tokenType) {
+            case TokenType.Identifier: return "an identifier";
+            case TokenType.IntLiteral: return "an integer";
+            case TokenType.FloatLiteral: return "a float";
+            case TokenType.BoolLiteral: return "a boolean";
+            case TokenType.UnitLiteral: return "the unit value";
+
+            case TokenType.LessThanEqual: return "'<='";
+            case TokenType.GreaterThanEqual: return "'>='";
+            case TokenType.DoubleEqual: return "'=='";
+            case TokenType.NotEqual: return "'!='";
+            case TokenType.ArrowRight: return "'->'";
+            case TokenType.DoubleAmpersand: return "'&&'";
+            case TokenType.DoublePipe: return "'||'";
+
+            case TokenType.ParenOpen: return "'('";
+            case TokenType.ParenClose: return "')'";
+            case TokenType.BraceOpen: return "'{'";
+            case TokenType.BraceClose: return "'}'";
+
+            case TokenType.LessThan: return "'<'";
+            case TokenType.GreaterThan: return "'>'";
+            case TokenType.Equal: return "'='";
+            case TokenType.Plus: return "'+'";
+            case TokenType.Minus: return "'-'";
+            case TokenType.Asterisk: return "'*'";
+            case TokenType.Slash: return "'/'";
+            case TokenType.Colon: return "':'";
+            case TokenType.Comma: return "','";
+            case TokenType.ExclamationMark: return "'!'";
+
+            case TokenType.KeywordIf: return "'if'";
+            case TokenType.KeywordElse: return "'else'";
+            case TokenType.KeywordExt: return "'ext'";
+            case TokenType.KeywordFun: return "'fun'";
+            case TokenType.KeywordReturn: return "'return'";
+            case TokenType.KeywordVal: return "'val'";
+            case TokenType.KeywordMut: return "'mut'";
+
+            case TokenType.End: return "the end of the file";
+        }
+        console.warn(`No description for token type ${tokenType}`);
+        return "<no description>";
+    }
 
     function isAlphabetic(char) {
         const c = char.charCodeAt(0);
@@ -122,7 +302,7 @@ const quill = (function() {
         return { type, content, path, start, end };
     }
 
-    function tokenize(text, path) {
+    function tokenize(text, path, errors) {
         let output = [];
         for(let i = 0; i < text.length;) {
             if(text[i].trim().length == 0) { i += 1; continue; }
@@ -175,7 +355,11 @@ const quill = (function() {
                 ));
                 continue;
             }
-            throw `Unrecognized character: '${text[i]}'`;
+            errors.push(message.from(
+                message.error(`Usage of unrecognized character '${text[i]}'`),
+                message.code({ path, start: i, end: i + 1 })
+            ));
+            i += 1;
         }
         output.push(tokenFrom(
             TokenType.End, text.substring(text.length - 1),
@@ -200,13 +384,31 @@ const quill = (function() {
             },
             assertType: function(...types) {
                 if(types.includes(this.curr().type)) { return; }
-                this.reportUnexpected();
-            },
-            reportUnexpected: function() {
-                if(this.curr().type == TokenType.End) {
-                    throw `Unexpected end of file`;
+                let expected = "";
+                for(let i = 0; i < types.length; i += 1) {
+                    if(i > 0 && i === types.length - 1) { 
+                        expected += " or "; 
+                    } else if(i > 0) { 
+                        expected += ", ";
+                    }
+                    expected += tokenDescription(types[i]);
                 }
-                throw `Unexpected token: ${this.curr().content}`;
+                this.reportUnexpected(expected);
+                
+            },
+            reportUnexpected: function(expected = null) {
+                const token = this.curr().type == TokenType.End
+                    ? "end of file" : `token '${this.curr().content}'`;
+                let msg = message.from(
+                    message.error(`Unexpected ${token}`),
+                    message.code(this.curr())
+                );
+                if(expected != null) {
+                    msg.sections.push(
+                        message.note(`Expected ${expected}`)
+                    );
+                }
+                throw msg;
             }
         };
     }
@@ -235,6 +437,7 @@ const quill = (function() {
         "Multiplicative",
         "Additive",
         "Comparative",
+        "Negation",
         "Call",
         "IfExpr",
 
@@ -259,9 +462,14 @@ const quill = (function() {
         "!=": NodeType.Comparative
     });
 
+    const unaryOpType = Object.freeze({
+        "-": NodeType.Negation,
+        "!": NodeType.Negation
+    });
+
     function valueNodeFrom(type, value, token) {
         return {
-            type, value: value,
+            type, value,
             path: token.path, start: token.start, end: token.end
         };
     }
@@ -270,6 +478,13 @@ const quill = (function() {
         const start = state.curr();
         const value = start.content;
         switch(state.curr().type) {
+            case TokenType.ParenOpen: {
+                state.next();
+                const value = parseExpression(state);
+                state.assertType(TokenType.ParenClose);
+                state.next();
+                return value;
+            }
             case TokenType.Identifier: {
                 state.next();
                 return valueNodeFrom(NodeType.Identifier, value, start);
@@ -319,7 +534,17 @@ const quill = (function() {
                 };
             }
         }
-        state.reportUnexpected();
+        const prec = unaryOpPrec[start.content];
+        if(prec !== undefined) {
+            start.next();
+            const value = parseExpression(state, prec);
+            return { 
+                type: unaryOpType[start.content], value,
+                path: start.path, start: start.start, 
+                end: value.end
+            };
+        }
+        state.reportUnexpected("an expression");
     }
 
     function parseExpression(state, precedence = Infinity) {
@@ -385,7 +610,7 @@ const quill = (function() {
     function parseType(state) {
         switch(state.curr().type) {
             case TokenType.Identifier: {
-                const token = state.curr().type;
+                const token = state.curr();
                 state.next();
                 return {
                     type: NodeType.Identifier, value: token.content,
@@ -393,13 +618,16 @@ const quill = (function() {
                 };
             }
         }
-        state.reportUnexpected();
+        state.reportUnexpected("a type");
     }
 
     function parseArgumentList(state) {
         state.assertType(TokenType.ParenOpen);
         state.next();
         let args = [];
+        state.assertType(
+            TokenType.Identifier, TokenType.ParenClose
+        );
         while(state.curr().type == TokenType.Identifier) {
             const name = state.curr().content;
             state.next();
@@ -407,9 +635,15 @@ const quill = (function() {
             state.next();
             const type = parseType(state);
             args.push({ name, type });
+            state.assertType(
+                TokenType.Comma, TokenType.ParenClose
+            );
             if(state.curr().type === TokenType.Comma) {
                 state.next();
             }
+            state.assertType(
+                TokenType.Identifier, TokenType.ParenClose
+            );
         }
         state.assertType(TokenType.ParenClose);
         state.next();
@@ -420,65 +654,91 @@ const quill = (function() {
         const assertTopLevel = tl => {
             if(tl == topLevel) { return; }
             if(tl && !topLevel) {
-                throw `Top-level expression used in local scope`;
+                throw message.from(
+                    message.error("Top-level expression inside function"),
+                    message.code(state.curr())
+                );
             }
             if(!tl && topLevel) {
-                throw `Local expression used in top-level scope`;
+                throw message.from(
+                    message.error("Local expression used outside of function"),
+                    message.code(state.curr())
+                );
             }
         };
         switch(state.curr().type) {
-            case TokenType.KeywordFun: {
+            case TokenType.KeywordFun: 
+            case TokenType.KeywordExt: {
                 assertTopLevel(true);
                 const start = state.curr();
+                const isExternal = start.type === TokenType.KeywordExt;
+                if(isExternal) {
+                    state.next();
+                    state.assertType(TokenType.KeywordFun);
+                }
                 state.next();
                 state.assertType(TokenType.Identifier);
                 const name = state.curr().content;
                 state.next();
                 const args = parseArgumentList(state);
                 let returnType;
+                if(isExternal) {
+                    state.assertType(
+                        TokenType.ArrowRight, TokenType.Equal
+                    );
+                } else {
+                    state.assertType(
+                        TokenType.ArrowRight,
+                        TokenType.BraceOpen, TokenType.Equal
+                    );
+                }
                 if(state.curr().type == TokenType.ArrowRight) {
                     state.assertType(TokenType.ArrowRight);
                     state.next();
                     returnType = parseType(state);
                 } else {
                     returnType = {
-                        type: NodeType.Identifier, value: "unit",
+                        type: NodeType.Identifier, value: "Unit",
                         path: start.path, start: start.start, end: start.end
                     };
                 }
-                let body;
-                let end;
-                if(state.curr().type == TokenType.Equal) {
-                    state.next();
-                    const value = parseExpression(state);
-                    body = [
-                        {
-                            type: NodeType.Return, value,
-                            path: value.path, start: value.start,
-                            end: value.end
-                        }
-                    ];
-                    end = value.end;
+                let body = null;
+                let externalName = null;
+                let end = returnType.end;
+                if(!isExternal) {
+                    state.assertType(
+                        TokenType.BraceOpen, TokenType.Equal
+                    );
+                    if(state.curr().type == TokenType.Equal) {
+                        state.next();
+                        const value = parseExpression(state);
+                        body = [
+                            {
+                                type: NodeType.Return, value,
+                                path: value.path, start: value.start,
+                                end: value.end
+                            }
+                        ];
+                        end = value.end;
+                    } else {
+                        state.assertType(TokenType.BraceOpen);
+                        state.next();
+                        body = parseStatementList(state);
+                        state.assertType(TokenType.BraceClose);
+                        end = state.curr().end;
+                        state.next();
+                    }
                 } else {
-                    state.assertType(TokenType.BraceOpen);
+                    state.assertType(TokenType.Equal);
                     state.next();
-                    body = parseStatementList(state);
-                    state.assertType(TokenType.BraceClose);
-                    end = state.curr().end;
+                    state.assertType(TokenType.Identifier);
+                    externalName = state.curr().content;
                     state.next();
                 }
                 return {
-                    type: NodeType.Function, name, args, body,
+                    type: NodeType.Function, isExternal, 
+                    name, args, returnType, body, externalName,
                     path: start.path, start: start.start, end
-                };
-            }
-            case TokenType.KeywordReturn: {
-                const start = state.curr();
-                state.next();
-                const value = parseExpression(state);
-                return {
-                    type: NodeType.Return, value,
-                    path: start.path, start: start.start, end: value.end
                 };
             }
             case TokenType.KeywordVal:
@@ -490,11 +750,28 @@ const quill = (function() {
                 state.assertType(TokenType.Identifier);
                 const name = state.curr().content;
                 state.next();
+                state.assertType(TokenType.Equal, TokenType.Colon);
+                let valueType = null;
+                if(state.curr().type === TokenType.Colon) {
+                    state.next();
+                    valueType = parseType(state);
+                }
                 state.assertType(TokenType.Equal);
                 state.next();
                 const value = parseExpression(state);
                 return {
-                    type: NodeType.Variable, isMutable, name, value,
+                    type: NodeType.Variable, isMutable, name, 
+                    valueType, value,
+                    path: start.path, start: start.start, end: value.end
+                };
+            }
+            case TokenType.KeywordReturn: {
+                assertTopLevel(false);
+                const start = state.curr();
+                state.next();
+                const value = parseExpression(state);
+                return {
+                    type: NodeType.Return, value,
                     path: start.path, start: start.start, end: value.end
                 };
             }
@@ -559,12 +836,344 @@ const quill = (function() {
         return statements;
     }
 
+    // Type Checking
+
+    function createCheckerState() {
+        return {
+            functions: {},
+            types: {},
+            scopes: [],
+
+            enterScope: function(returnType = null) {
+                this.scopes.push({
+                    variables: {},
+                    returnType
+                });
+            },
+            scope: function() {
+                return this.scopes.at(-1);
+            },
+            exitScope: function() {
+                this.scopes.pop();
+            },
+            reset: function() {
+                this.scopes = [];
+            },
+
+            findVariable: function(name) {
+                for(let i = this.scopes.length - 1; i >= 0; i -= 1) {
+                    const scope = this.scopes[i];
+                    const variable = scope.variables[name];
+                    if(variable === undefined) { continue; }
+                    return variable;
+                }
+                return null;
+            },
+            findReturnType: function() {
+                for(let i = this.scopes.length - 1; i >= 0; i -= 1) {
+                    const scope = this.scopes[i];
+                    const returnType = scope.returnType;
+                    if(returnType !== null) { return returnType; }
+                }
+                return null;
+            }
+        };
+    }
+
+    const Type = makeEnum(
+        "Unit",
+        "Integer",
+        "Float",
+        "Boolean",
+        "Named"
+    );
+
+    const builtinTypeNames = Object.freeze({
+        "Unit": Type.Unit,
+        "Int": Type.Integer,
+        "Float": Type.Float,
+        "Bool": Type.Boolean
+    });
+
+    function typeFromNode(node, state) {
+        switch(node.type) {
+            case NodeType.Identifier: {
+                const builtin = builtinTypeNames[node.value];
+                if(builtin !== undefined) { 
+                    return { type: builtin, node }; 
+                }
+                const custom = state.types[node.value];
+                if(custom !== undefined) {
+                    return { 
+                        type: Type.Named, name: node.value, node 
+                    };
+                }
+                throw message.from(
+                    message.error(`Unknown type '${node.value}'`),
+                    message.code(node)
+                );
+            }
+        }
+        throw message.internalError(`Unhandled node type ${node.type}`);
+    }
+
+    function collectSymbols(statements, state) {
+        for(const node of statements) {
+            switch(node.type) {
+                case NodeType.Function: {
+                    const args = node.args.map(a => {
+                        return { 
+                            name: a.name, 
+                            type: typeFromNode(a.type, state)
+                        };
+                    });
+                    state.functions[node.name] = {
+                        node, args, 
+                        returnType: typeFromNode(node.returnType, state)
+                    };
+                    continue;
+                }
+                // case NodeType.Record: ...
+                //     (add to state.types)
+            }
+        }
+    }
+
+    function displayType(t) {
+        switch(t.type) {
+            case Type.Unit: return "Unit";
+            case Type.Integer: return "Int";
+            case Type.Float: return "Float";
+            case Type.Boolean: return "Boolean";
+            case Type.Named: return type.name;
+        }
+        return `<unhandled type: ${t.type}>`;
+    }
+
+    function assertTypesEqual(exp, got, source) {
+        const typesEqual = exp.type === got.type;
+        const namesEqual = exp.name === got.name;
+        if(typesEqual && namesEqual) { return; }
+        const expD = displayType(exp);
+        const gotD = displayType(got);
+        throw message.from(
+            message.error(`Expected type '${expD}', but got '${gotD}'`),
+            message.code(source),
+            message.note(`'${expD}' originates from here:`),
+            message.code(exp.node),
+            message.note(`'${gotD}' originates from here:`),
+            message.code(got.node)
+        );
+    }
+
+    function assertNumberType(t, node) {
+        if(t.type === Type.Integer || t.type === Type.Float) { return; }
+        const gotD = displayType(t);
+        throw message.from(
+            message.error(`Expected number type, but got '${gotD}'`),
+            message.code(node),
+            message.note(`'${gotD}' originates from here:`),
+            message.code(t.node)
+        );
+    }
+
+    function checkTypes(node, state, assignment = false) {
+        const assertReadOnly = () => {
+            if(!assignment) { return; }
+            throw message.from(
+                message.error(`Assignment to immutable expression`),
+                message.code(node)
+            );
+        };
+        const check = () => {
+            switch(node.type) {
+                case NodeType.Identifier: {
+                    const variable = state.findVariable(node.value);
+                    if(variable !== null) {
+                        if(assignment && !variable.isMutable) {
+                            throw message.from(
+                                message.error(`Assignment to immutable variable '${node.value}'`),
+                                message.code(node),
+                                message.note(`'${node.value}' is defined here:`),
+                                message.code(variable.node)
+                            );
+                        }
+                        return variable.type;
+                    }
+                    assertReadOnly();
+                    // TODO: NON-VARIABLE ACCESSES
+                    //     FUNCTIONS -> TO EQUAL LAMBDA TYPE
+                    //         fun test(a: Int) -> Int  =>  fun(Int) -> Int
+                    //     RECORDS -> TO CONSTRUCTOR LAMBDA TYPE
+                    //         record Cat(name: str)    =>  fun(str) -> Cat
+                    throw message.from(
+                        message.error(`Unknown variable '${node.value}'`),
+                        message.code(node)
+                    );
+                }
+                case NodeType.IntLiteral: {
+                    assertReadOnly();
+                    return { type: Type.Integer, node };
+                }
+                case NodeType.FloatLiteral: {
+                    assertReadOnly();
+                    return { type: Type.Float, node };
+                }
+                case NodeType.BoolLiteral: {
+                    assertReadOnly();
+                    return { type: Type.Boolean, node };
+                }
+                case NodeType.UnitLiteral: {
+                    assertReadOnly();
+                    return { type: Type.Unit, node };
+                }
+                case NodeType.Multiplicative:
+                case NodeType.Additive:
+                case NodeType.Comparative: {
+                    assertReadOnly();
+                    const lhs = checkTypes(node.lhs, state);
+                    const rhs = checkTypes(node.rhs, state);
+                    assertTypesEqual(lhs, rhs, node);
+                    const op = node.op;
+                    if(op != "==" && op != "!=") {
+                        assertNumberType(lhs, node);
+                    }
+                    return node.type === NodeType.Comparative
+                        ? { type: Type.Boolean, node } : lhs;
+                }
+                case NodeType.Negation: {
+                    assertReadOnly();
+                    const value = checkTypes(node.value, state);
+                    if(node.op == "-") {
+                        assertNumberType(value, node, node);
+                    } else {
+                        const bool = { type: Type.Boolean, node };
+                        assertTypesEqual(value, bool, node);
+                    }
+                    return value;
+                }
+                case NodeType.Call: {
+                    assertReadOnly();
+                    if(node.called.type === NodeType.Identifier) {
+                        const called = state.functions[node.called.value];
+                        if(called !== undefined) {
+                            if(called.args.length !== node.args.length) {
+                                throw message.from(
+                                    message.error(`Function '${node.called.value}'`
+                                        + ` expects ${called.args.length} argument(s),` 
+                                        + ` but ${node.args.length} were provided`
+                                    ),
+                                    message.code(node),
+                                    message.note(`'${node.called.value}' defined here:`),
+                                    message.code(called.node)
+                                );
+                            }
+                            for(const argI in called.args) {
+                                const given = checkTypes(node.args[argI], state);
+                                const expected = called.args[argI].type;
+                                assertTypesEqual(expected, given, node.args[argI]);
+                            }
+                            return called.returnType;
+                        }
+                        // TODO: CHECK FOR RECORD HERE, THEN CONSTRUCT
+                    }
+                    // TODO: CALL LAMBDA
+                    throw message.internalError(
+                        "not yet implemented - lambdas"
+                    );   
+                }
+                case NodeType.IfExpr: {
+                    assertReadOnly();
+                    const cond = checkTypes(node.cond, state);
+                    assertTypesEqual(cond, { type: Type.Boolean, node }, node);
+                    const ifType = checkTypes(node.ifValue, state);
+                    const elseType = checkTypes(node.elseValue, state);
+                    assertTypesEqual(ifType, elseType, node);
+                    return ifType;
+                }
+
+                case NodeType.Variable: {
+                    const scope = state.scope();
+                    const type = checkTypes(node.value, state);
+                    if(node.valueType !== null) {
+                        const exp = typeFromNode(node.valueType, state);
+                        assertTypesEqual(exp, type, node);
+                    }
+                    scope.variables[node.name] = {
+                        type, isMutable: node.isMutable, node
+                    };
+                    return null;
+                }
+                case NodeType.Assignment: {
+                    const scope = state.scope();
+                    const lhs = checkTypes(node.to, state, true);
+                    const rhs = checkTypes(node.value, state);
+                    assertTypesEqual(lhs, rhs, node);
+                    return null;
+                }
+                case NodeType.Return: {
+                    const returnType = state.findReturnType();
+                    if(returnType === null) { 
+                        throw message.internalError(
+                            "'return' used outside function (should not parse)"
+                        ); 
+                    }
+                    const value = checkTypes(node.value, state);
+                    assertTypesEqual(returnType, value, node);
+                    return null;
+                }
+                case NodeType.If: {
+                    const cond = checkTypes(node.cond, state);
+                    assertTypesEqual(cond, { type: Type.Boolean, node }, node);
+                    checkBlock(node.ifBody, state);
+                    checkBlock(node.elseBody, state);
+                    return null;
+                }
+
+                case NodeType.Function: {
+                    const returnType = typeFromNode(node.returnType, state);
+                    state.enterScope(returnType);
+                    const scope = state.scope();
+                    for(const arg of node.args) {
+                        const argType = typeFromNode(arg.type, state);
+                        scope.variables[arg.name] = {
+                            type: argType, isMutable: false, node
+                        };
+                    }
+                    if(!node.isExternal) {
+                        for(const statement of node.body) {
+                            checkTypes(statement, state);
+                        }
+                    }
+                    state.exitScope();
+                    return null;
+                }
+            }
+            throw message.internalError(`Unhandled node type ${node.type}`);
+        };
+        let valueType = check();
+        if(valueType === null) { 
+            valueType = { type: Type.Unit, node };
+        }
+        node.valueType = valueType;
+        return valueType;
+    }
+
+    function checkBlock(nodes, state, returnType = null) {
+        state.enterScope(returnType);
+        for(const node of nodes) {
+            checkTypes(node, state);
+        }
+        state.exitScope();
+    }
+
 
 
     // Codegen 
 
-    function createGeneratorState() {
+    function createGeneratorState(checker) {
         return {
+            checker,
             nextVarNumber: 0,
             scopes: [],
 
@@ -572,7 +1181,8 @@ const quill = (function() {
                 this.scopes.push({
                     aliases: {},
                     variables: [],
-                    output: ""
+                    output: "",
+                    vars: ""
                 });
             },
             scope: function() {
@@ -580,26 +1190,27 @@ const quill = (function() {
             },
             exitScope: function() {
                 const scope = this.scope();
-                let vars = "";
-                for(const variable of scope.variables) {
-                    vars += `let ${variable};\n`;
-                }
                 this.scopes.pop();
-                return vars;
+                return scope.vars;
             },
+            
             alloc: function() {
                 const i = this.nextVarNumber;
                 this.nextVarNumber += 1;
                 const scope = this.scope();
                 const variable = `local${i}`;
+                scope.vars += `let ${variable};\n`;
                 scope.variables.push(variable);
                 return variable;
+            },
+            isBase: function() {
+                return this.scopes.length === 1;
             }
         };
     }
 
     function generateCode(node, state, into = null) {
-        const into_or_alloc = () => into === null? state.alloc() : into;
+        const intoOrAlloc = () => into === null? state.alloc() : into;
         switch(node.type) {
             case NodeType.Identifier: {
                 for(let i = state.scopes.length - 1; i >= 0; i -= 1) {
@@ -610,29 +1221,63 @@ const quill = (function() {
                     state.scope().output += `${into} = ${value};\n`;
                     return into;
                 }
-                // FALL THROUGH
+                return node.value;
             }
             case NodeType.IntLiteral:
-            case NodeType.FloatLiteral: {
-                const out = into_or_alloc();
+                const out = intoOrAlloc();
+                state.scope().output += `${out} = ${node.value}n;\n`;
+                return out;
+            case NodeType.FloatLiteral:
+            case NodeType.BoolLiteral: {
+                const out = intoOrAlloc();
                 state.scope().output += `${out} = ${node.value};\n`;
                 return out;
             }
+            case NodeType.UnitLiteral: {
+                return intoOrAlloc();
+            }
             case NodeType.Multiplicative:
-            case NodeType.Additive:
+            case NodeType.Additive: {
+                const lhs = generateCode(node.lhs, state);
+                const rhs = generateCode(node.rhs, state);
+                const out = intoOrAlloc();
+                if(node.valueType === Type.Integer) {
+                    state.scope().output += `${out} = BigInt.asIntN(64,`
+                        + ` ${lhs} ${node.op} ${rhs}`
+                        + `);\n`;
+                } else {
+                    state.scope().output += `${out} = ${lhs} ${node.op} ${rhs};\n`;
+                }
+                return out;
+            }
             case NodeType.Comparative: {
                 const lhs = generateCode(node.lhs, state);
                 const rhs = generateCode(node.rhs, state);
-                const out = into_or_alloc();
+                const out = intoOrAlloc();
                 state.scope().output += `${out} = ${lhs} ${node.op} ${rhs};\n`;
                 return out;
             }
+            case NodeType.Negation: {
+                const value = generateCode(node.value, state);
+                const out = intoOrAlloc();
+                state.scope().output += `${out} = ${node.op} ${value};\n`;
+                return out;
+            }
             case NodeType.Call: {
-                const called = generateCode(node.called, state);
+                let called = null;
+                if(node.called.type === NodeType.Identifier) {
+                    const func = state.checker.functions[node.called.value];
+                    if(func !== undefined && func.node.isExternal) {
+                        called = func.node.externalName;
+                    }
+                }
+                if(called === null) {
+                    called = generateCode(node.called, state);
+                }
                 const args = node.args
                     .map(n => generateCode(n, state))
                     .join(", ");
-                const out = into_or_alloc();
+                const out = intoOrAlloc();
                 state.scope().output += `${out} = ${called}(${args});\n`;
                 return out;
             }
@@ -656,16 +1301,23 @@ const quill = (function() {
             }
             case NodeType.Variable: {
                 const value = generateCode(node.value, state);
-                state.scope().aliases[node.name] = value;
+                if(state.isBase()) {
+                    state.scope().vars += `let ${node.name} = ${value};\n`;
+                } else {
+                    state.scope().aliases[node.name] = value;
+                }
                 return null;
             }
             case NodeType.Assignment: {
                 const to = generateCode(node.to, state);
-                const value = generateCode(node.value, state);
-                state.scope().output += `${to} = ${value};\n`;
+                const value = generateCode(node.value, state, to);
+                if(value !== to) {
+                    state.scope().output += `${to} = ${value};\n`;
+                }
                 return null;
             }
             case NodeType.Function: {
+                if(node.isExternal) { return null; }
                 state.enterScope();
                 const args = node.args.map((n, i) => `param${i}`).join(", ");
                 node.args.forEach((n, i) => {
@@ -696,9 +1348,7 @@ const quill = (function() {
                 return null;
             }
         }
-        console.error("Unimplemented node type!");
-        console.log(node);
-        throw "";
+        throw message.internalError(`Unhandled node type ${node.type}`);
     }
 
     function generateBlock(nodes, state) {
@@ -714,29 +1364,76 @@ const quill = (function() {
     // Driver
 
     function compile(sources) {
+        const makeError = errors => {
+            return { success: false, errors, code: null };
+        };
+        const makeSuccess = code => {
+            return { success: true, errors: null, code };
+        };
+        let errors = [];
         let code = "";
+        const checker = createCheckerState();
+        let nodes = {};
         for(const path in sources) {
             const text = sources[path];
             if(text.length == 0) { continue; }
-            const tokens = tokenize(text, path);
+            const tokens = tokenize(text, path, errors);
             const parser = createParserState(tokens);
-            const statements = parseStatementList(parser, true);
-            const generator = createGeneratorState();
-            code += generateBlock(statements, generator);
+            try {
+                const statements = parseStatementList(parser, true);
+                nodes[path] = statements;
+                collectSymbols(statements, checker);
+            } catch(error) {
+                if(error.sections === undefined) { throw error; }
+                errors.push(error);
+            }
         }
-        return code;
+        if(errors.length > 0) { return makeError(errors); }
+        for(const path in nodes) {
+            const statements = nodes[path];
+            checker.reset();
+            try {
+                checkBlock(statements, checker);
+            } catch(error) {
+                if(error.sections === undefined) { throw error; }
+                errors.push(error);
+            }
+        }
+        if(errors.length > 0) { return makeError(errors); }
+        for(const path in nodes) {
+            const statements = nodes[path];
+            const generator = createGeneratorState(checker);
+            try {
+                code += generateBlock(statements, generator);
+            } catch(error) {
+                if(error.sections === undefined) { throw error; }
+                errors.push(error);
+            }
+        }
+        if(errors.length > 0) { return makeError(errors); }
+        return makeSuccess(code);
     }
 
     return {
+        message,
+    
         TokenType, 
         isAlphabetic, isNumeric, isAlphanumeric, 
         tokenize,
-        
+
+        NodeType,
         createParserState,
         parseValue, parseExpression, parseType, 
         parseArgumentList, parseStatement, parseStatementList,
-        
+
+        Type,
+        createCheckerState,
+        collectSymbols,
+        checkTypes, checkBlock,
+
+        createGeneratorState,    
         generateCode,
+        generateBlock,
 
         compile
     };
