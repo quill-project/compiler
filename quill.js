@@ -4,24 +4,74 @@
  * - [*] More useful errors
  * - [*] External functions and variables
  * - [ ] Module System
+ *     - [ ] Token types 'Identifier' and 'Path'
+ *           ('Path' contains at least one '::')
+ *     - [ ] Parse 'mod' and 'use' statements
+ *           (Store map of <name> -> <full path> in node)
+ *           - 'use std::(io, math::(E, PI as HALF_TAU), bits as bw)'
+ *           = 'io'       -> 'std::io'
+ *           = 'E'        -> 'std::math::E'
+ *           = 'HALF_TAU' -> 'std::math::PI'
+ *           = 'bw'       -> 'std::bits'
+ *     - [ ] Collect and store all modules,
+ *           their imports (same mappings as in import nodes)
+ *           and the current module in the checker
+ *     - [ ] Store the full paths of symbols in the checker
+ *     - [ ] Check against duplicate symbols
+ *           - Also check in other maps for functions, variables, ...
+ *             (function that checks all existing)
+ *     - [ ] Extend paths based on the imports
+ *           of the current module
+ *           (Look up the first element of a path in the
+ *           current module's import map, and replace if it exists)
+ *           - 'use std::bits as bw'
+ *           > 'bw' -> 'std::bits'
+ *           = 'bw::and' -> 'std::bits::and'
+ *     - [ ] Functions and variables need to be marked 'pub'
+ *           to be accessed from other modules
+ * - [ ] Method calls (smart pipes)
  * - [ ] Lambdas and Anonymous Functions
- * - [ ] Custom Types (Records)
+ * - [ ] Custom Types (Structs)
+ *      - properties not marked 'pub' can only be read and written
+ *        to from the module the struct was defined in
  * - [ ] Strings
- * - [ ] Arrays
- * - [ ] Templates / Generics
- * - [ ] Method calls (UFCS / Pipes)
+ * - [ ] 'while' and 'loop' loops, 'continue' and 'break'
+ *      - Have instructions in the same block after
+ *        a 'continue' or 'break' be an error
+ * - [ ] Templates / Generics???
+ * - [ ] Variable argument counts and / or lists???
  */
 
 /*
 
-union Option<T>(Some: T, None: unit)
-enum Role(Guest, User, Moderator, Admin)
+mod std::io
 
-fun add<T>(a: T, b: T) -> T {
-    return a + b
-}
+use std::(iter, opt, res as r)
 
-record Cat(name: String, age: Int, hunger: Float)
+my_optional_value |> unwrap()
+// this will try the following:
+// 1. Extend it normally
+//     - If this exists, it only tries that
+// 2. Append the called path to all imported paths
+//    and choose the one which both exists and has
+//    fitting types
+//    (e.g. if 'use std::io', then 'std::io' :: 'unwrap')
+//    (if multiple can work, throw an error)
+//     - ('use std::(iter, opt, res)')
+//     = '|> std::iter::unwrap()'
+//     = '|> std::opt::unwrap()'
+//     = '|> std::res::unwrap()'
+
+/*
+
+// not writing a type makes it 'Unit'
+enum Option[T](Some: T, None)
+struct Member(name: String, friend: List[Member]) 
+enum User(Guest, Member: Member, Moderator: Member, Admin: Member)
+
+fun add[T](a: T, b: T) -> T = a + b
+
+struct Cat(name: String, age: Int, hunger: Float)
 
 fun feed(self: Cat, amount: Int) {
     self.hunger -= amount
@@ -873,14 +923,17 @@ const quill = (function() {
             enterScope: function(returnType = null) {
                 this.scopes.push({
                     variables: {},
-                    returnType
+                    returnType,
+                    alwaysReturns: false
                 });
             },
             scope: function() {
                 return this.scopes.at(-1);
             },
             exitScope: function() {
+                const alwaysReturns = this.scope().alwaysReturns;
                 this.scopes.pop();
+                return alwaysReturns;
             },
             reset: function() {
                 this.scopes = [];
@@ -950,7 +1003,7 @@ const quill = (function() {
         // collect all types
         for(const node of statements) {
             switch(node.type) {
-                // case NodeType.Record:
+                // case NodeType.Struct:
                     // todo - add to 'state.types'
             }
         }
@@ -978,7 +1031,7 @@ const quill = (function() {
                     };
                     continue;
                 }
-                // case NodeType.Record: ...
+                // case NodeType.Struct: ...
                 //     (update from state.types)
             }
         }
@@ -1056,8 +1109,8 @@ const quill = (function() {
                     // TODO: NON-VARIABLE ACCESSES
                     //     FUNCTIONS -> TO EQUAL LAMBDA TYPE
                     //         fun test(a: Int) -> Int  =>  fun(Int) -> Int
-                    //     RECORDS -> TO CONSTRUCTOR LAMBDA TYPE
-                    //         record Cat(name: str)    =>  fun(str) -> Cat
+                    //     STRUCTS / ENUMS -> TO CONSTRUCTOR LAMBDA TYPE
+                    //         struct Cat(name: str)    =>  fun(str) -> Cat
                     throw message.from(
                         message.error(`Unknown variable '${node.value}'`),
                         message.code(node)
@@ -1127,7 +1180,7 @@ const quill = (function() {
                             }
                             return called.returnType;
                         }
-                        // TODO: CHECK FOR RECORD HERE, THEN CONSTRUCT
+                        // TODO: CHECK FOR STRUCT / ENUM HERE, THEN CONSTRUCT
                     }
                     // TODO: CALL LAMBDA
                     throw message.internalError(
@@ -1179,13 +1232,15 @@ const quill = (function() {
                     }
                     const value = checkTypes(node.value, state);
                     assertTypesEqual(returnType, value, node);
+                    state.scope().alwaysReturns = true;
                     return null;
                 }
                 case NodeType.If: {
                     const cond = checkTypes(node.cond, state);
                     assertTypesEqual(cond, { type: Type.Boolean, node }, node);
-                    checkBlock(node.ifBody, state);
-                    checkBlock(node.elseBody, state);
+                    const ifReturns = checkBlock(node.ifBody, state);
+                    const elseReturns = checkBlock(node.elseBody, state);
+                    state.scope().alwaysReturns |= (ifReturns && elseReturns);
                     return null;
                 }
 
@@ -1204,7 +1259,21 @@ const quill = (function() {
                             checkTypes(statement, state);
                         }
                     }
-                    state.exitScope();
+                    const alwaysReturns = state.exitScope();
+                    const missingReturn = !node.isExternal 
+                        && !alwaysReturns && returnType.type !== Type.Unit
+                    if(missingReturn) {
+                        throw message.from(
+                            message.error(`Function '${node.name}' does not always return a value`),
+                            message.note(`The function specifies '${displayType(returnType)}' as the return type here:`),
+                            message.code(node.returnType),
+                            message.note(`However, the end of the function can be reached:`),
+                            message.code(
+                                node.body.length === 0? node : node.body.at(-1)
+                            ),
+                            message.note(`This is only allowed if the function returns 'Unit'`)
+                        );
+                    }
                     return null;
                 }
             }
@@ -1223,7 +1292,7 @@ const quill = (function() {
         for(const node of nodes) {
             checkTypes(node, state);
         }
-        state.exitScope();
+        return state.exitScope();
     }
 
     function checkVariables(statements, state) {
