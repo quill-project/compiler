@@ -3,37 +3,12 @@
  * - ...
  * - [*] More useful errors
  * - [*] External functions and variables
- * - [ ] Module System
- *     - [ ] Token types 'Identifier' and 'Path'
- *           ('Path' contains at least one '::')
- *     - [ ] Parse 'mod' and 'use' statements
- *           (Store map of <name> -> <full path> in node)
- *           - 'use std::(io, math::(E, PI as HALF_TAU), bits as bw)'
- *           = 'io'       -> 'std::io'
- *           = 'E'        -> 'std::math::E'
- *           = 'HALF_TAU' -> 'std::math::PI'
- *           = 'bw'       -> 'std::bits'
- *     - [ ] Collect and store all modules,
- *           their imports (same mappings as in import nodes)
- *           and the current module in the checker
- *     - [ ] Store the full paths of symbols in the checker
- *     - [ ] Check against duplicate symbols
- *           - Also check in other maps for functions, variables, ...
- *             (function that checks all existing)
- *     - [ ] Extend paths based on the imports
- *           of the current module
- *           (Look up the first element of a path in the
- *           current module's import map, and replace if it exists)
- *           - 'use std::bits as bw'
- *           > 'bw' -> 'std::bits'
- *           = 'bw::and' -> 'std::bits::and'
- *     - [ ] Functions and variables need to be marked 'pub'
- *           to be accessed from other modules
+ * - [*] Module System
  * - [ ] Method calls (smart pipes)
  * - [ ] Lambdas and Anonymous Functions
  * - [ ] Custom Types (Structs)
- *      - properties not marked 'pub' can only be read and written
- *        to from the module the struct was defined in
+ *      - 'pub' doesn't control usage of the type itself,
+ *        but whether it can be created and accessed / written to
  * - [ ] Strings
  * - [ ] 'while' and 'loop' loops, 'continue' and 'break'
  *      - Have instructions in the same block after
@@ -183,8 +158,11 @@ const quill = (function() {
                                     .padStart(lineCW, " ");
                                 output += `\n ${lineC}   ${line}`;
                                 output += `\n ${" ".repeat(lineCW)}   `;
-                                for(let c = 1; c <= endCol; c += 1) {
-                                    output += c >= startCol? "^" : " ";
+                                for(let c = 1; c <= line.length; c += 1) {
+                                    let m = l >= startLine && l <= endLine;
+                                    if(l === startLine) { m &= c >= startCol; }
+                                    if(l === endLine) { m &= c <= endCol; }
+                                    output += m? "^" : " ";
                                 }
                             }
                         }
@@ -221,6 +199,7 @@ const quill = (function() {
         "ArrowRight",
         "DoubleAmpersand",
         "DoublePipe",
+        "PathSeparator",
 
         "ParenOpen",
         "ParenClose",
@@ -245,6 +224,10 @@ const quill = (function() {
         "KeywordReturn",
         "KeywordVal",
         "KeywordMut",
+        "KeywordMod",
+        "KeywordUse",
+        "KeywordAs",
+        "KeywordPub",
 
         "End"
     );
@@ -257,6 +240,7 @@ const quill = (function() {
         "->": TokenType.ArrowRight,
         "&&": TokenType.DoubleAmpersand,
         "||": TokenType.DoublePipe,
+        "::": TokenType.PathSeparator,
 
         "(": TokenType.ParenOpen,
         ")": TokenType.ParenClose,
@@ -281,6 +265,10 @@ const quill = (function() {
         "return": TokenType.KeywordReturn,
         "val": TokenType.KeywordVal,
         "mut": TokenType.KeywordMut,
+        "mod": TokenType.KeywordMod,
+        "use": TokenType.KeywordUse,
+        "as": TokenType.KeywordAs,
+        "pub": TokenType.KeywordPub,
 
         "true": TokenType.BoolLiteral,
         "false": TokenType.BoolLiteral,
@@ -302,6 +290,7 @@ const quill = (function() {
             case TokenType.ArrowRight: return "'->'";
             case TokenType.DoubleAmpersand: return "'&&'";
             case TokenType.DoublePipe: return "'||'";
+            case TokenType.PathSeparator: return "'::'";
 
             case TokenType.ParenOpen: return "'('";
             case TokenType.ParenClose: return "')'";
@@ -326,6 +315,10 @@ const quill = (function() {
             case TokenType.KeywordReturn: return "'return'";
             case TokenType.KeywordVal: return "'val'";
             case TokenType.KeywordMut: return "'mut'";
+            case TokenType.KeywordMod: return "'mod'";
+            case TokenType.KeywordUse: return "'use'";
+            case TokenType.KeywordAs: return "'as'";
+            case TokenType.KeywordPub: return "'pub'";
 
             case TokenType.End: return "the end of the file";
         }
@@ -478,7 +471,7 @@ const quill = (function() {
     });
 
     const NodeType = makeEnum(
-        "Identifier",
+        "Path",
         "IntLiteral",
         "FloatLiteral",
         "BoolLiteral",
@@ -496,6 +489,8 @@ const quill = (function() {
         "Return",
         "If",
 
+        "Module",
+        "Usage",
         "Function"
     );
 
@@ -524,6 +519,24 @@ const quill = (function() {
         };
     }
 
+    function parsePath(state, endOut = null) {
+        let result = "";
+        for(;;) {
+            state.assertType(TokenType.Identifier);
+            result += state.curr().content;
+            state.next();
+            const isSeparator = state.curr().type 
+                === TokenType.PathSeparator;
+            if(!isSeparator) { break; }
+            result += "::";
+            if(endOut !== null) { 
+                endOut.value = state.curr().end; 
+            }
+            state.next();
+        }
+        return result;
+    }
+
     function parseValue(state) {
         const start = state.curr();
         const value = start.content;
@@ -536,8 +549,8 @@ const quill = (function() {
                 return value;
             }
             case TokenType.Identifier: {
-                state.next();
-                return valueNodeFrom(NodeType.Identifier, value, start);
+                const path = parsePath(state);
+                return valueNodeFrom(NodeType.Path, path, start);
             }
             case TokenType.IntLiteral: {
                 state.next();
@@ -663,7 +676,7 @@ const quill = (function() {
                 const token = state.curr();
                 state.next();
                 return {
-                    type: NodeType.Identifier, value: token.content,
+                    type: NodeType.Path, value: token.content,
                     path: token.path, start: token.start, end: token.end
                 };
             }
@@ -717,7 +730,7 @@ const quill = (function() {
             }
         };
         const start = state.curr();
-        const parseFunction = isExternal => {
+        const parseFunction = (isPublic, isExternal) => {
             assertTopLevel(true);
             state.assertType(TokenType.KeywordFun);
             state.next();
@@ -742,7 +755,7 @@ const quill = (function() {
                 returnType = parseType(state);
             } else {
                 returnType = {
-                    type: NodeType.Identifier, value: "Unit",
+                    type: NodeType.Path, value: "Unit",
                     path: start.path, start: start.start, end: start.end
                 };
             }
@@ -780,12 +793,12 @@ const quill = (function() {
                 state.next();
             }
             return {
-                type: NodeType.Function, isExternal, 
+                type: NodeType.Function, isPublic, isExternal, 
                 name, args, returnType, body, externalName,
                 path: start.path, start: start.start, end
             };
         };
-        const parseVariable = isExternal => {
+        const parseVariable = (isPublic, isExternal) => {
             const isMutable = state.curr().type 
                 == TokenType.KeywordMut;
             state.next();
@@ -817,30 +830,107 @@ const quill = (function() {
                 state.next();
             }
             return {
-                type: NodeType.Variable, isExternal, isMutable, 
+                type: NodeType.Variable, 
+                isPublic, isExternal, isMutable, 
                 name, valueType, value, externalName,
                 path: start.path, start: start.start, end
             };
         };
+        const parseExternal = isPublic => {
+            state.next();
+            state.assertType(
+                TokenType.KeywordFun,
+                TokenType.KeywordVal, TokenType.KeywordMut
+            );
+            if(state.curr().type === TokenType.KeywordFun) {
+                return parseFunction(isPublic, true);    
+            } else {
+                return parseVariable(isPublic, true);
+            }
+        };
         switch(state.curr().type) {
-            case TokenType.KeywordExt: {
+            case TokenType.KeywordPub: {
                 state.next();
                 state.assertType(
-                    TokenType.KeywordFun,
-                    TokenType.KeywordVal, TokenType.KeywordMut
+                    TokenType.KeywordExt,
+                    TokenType.KeywordFun, 
+                    TokenType.KeywordVal,
+                    TokenType.KeywordMut
                 );
-                if(state.curr().type === TokenType.KeywordFun) {
-                    return parseFunction(true);    
-                } else {
-                    return parseVariable(true);
+                switch(state.curr().type) {
+                    case TokenType.KeywordExt:
+                        return parseExternal(true);
+                    case TokenType.KeywordFun:
+                        return parseFunction(true, false);
+                    case TokenType.KeywordVal:
+                    case TokenType.KeywordMut:
+                        return parseVariable(true, false);
                 }
             }
+            case TokenType.KeywordExt: {
+                return parseExternal(false);
+            }
             case TokenType.KeywordFun: {
-                return parseFunction(false);
+                return parseFunction(false, false);
             }
             case TokenType.KeywordVal:
             case TokenType.KeywordMut: {
-                return parseVariable(false);
+                return parseVariable(false, false);
+            }
+            case TokenType.KeywordMod: {
+                state.next();
+                const end = { value: null };
+                const path = parsePath(state, end);
+                return {
+                    type: NodeType.Module, name: path,
+                    path: start.path, start: start.start, end: end.value
+                };
+            }
+            case TokenType.KeywordUse: {
+                const parseUsages = base => {
+                    let path = [...base];
+                    state.assertType(TokenType.Identifier);
+                    while(state.curr().type === TokenType.Identifier) {
+                        path.push(state.curr().content);
+                        state.next();
+                        if(state.curr().type === TokenType.PathSeparator) {
+                            state.next();
+                            continue;
+                        }
+                        let usages = {};
+                        if(state.curr().type === TokenType.KeywordAs) {
+                            state.next();
+                            state.assertType(TokenType.Identifier);
+                            usages[state.curr().content] = path.join("::");
+                            state.next();
+                        } else {
+                            const end = path.at(-1);
+                            usages[end] = path.join("::");
+                        }
+                        return usages;
+                    }
+                    state.assertType(TokenType.ParenOpen);
+                    state.next();
+                    let usages = {};
+                    while(state.curr().type !== TokenType.ParenClose) {
+                        const branch = parseUsages(path);
+                        for(const usage in branch) {
+                            usages[usage] = branch[usage];
+                        }
+                        state.assertType(TokenType.Comma, TokenType.ParenClose);
+                        if(state.curr().type === TokenType.Comma) {
+                            state.next();
+                        }
+                    }
+                    state.next();
+                    return usages;
+                };
+                state.next();
+                const usages = parseUsages([]);
+                return {
+                    type: NodeType.Usage, usages,
+                    path: start.path, start: start.start, end: start.end
+                };
             }
             case TokenType.KeywordReturn: {
                 assertTopLevel(false);
@@ -915,9 +1005,11 @@ const quill = (function() {
 
     function createCheckerState() {
         return {
+            module: "",
+            usages: {},
             functions: {},
             variables: {},
-            types: {},
+            structs: {},
             scopes: [],
 
             enterScope: function(returnType = null) {
@@ -936,6 +1028,8 @@ const quill = (function() {
                 return alwaysReturns;
             },
             reset: function() {
+                this.module = "";
+                this.usages = {};
                 this.scopes = [];
             },
 
@@ -967,7 +1061,7 @@ const quill = (function() {
         "Integer",
         "Float",
         "Boolean",
-        "Named"
+        "Struct"
     );
 
     const builtinTypeNames = Object.freeze({
@@ -979,15 +1073,16 @@ const quill = (function() {
 
     function typeFromNode(node, state) {
         switch(node.type) {
-            case NodeType.Identifier: {
-                const builtin = builtinTypeNames[node.value];
+            case NodeType.Path: {
+                const path = expandUsages(node.value, state);
+                const builtin = builtinTypeNames[path];
                 if(builtin !== undefined) { 
                     return { type: builtin, node }; 
                 }
-                const custom = state.types[node.value];
-                if(custom !== undefined) {
+                const struct = state.structs[path];
+                if(struct !== undefined) {
                     return { 
-                        type: Type.Named, name: node.value, node 
+                        type: Type.Struct, name: path, node 
                     };
                 }
                 throw message.from(
@@ -999,16 +1094,50 @@ const quill = (function() {
         throw message.internalError(`Unhandled node type ${node.type}`);
     }
 
-    function collectSymbols(statements, state) {
-        // collect all types
-        for(const node of statements) {
-            switch(node.type) {
-                // case NodeType.Struct:
-                    // todo - add to 'state.types'
+    function handleModules(node, state) {
+        switch(node.type) {
+            case NodeType.Module: {
+                state.module = node.name;
+                state.usages = {};
+                break;
+            }
+            case NodeType.Usage: {
+                for(const usage in node.usages) {
+                    const replacement = node.usages[usage];
+                    state.usages[usage] = replacement;
+                }
+                break;
             }
         }
+    }
+
+    function hasSymbol(path, state) {
+        return state.functions[path] !== undefined
+            || state.variables[path] !== undefined
+            || state.structs[path] !== undefined;
+    }
+
+    function collectSymbols(statements, state) {
+        const assertUnique = (node, path) => {
+            if(!hasSymbol(path, state)) { return; }
+            throw message.from(
+                message.error(`The symbol '${path}' exists more than once`),
+                message.code(node),
+                message.note("There may only be one symbol of the same name in the same module")
+            );
+        };
+        // collect all types
+        for(const node of statements) {
+            handleModules(node, state);
+            switch(node.type) {
+                // case NodeType.Struct:
+                    // todo - add to 'state.structs'
+            }
+        }
+        state.reset();
         // collect all symbols, fully collect types
         for(const node of statements) {
+            handleModules(node, state);
             switch(node.type) {
                 case NodeType.Function: {
                     const args = node.args.map(a => {
@@ -1017,7 +1146,10 @@ const quill = (function() {
                             type: typeFromNode(a.type, state)
                         };
                     });
-                    state.functions[node.name] = {
+                    const path = state.module.length === 0
+                        ? node.name : state.module + "::" + node.name;
+                    assertUnique(node, path);
+                    state.functions[path] = {
                         node, args, 
                         returnType: typeFromNode(node.returnType, state)
                     };
@@ -1026,15 +1158,49 @@ const quill = (function() {
                 case NodeType.Variable: {
                     const type = node.valueType === null? null
                         : typeFromNode(node.valueType, state);
-                    state.variables[node.name] = {
+                    const path = state.module.length === 0
+                        ? node.name : state.module + "::" + node.name;
+                    assertUnique(node, path);
+                    state.variables[path] = {
                         node, type, isMutable: node.isMutable
                     };
                     continue;
                 }
                 // case NodeType.Struct: ...
-                //     (update from state.types)
+                //     (update from state.structs)
             }
         }
+    }
+
+    function expandUsages(path, state) {
+        const inModule = state.module.length === 0
+            ? path : state.module + "::" + path;
+        if(hasSymbol(inModule, state)) { return inModule; }
+        const pathSegs = path.split("::");
+        const start = pathSegs.at(0);
+        const expansion = state.usages[start];
+        if(expansion !== undefined) {
+            let result = expansion; 
+            if(pathSegs.length > 1) {
+                result += "::" + pathSegs.slice(1).join("::");
+            }
+            return result;
+        }
+        return path;
+    }
+
+    function assertSymbolExposed(node, symbolPath, symbol, state) {
+        if(symbol.node.isPublic) { return; }
+        const symbolModule = symbolPath
+            .split("::").slice(0, -1).join("::");
+        if(symbolModule === state.module) { return; }
+        throw message.from(
+            message.error(`'${symbolPath}' is not public but accessed from a different module`),
+            message.code(node),
+            message.note(`'${symbolPath}' is defined here:`),
+            message.code(symbol.node),
+            message.note(`The access is in '${state.module}', which is only valid if '${symbolPath}' is declared as public`)
+        );
     }
 
     function displayType(t) {
@@ -1043,7 +1209,7 @@ const quill = (function() {
             case Type.Integer: return "Int";
             case Type.Float: return "Float";
             case Type.Boolean: return "Boolean";
-            case Type.Named: return type.name;
+            case Type.Struct: return type.name;
         }
         return `<unhandled type: ${t.type}>`;
     }
@@ -1085,7 +1251,7 @@ const quill = (function() {
         };
         const check = () => {
             switch(node.type) {
-                case NodeType.Identifier: {
+                case NodeType.Path: {
                     const assertImmutable = variable => {
                         if(!assignment || variable.isMutable) { return; }
                         throw message.from(
@@ -1097,11 +1263,15 @@ const quill = (function() {
                     };
                     const variable = state.findLocalVariable(node.value);
                     if(variable !== null) {
+                        node.fullPath = node.value;
                         assertImmutable(variable);
                         return variable.type;
                     }
-                    const global = state.variables[node.value];
+                    const path = expandUsages(node.value, state);
+                    const global = state.variables[path];
                     if(global !== undefined) {
+                        assertSymbolExposed(node, path, global, state);
+                        node.fullPath = path;
                         assertImmutable(global);
                         return global.type;
                     }
@@ -1159,9 +1329,12 @@ const quill = (function() {
                 }
                 case NodeType.Call: {
                     assertReadOnly();
-                    if(node.called.type === NodeType.Identifier) {
-                        const called = state.functions[node.called.value];
+                    if(node.called.type === NodeType.Path) {
+                        const path = expandUsages(node.called.value, state);
+                        const called = state.functions[path];
                         if(called !== undefined) {
+                            assertSymbolExposed(node, path, called, state);
+                            node.called.fullPath = path;
                             if(called.args.length !== node.args.length) {
                                 throw message.from(
                                     message.error(`Function '${node.called.value}'`
@@ -1169,7 +1342,7 @@ const quill = (function() {
                                         + ` but ${node.args.length} were provided`
                                     ),
                                     message.code(node),
-                                    message.note(`'${node.called.value}' defined here:`),
+                                    message.note("'" + node.called.value + "' defined here:"),
                                     message.code(called.node)
                                 );
                             }
@@ -1207,7 +1380,10 @@ const quill = (function() {
                     }
                     const type = got !== null? got : exp;
                     if(state.isBase()) {
-                        state.variables[node.name].type = type;
+                        const path = state.module.length === 0
+                            ? node.name : state.module + "::" + node.name;
+                        node.fullPath = path;
+                        state.variables[path].type = type;
                     } else {
                         const scope = state.scope();
                         scope.variables[node.name] = {
@@ -1245,6 +1421,9 @@ const quill = (function() {
                 }
 
                 case NodeType.Function: {
+                    const path = state.module.length === 0
+                        ? node.name : state.module + "::" + node.name;
+                    node.fullPath = path;
                     const returnType = typeFromNode(node.returnType, state);
                     state.enterScope(returnType);
                     const scope = state.scope();
@@ -1276,6 +1455,9 @@ const quill = (function() {
                     }
                     return null;
                 }
+                case NodeType.Module:
+                case NodeType.Usage:
+                    return null;
             }
             throw message.internalError(`Unhandled node type ${node.type}`);
         };
@@ -1297,6 +1479,7 @@ const quill = (function() {
 
     function checkVariables(statements, state) {
         for(const node of statements) {
+            handleModules(node, state);
             if(node.type !== NodeType.Variable) { continue; }
             checkTypes(node, state);
         }
@@ -1304,6 +1487,7 @@ const quill = (function() {
 
     function checkSymbols(statements, state) {
         for(const node of statements) {
+            handleModules(node, state);
             if(node.type === NodeType.Variable) { continue; }
             checkTypes(node, state);
         }
@@ -1351,10 +1535,14 @@ const quill = (function() {
         };
     }
 
+    function manglePath(path) {
+        return path.split("::").join("$");
+    }
+
     function generateCode(node, state, into = null) {
         const intoOrAlloc = () => into === null? state.alloc() : into;
         switch(node.type) {
-            case NodeType.Identifier: {
+            case NodeType.Path: {
                 for(let i = state.scopes.length - 1; i >= 0; i -= 1) {
                     const scope = state.scopes[i];
                     if(!Object.hasOwn(scope.aliases, node.value)) { continue; }
@@ -1363,9 +1551,9 @@ const quill = (function() {
                     state.scope().output += `${into} = ${value};\n`;
                     return into;
                 }
-                const read = state.checker.variables[node.value];
+                const read = state.checker.variables[node.fullPath];
                 return read !== undefined && read.node.isExternal
-                    ? read.node.externalName : node.value;
+                    ? read.node.externalName : manglePath(node.fullPath);
             }
             case NodeType.IntLiteral:
                 const out = intoOrAlloc();
@@ -1409,8 +1597,8 @@ const quill = (function() {
             }
             case NodeType.Call: {
                 let called = null;
-                if(node.called.type === NodeType.Identifier) {
-                    const func = state.checker.functions[node.called.value];
+                if(node.called.type === NodeType.Path) {
+                    const func = state.checker.functions[node.called.fullPath];
                     if(func !== undefined && func.node.isExternal) {
                         called = func.node.externalName;
                     }
@@ -1447,7 +1635,7 @@ const quill = (function() {
                 if(node.isExternal) { return null; }
                 if(state.isBase()) {
                     const value = generateCode(node.value, state);
-                    state.scope().output += `let ${node.name} = ${value};\n`;
+                    state.scope().output += `let ${manglePath(node.fullPath)} = ${value};\n`;
                 } else {
                     const value = generateCode(node.value, state);
                     state.scope().aliases[node.name] = value;
@@ -1472,7 +1660,8 @@ const quill = (function() {
                 node.body.forEach(n => generateCode(n, state));
                 const body = state.scope().output;
                 const vars = state.exitScope();
-                state.scope().output += `function ${node.name}(${args}) {\n`
+                state.scope().output 
+                    += `function ${manglePath(node.fullPath)}(${args}) {\n`
                     + `${vars}${body}`
                     + `}\n`;
                 return null;
@@ -1493,6 +1682,9 @@ const quill = (function() {
                     + `}\n`;
                 return null;
             }
+            case NodeType.Module:
+            case NodeType.Usage:
+                return null;
         }
         throw message.internalError(`Unhandled node type ${node.type}`);
     }

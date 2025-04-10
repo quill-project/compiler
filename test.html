@@ -12,25 +12,32 @@
     const sources = {
         "test.quill": `
 
-ext fun print_int(n: Int) = print
-ext fun print_float(x: Float) = print
-ext fun add_int(a: Int, b: Int) -> Int = add
-ext fun add_float(a: Float, b: Float) -> Float = add
-ext fun sqrt(x: Float) -> Float = sqrt
+mod js
+
+pub ext fun print_int(n: Int) = print
+pub ext fun print_float(x: Float) = print
+pub ext fun add_int(a: Int, b: Int) -> Int = add
+pub ext fun add_float(a: Float, b: Float) -> Float = add
+pub ext fun sqrt(x: Float) -> Float = sqrt
+pub ext val PI: Float = PI
+
+
+mod test
+
+use js::(print_int, print_float, PI as pi)
 
 fun fib(n: Int) -> Int =
     if n <= 1 { n }
     else { fib(n - 1) + fib(n - 2) }
 
 fun main() {
-    print_float(TAU)
+    print_float(3.5)
+    print_int(fib(10))
 }
-
-ext val PI: Float = PI
 
 fun double(a: Float) -> Float = a * 2.0
 
-val TAU: Float = double(PI)
+val TAU: Float = test::double(pi)
 
         `
     };
@@ -39,7 +46,7 @@ val TAU: Float = double(PI)
     if(result.success) {
         console.log(result.code);
         eval(result.code);
-        main();
+        test$main();
     } else {
         console.log(result.errors
             .map(e => quill.message.display(e, sources))
