@@ -7,6 +7,7 @@
     const print = thing => console.log(thing);
     const add = (a, b) => a + b;
     const sqrt = x => Math.sqrt(x);
+    const rand = () => Math.random();
     const PI = Math.PI;
 
     const sources = {
@@ -16,6 +17,8 @@ mod js
 
 pub ext fun print_int(n: Int) = print
 pub ext fun print_float(x: Float) = print
+pub ext fun print_bool(b: Bool) = print
+pub ext fun rand() -> Float = rand
 pub ext fun add_int(a: Int, b: Int) -> Int = add
 pub ext fun add_float(a: Float, b: Float) -> Float = add
 pub ext fun sqrt(x: Float) -> Float = sqrt
@@ -24,20 +27,42 @@ pub ext val PI: Float = PI
 
 mod test
 
-use js::(print_int, print_float, PI as pi)
-
 fun fib(n: Int) -> Int =
     if n <= 1 { n }
     else { fib(n - 1) + fib(n - 2) }
 
 fun main() {
-    print_float(3.5)
-    print_int(fib(10))
+    js::print_float(3.5)
+    js::print_int(fib(10))
+    print_is_even(20, 0)
+}
+
+fun print_is_even(n: Int, c: Int) {
+    if c == n { return unit }
+    js::print_bool(is_even(c))
+    print_is_even(n, c + 1)
+}
+
+fun abs(n: Int) -> Int = if n < 0 { -n } else { n }
+
+fun is_even(n: Int) -> Bool {
+    case abs(n) {
+        0 { return true }
+        1 { return false }
+        2 { return true }
+        3 { return false }
+        4 { return true }
+        5 { return false }
+        6 { return true }
+        7 { return false }
+        8 { return true }
+    }
+    return js::rand() < 0.5
 }
 
 fun double(a: Float) -> Float = a * 2.0
 
-val TAU: Float = test::double(pi)
+val TAU: Float = double(js::PI)
 
         `
     };

@@ -4,47 +4,117 @@
  * - [*] More useful errors
  * - [*] External functions and variables
  * - [*] Module System
- * - [ ] Method calls (smart pipes)
- * - [ ] Lambdas and Anonymous Functions
- * - [ ] Custom Types (Structs)
- *      - 'pub' doesn't control usage of the type itself,
+ * - [*] Case statements
+ * - [ ] Custom Types
+ *     - [ ] Structs
+ *     - [ ] Enums
+ *         - [ ] Error if not all enum members are handled (and if else doesn't have a body)
+ *         - [ ] case ... { ... as ... { ... } ... as ... { ... } } else { ... }
+ *     - 'pub' doesn't control usage of the type itself,
  *        but whether it can be created and accessed / written to
+ * - [ ] Bi-directional type checking 
+ *     - (pass nullable expected type to expressions)
+ * - [ ] Template functions and types
+ *     - Template types must specify arguments
+ *     - Function template args must be inferrable 
+ *       from return type and provided arguments
+ * - [ ] Anonymous Functions
+ *     - Type must be inferrable from expected type,
+ *       otherwise error
  * - [ ] Strings
+ * - [ ] Arrays
+ * - [ ] Pipes and method calls (smart pipes)
+ *     1. Extend it normally
+ *         - If this exists, it only tries that
+ *     2. Append the called path to all imported paths
+ *        and choose the one which both exists and has
+ *        a fitting first argument type
+ *        (e.g. if 'use std::io', then 'std::io' :: 'unwrap')
+ *        (if multiple can work, throw an error)
+ *         - ('use std::(iter, opt, res)')
+ *         = '|> std::iter::unwrap()'
+ *         = '|> std::opt::unwrap()'
+ *         = '|> std::res::unwrap()'
+ * - [ ] Enum unwrapping ('?Some')
  * - [ ] 'while' and 'loop' loops, 'continue' and 'break'
- *      - Have instructions in the same block after
+ *     - Have instructions in the same block after
  *        a 'continue' or 'break' be an error
- * - [ ] Templates / Generics???
- * - [ ] Variable argument counts and / or lists???
+ * - [ ] Any?
  */
 
 /*
 
-mod std::io
 
-use std::(iter, opt, res as r)
+struct Cat { name: String, hunger: Float }
+
+struct Dog { name: String, speed: Float }
+
+enum Pet(Cat: Cat, Dog: Dog, Birdish)
+
+enum Option<T>(Some: T, None: Unit)
+
+val my_cat: Cat = Cat("Bob", 100000.0)
+val my_pet: Pet = Pet::Cat(my_cat)
+case my_pet {
+    Pet::Cat as my_cat {
+        
+    }
+    Pet::Dog as my_dog {
+    
+    }
+}
+
+fun map<T, R>(i: Iterator<T>, f: Fun(T) -> R) -> Iterator<R> 
+    = Iterator(|| i |> next() ?Some |> f() |> Option::Some())
+
+0..20 |> map(|n| n * 2)
+
+
+enum Value {
+    I64: Int,
+    F64: Float,
+    Str: String,
+    Undefined,
+    ...
+}
+
+fun add(a: Value, b: Value) -> Value {
+    case a {
+        
+    }
+}
+
+
+
+mod cool::example
+
+use std::(iter, opt, int, io as console)
+
+case my_iter |> next() {
+    10 {  }
+    5 {  }
+    5 {  }
+    Some as x {  }
+    None
+}
+
+my_iter |> next() |> unwrap_or_else(|| console::inputln()
+    |> int::parse()
+    |> expect("Invalid input!")
+)
 
 my_optional_value |> unwrap()
 // this will try the following:
-// 1. Extend it normally
-//     - If this exists, it only tries that
-// 2. Append the called path to all imported paths
-//    and choose the one which both exists and has
-//    fitting types
-//    (e.g. if 'use std::io', then 'std::io' :: 'unwrap')
-//    (if multiple can work, throw an error)
-//     - ('use std::(iter, opt, res)')
-//     = '|> std::iter::unwrap()'
-//     = '|> std::opt::unwrap()'
-//     = '|> std::res::unwrap()'
+
 
 /*
-
 // not writing a type makes it 'Unit'
-enum Option[T](Some: T, None)
-struct Member(name: String, friend: List[Member]) 
+enum Option<T>(Some: T, None: Unit)
+
+struct Member(name: String, friend: List<Member>) 
 enum User(Guest, Member: Member, Moderator: Member, Admin: Member)
 
-fun add[T](a: T, b: T) -> T = a + b
+fun add<T>(a: T, b: T) -> T = a + b
 
 struct Cat(name: String, age: Int, hunger: Float)
 
@@ -219,6 +289,7 @@ const quill = (function() {
 
         "KeywordIf",
         "KeywordElse",
+        "KeywordCase",
         "KeywordExt",
         "KeywordFun",
         "KeywordReturn",
@@ -260,6 +331,7 @@ const quill = (function() {
 
         "if": TokenType.KeywordIf,
         "else": TokenType.KeywordElse,
+        "case": TokenType.KeywordCase,
         "ext": TokenType.KeywordExt,
         "fun": TokenType.KeywordFun,
         "return": TokenType.KeywordReturn,
@@ -310,6 +382,7 @@ const quill = (function() {
 
             case TokenType.KeywordIf: return "'if'";
             case TokenType.KeywordElse: return "'else'";
+            case TokenType.KeywordCase: return "'case'";
             case TokenType.KeywordExt: return "'ext'";
             case TokenType.KeywordFun: return "'fun'";
             case TokenType.KeywordReturn: return "'return'";
@@ -488,6 +561,7 @@ const quill = (function() {
         "Assignment",
         "Return",
         "If",
+        "Case",
 
         "Module",
         "Usage",
@@ -599,10 +673,11 @@ const quill = (function() {
         }
         const prec = unaryOpPrec[start.content];
         if(prec !== undefined) {
-            start.next();
+            state.next();
             const value = parseExpression(state, prec);
             return { 
-                type: unaryOpType[start.content], value,
+                type: unaryOpType[start.content], 
+                op: start.content, value,
                 path: start.path, start: start.start, 
                 end: value.end
             };
@@ -974,6 +1049,54 @@ const quill = (function() {
                     path: start.path, start: start.start, end
                 };
             }
+            case TokenType.KeywordCase: {
+                assertTopLevel(false);
+                state.next();
+                const matched = parseExpression(state);
+                state.assertType(TokenType.BraceOpen);
+                state.next();
+                let branches = [];
+                while(state.curr().type !== TokenType.BraceClose) {
+                    const value = parseExpression(state);
+                    let end = value.end;
+                    let name = null;
+                    if(state.curr().type === TokenType.KeywordAs) {
+                        state.next();
+                        state.assertType(TokenType.Identifier);
+                        name = state.curr().content;
+                        end = state.curr().end;
+                        state.next();
+                    }
+                    state.assertType(TokenType.BraceOpen);
+                    state.next();
+                    const body = parseStatementList(state);
+                    state.assertType(TokenType.BraceClose);
+                    state.next();
+                    branches.push({
+                        value, name, body,
+                        path: value.path, start: value.start, end
+                    });
+                }
+                state.assertType(TokenType.BraceClose);
+                let end = state.curr().end;
+                let elseBody = null;
+                state.next();
+                if(state.curr().type === TokenType.KeywordElse) {
+                    state.next();
+                    state.assertType(TokenType.BraceOpen);
+                    state.next();
+                    elseBody = parseStatementList(state);
+                    state.assertType(TokenType.BraceClose);
+                    end = state.curr().end;
+                    state.next();
+                }
+                return {
+                    type: NodeType.Case, value: matched,
+                    branches, elseBody,
+                    path: start.path, start: start.start, end
+                };
+            
+            }
         }
         assertTopLevel(false);
         const expr = parseExpression(state);
@@ -1319,7 +1442,7 @@ const quill = (function() {
                 case NodeType.Negation: {
                     assertReadOnly();
                     const value = checkTypes(node.value, state);
-                    if(node.op == "-") {
+                    if(node.op === "-") {
                         assertNumberType(value, node, node);
                     } else {
                         const bool = { type: Type.Boolean, node };
@@ -1417,6 +1540,31 @@ const quill = (function() {
                     const ifReturns = checkBlock(node.ifBody, state);
                     const elseReturns = checkBlock(node.elseBody, state);
                     state.scope().alwaysReturns |= (ifReturns && elseReturns);
+                    return null;
+                }
+                case NodeType.Case: {
+                    const matchedValue = checkTypes(node.value, state);
+                    let alwaysReturns = true;
+                    for(const branch of node.branches) {
+                        const branchValue = checkTypes(branch.value, state);
+                        state.enterScope(null);
+                        if(branch.name !== null) {
+                            throw message.internalMessage("not yet implemented - enum value");
+                        }
+                        for(const statement of branch.body) {
+                            checkTypes(statement, state);
+                        }
+                        alwaysReturns &= state.exitScope();
+                    }
+                    if(node.elseBody !== null) {
+                        alwaysReturns &= checkBlock(node.elseBody, state);
+                    } else {
+                        alwaysReturns = false;
+                        // TODO! IF IS AN ENUM:
+                        //     ALWAYS RETURNS IF ALL CASES HANDLED
+                        //     BITCH AROUND IF NOT ALL CASES HANDLED
+                    }
+                    state.scope().alwaysReturns |= alwaysReturns;
                     return null;
                 }
 
@@ -1680,6 +1828,30 @@ const quill = (function() {
                     + `} else {\n`
                     + elseBody
                     + `}\n`;
+                return null;
+            }
+            case NodeType.Case: {
+                const matched = generateCode(node.value, state);
+                let branches = [];
+                for(const branch of node.branches) {
+                    const value = generateCode(branch.value, state);
+                    const body = generateBlock(branch.body, state);
+                    branches.push({ value, body });
+                }
+                const elseBody = node.elseBody === null? null
+                    : generateBlock(node.elseBody, state);
+                state.scope().output += `switch(${matched}) {\n`;
+                for(const branch of branches) {
+                    state.scope().output += `case ${branch.value}: {\n`
+                        + branch.body
+                        + `}\n`;
+                }
+                if(node.elseBody !== null) {
+                    state.scope().output += `default: {\n`
+                        + elseBody
+                        + `}\n`;
+                }
+                state.scope().output += `}\n`;
                 return null;
             }
             case NodeType.Module:
