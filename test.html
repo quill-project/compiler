@@ -25,6 +25,18 @@ pub ext fun sqrt(x: Float) -> Float = sqrt
 pub ext val PI: Float = PI
 
 
+mod pet
+
+struct Cat(age: Int, hunger: Float)
+
+pub fun make_cat(age: Int, hunger: Float) -> Cat 
+    = Cat(age, hunger)
+
+fun feed(self: Cat) {
+    self.hunger = 0.0
+}
+
+
 mod test
 
 fun fib(n: Int) -> Int =
@@ -35,6 +47,8 @@ fun main() {
     js::print_float(3.5)
     js::print_int(fib(10))
     print_is_even(20, 0)
+    val my_cat = pet::make_cat(5, 1.0)
+    js::print_float(my_cat.hunger)
 }
 
 fun print_is_even(n: Int, c: Int) {

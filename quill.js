@@ -6,8 +6,11 @@
  * - [*] Module System
  * - [*] Case statements
  * - [ ] Custom Types
- *     - [ ] Structs
+ *     - [*] Structs
  *     - [ ] Enums
+ *         - [ ] Definition
+ *         - [ ] Call Initialization (check for call in type checker, remove last path element to get variant name)
+ *         - [ ] Unit Initialization (check for path access in type checker, remove last path element to get variant name)
  *         - [ ] Error if not all enum members are handled (and if else doesn't have a body)
  *         - [ ] case ... { ... as ... { ... } ... as ... { ... } } else { ... }
  *     - 'pub' doesn't control usage of the type itself,
@@ -286,6 +289,7 @@ const quill = (function() {
         "Colon",
         "Comma",
         "ExclamationMark",
+        "Dot",
 
         "KeywordIf",
         "KeywordElse",
@@ -299,6 +303,7 @@ const quill = (function() {
         "KeywordUse",
         "KeywordAs",
         "KeywordPub",
+        "KeywordStruct",
 
         "End"
     );
@@ -328,6 +333,7 @@ const quill = (function() {
         ":": TokenType.Colon,
         ",": TokenType.Comma,
         "!": TokenType.ExclamationMark,
+        ".": TokenType.Dot,
 
         "if": TokenType.KeywordIf,
         "else": TokenType.KeywordElse,
@@ -341,6 +347,7 @@ const quill = (function() {
         "use": TokenType.KeywordUse,
         "as": TokenType.KeywordAs,
         "pub": TokenType.KeywordPub,
+        "struct": TokenType.KeywordStruct,
 
         "true": TokenType.BoolLiteral,
         "false": TokenType.BoolLiteral,
@@ -379,6 +386,7 @@ const quill = (function() {
             case TokenType.Colon: return "':'";
             case TokenType.Comma: return "','";
             case TokenType.ExclamationMark: return "'!'";
+            case TokenType.Dot: return "'.'";
 
             case TokenType.KeywordIf: return "'if'";
             case TokenType.KeywordElse: return "'else'";
@@ -392,6 +400,7 @@ const quill = (function() {
             case TokenType.KeywordUse: return "'use'";
             case TokenType.KeywordAs: return "'as'";
             case TokenType.KeywordPub: return "'pub'";
+            case TokenType.KeywordStruct: return "'struct'";
 
             case TokenType.End: return "the end of the file";
         }
@@ -530,7 +539,7 @@ const quill = (function() {
     }
 
     const binaryOpPrec = Object.freeze({
-        "(": 2,
+        "(": 2, ".": 2,
         "*": 3, "/": 3,
         "+": 4, "-": 4, 
         "<": 5, ">": 5, "<=": 5, ">=": 5,
@@ -554,7 +563,9 @@ const quill = (function() {
         "Additive",
         "Comparative",
         "Negation",
+        "MemberAccess",
         "Call",
+        "StructureInit",
         "IfExpr",
 
         "Variable",
@@ -565,7 +576,8 @@ const quill = (function() {
 
         "Module",
         "Usage",
-        "Function"
+        "Function",
+        "Structure"
     );
 
     const binaryOpType = Object.freeze({
@@ -691,23 +703,39 @@ const quill = (function() {
             const currPrec = binaryOpPrec[state.curr().content];
             if(currPrec === undefined) { return collected; }
             if(currPrec >= precedence) { return collected; }
-            if(state.curr().type == TokenType.ParenOpen) {
-                state.next();
-                let args = [];
-                while(state.curr().type != TokenType.ParenClose) {
-                    args.push(parseExpression(state));
-                    if(state.curr().type == TokenType.Comma) {
-                        state.next();
+            switch(state.curr().type) {
+                case TokenType.ParenOpen: {
+                    state.next();
+                    let args = [];
+                    while(state.curr().type != TokenType.ParenClose) {
+                        args.push(parseExpression(state));
+                        if(state.curr().type == TokenType.Comma) {
+                            state.next();
+                        }
                     }
+                    const end = state.curr();
+                    state.next();
+                    collected = {
+                        type: NodeType.Call, called: collected, args,
+                        path: collected.path, start: collected.start,
+                        end: end.end
+                    };
+                    continue;                
                 }
-                const end = state.curr();
-                state.next();
-                collected = {
-                    type: NodeType.Call, called: collected, args,
-                    path: collected.path, start: collected.start,
-                    end: end.end
-                };
-                continue;
+                case TokenType.Dot: {
+                    state.next();
+                    state.assertType(TokenType.Identifier);
+                    const name = state.curr().content;
+                    const end = state.curr().end;
+                    state.next();
+                    collected = {
+                        type: NodeType.MemberAccess, 
+                        accessed: collected, name,
+                        path: collected.path, start: collected.start,
+                        end
+                    };
+                    continue;
+                } 
             }
             const op = state.curr();
             state.next();
@@ -873,6 +901,24 @@ const quill = (function() {
                 path: start.path, start: start.start, end
             };
         };
+        const parseStructure = isPublic => {
+            assertTopLevel(true);
+            state.assertType(TokenType.KeywordStruct);
+            state.next();
+            state.assertType(TokenType.Identifier);
+            const name = state.curr().content;
+            state.next();
+            let end = state.curr().end;
+            const members = parseArgumentList(state);
+            if(members.length > 0) { 
+                end = members.at(-1).type.end; 
+            } 
+            return {
+                type: NodeType.Structure, isPublic,
+                name, members,
+                path: start.path, start: start.start, end
+            };
+        };
         const parseVariable = (isPublic, isExternal) => {
             const isMutable = state.curr().type 
                 == TokenType.KeywordMut;
@@ -930,7 +976,8 @@ const quill = (function() {
                     TokenType.KeywordExt,
                     TokenType.KeywordFun, 
                     TokenType.KeywordVal,
-                    TokenType.KeywordMut
+                    TokenType.KeywordMut,
+                    TokenType.KeywordStruct
                 );
                 switch(state.curr().type) {
                     case TokenType.KeywordExt:
@@ -940,6 +987,8 @@ const quill = (function() {
                     case TokenType.KeywordVal:
                     case TokenType.KeywordMut:
                         return parseVariable(true, false);
+                    case TokenType.KeywordStruct:
+                        return parseStructure(true);
                 }
             }
             case TokenType.KeywordExt: {
@@ -947,6 +996,9 @@ const quill = (function() {
             }
             case TokenType.KeywordFun: {
                 return parseFunction(false, false);
+            }
+            case TokenType.KeywordStruct: {
+                return parseStructure(false);
             }
             case TokenType.KeywordVal:
             case TokenType.KeywordMut: {
@@ -1253,8 +1305,13 @@ const quill = (function() {
         for(const node of statements) {
             handleModules(node, state);
             switch(node.type) {
-                // case NodeType.Struct:
-                    // todo - add to 'state.structs'
+                case NodeType.Structure: {
+                    const path = state.module.length === 0
+                        ? node.name : state.module + "::" + node.name;
+                    assertUnique(node, path);
+                    state.structs[path] = null;
+                    continue;
+                }
             }
         }
         state.reset();
@@ -1289,8 +1346,20 @@ const quill = (function() {
                     };
                     continue;
                 }
-                // case NodeType.Struct: ...
-                //     (update from state.structs)
+                case NodeType.Structure: {
+                    const members = node.members.map(m => {
+                        return {
+                            name: m.name,
+                            type: typeFromNode(m.type, state)
+                        };
+                    });
+                    const path = state.module.length === 0
+                        ? node.name : state.module + "::" + node.name;
+                    state.structs[path] = {
+                        node, members
+                    };
+                    continue;
+                }
             }
         }
     }
@@ -1405,7 +1474,7 @@ const quill = (function() {
                     //     STRUCTS / ENUMS -> TO CONSTRUCTOR LAMBDA TYPE
                     //         struct Cat(name: str)    =>  fun(str) -> Cat
                     throw message.from(
-                        message.error(`Unknown variable '${node.value}'`),
+                        message.error(`Access of unknown variable '${node.value}'`),
                         message.code(node)
                     );
                 }
@@ -1450,33 +1519,84 @@ const quill = (function() {
                     }
                     return value;
                 }
+                case NodeType.MemberAccess: {
+                    const accessed = checkTypes(node.accessed, state);
+                    if(accessed.type !== Type.Struct) {
+                        throw message.from(
+                            messsage.error(
+                                `Access of member ${node.name} of the non-struct `
+                                    + `type '${displayType(accessed)}'`
+                            ),
+                            message.code(node),
+                            message.note(`'${displayType(accessed)}' originates from here:`),
+                            message.code(accessed.node)
+                        );
+                    }
+                    const struct = state.structs[accessed.name];
+                    assertSymbolExposed(node, accessed.name, struct, state);
+                    for(const member of struct.members) {
+                        if(member.name !== node.name) { continue; }
+                        return member.type;
+                    }
+                    throw message.from(
+                        messsage.error(
+                            `Access of unknown member ${node.name} of `
+                                + `struct '${displayType(accessed)}'`
+                        ),
+                        message.code(node),
+                        message.note(`'${displayType(accessed)}' originates from here:`),
+                        message.code(accessed.node)
+                    );
+                }
                 case NodeType.Call: {
                     assertReadOnly();
+                    const assertMatchingArgC = (expC, gotC, path, node, symbol) => {
+                        if(expC === gotC) { return; }
+                        throw message.from(
+                            message.error(`'${path}'`
+                                + ` expects ${expC} argument(s),` 
+                                + ` but ${gotC} were provided`
+                            ),
+                            message.code(node),
+                            message.note("'" + path + "' is defined here:"),
+                            message.code(called.node)
+                        );
+                    };
+                    const assertMatchingArgTypes = (expected, got) => {
+                        for(const argI in expected) {
+                            const exp = expected[argI].type;
+                            const given = checkTypes(got[argI], state);
+                            assertTypesEqual(exp, given, expected[argI]);
+                        }
+                    };
                     if(node.called.type === NodeType.Path) {
                         const path = expandUsages(node.called.value, state);
-                        const called = state.functions[path];
+                        let called = state.functions[path];
                         if(called !== undefined) {
                             assertSymbolExposed(node, path, called, state);
                             node.called.fullPath = path;
-                            if(called.args.length !== node.args.length) {
-                                throw message.from(
-                                    message.error(`Function '${node.called.value}'`
-                                        + ` expects ${called.args.length} argument(s),` 
-                                        + ` but ${node.args.length} were provided`
-                                    ),
-                                    message.code(node),
-                                    message.note("'" + node.called.value + "' defined here:"),
-                                    message.code(called.node)
-                                );
-                            }
-                            for(const argI in called.args) {
-                                const given = checkTypes(node.args[argI], state);
-                                const expected = called.args[argI].type;
-                                assertTypesEqual(expected, given, node.args[argI]);
-                            }
+                            assertMatchingArgC(
+                                called.args.length, node.args.length,
+                                path, node, called
+                            );
+                            assertMatchingArgTypes(called.args, node.args);
                             return called.returnType;
                         }
-                        // TODO: CHECK FOR STRUCT / ENUM HERE, THEN CONSTRUCT
+                        called = state.structs[path];
+                        if(called !== undefined) {
+                            assertSymbolExposed(node, path, called, state);
+                            node.called.fullPath = path;
+                            assertMatchingArgC(
+                                called.members.length, node.args.length,
+                                path, node, called
+                            );
+                            assertMatchingArgTypes(called.members, node.args);
+                            node.type = NodeType.StructureInit;
+                            return {
+                                type: Type.Struct, name: path, node 
+                            };
+                        }
+                        // TODO: CHECK FOR ENUM HERE, THEN CONSTRUCT
                     }
                     // TODO: CALL LAMBDA
                     throw message.internalError(
@@ -1603,6 +1723,8 @@ const quill = (function() {
                     }
                     return null;
                 }
+                case NodeType.Structure:
+                case NodeType.StructureInit:
                 case NodeType.Module:
                 case NodeType.Usage:
                     return null;
@@ -1743,6 +1865,10 @@ const quill = (function() {
                 state.scope().output += `${out} = ${node.op} ${value};\n`;
                 return out;
             }
+            case NodeType.MemberAccess: {
+                const accessed = generateCode(node.accessed, state);
+                return `${accessed}.${node.name}`;
+            }
             case NodeType.Call: {
                 let called = null;
                 if(node.called.type === NodeType.Path) {
@@ -1759,6 +1885,19 @@ const quill = (function() {
                     .join(", ");
                 const out = intoOrAlloc();
                 state.scope().output += `${out} = ${called}(${args});\n`;
+                return out;
+            }
+            case NodeType.StructureInit: {
+                const struct = state.checker.structs[node.called.fullPath];
+                const args = node.args.map(n => generateCode(n, state));
+                const out = intoOrAlloc();
+                state.scope().output += `${out} = {`;
+                for(const memberI in args) {
+                    const name = struct.members[memberI].name;
+                    if(memberI > 0) { state.scope().output += ","; }
+                    state.scope().output += ` ${name}: ${args[memberI]}`;
+                }
+                state.scope().output += ` };\n`;
                 return out;
             }
             case NodeType.IfExpr: {
@@ -1856,6 +1995,7 @@ const quill = (function() {
             }
             case NodeType.Module:
             case NodeType.Usage:
+            case NodeType.Structure:
                 return null;
         }
         throw message.internalError(`Unhandled node type ${node.type}`);
