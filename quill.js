@@ -8,8 +8,8 @@
  * - [ ] Custom Types
  *     - [*] Structs
  *     - [ ] Enums
- *         - [ ] Definition
- *         - [ ] Call Initialization (check for call in type checker, remove last path element to get variant name)
+ *         - [*] Definition
+ *         - [*] Call Initialization (check for call in type checker, remove last path element to get variant name)
  *         - [ ] Unit Initialization (check for path access in type checker, remove last path element to get variant name)
  *         - [ ] Error if not all enum members are handled (and if else doesn't have a body)
  *         - [ ] case ... { ... as ... { ... } ... as ... { ... } } else { ... }
@@ -304,6 +304,7 @@ const quill = (function() {
         "KeywordAs",
         "KeywordPub",
         "KeywordStruct",
+        "KeywordEnum",
 
         "End"
     );
@@ -348,6 +349,7 @@ const quill = (function() {
         "as": TokenType.KeywordAs,
         "pub": TokenType.KeywordPub,
         "struct": TokenType.KeywordStruct,
+        "enum": TokenType.KeywordEnum,
 
         "true": TokenType.BoolLiteral,
         "false": TokenType.BoolLiteral,
@@ -401,6 +403,7 @@ const quill = (function() {
             case TokenType.KeywordAs: return "'as'";
             case TokenType.KeywordPub: return "'pub'";
             case TokenType.KeywordStruct: return "'struct'";
+            case TokenType.KeywordEnum: return "'enum'";
 
             case TokenType.End: return "the end of the file";
         }
@@ -566,6 +569,7 @@ const quill = (function() {
         "MemberAccess",
         "Call",
         "StructureInit",
+        "EnumerationInit",
         "IfExpr",
 
         "Variable",
@@ -577,7 +581,8 @@ const quill = (function() {
         "Module",
         "Usage",
         "Function",
-        "Structure"
+        "Structure",
+        "Enumeration"
     );
 
     const binaryOpType = Object.freeze({
@@ -776,18 +781,18 @@ const quill = (function() {
     function parseType(state) {
         switch(state.curr().type) {
             case TokenType.Identifier: {
-                const token = state.curr();
-                state.next();
+                const start = state.curr();
+                const path = parsePath(state);
                 return {
-                    type: NodeType.Path, value: token.content,
-                    path: token.path, start: token.start, end: token.end
+                    type: NodeType.Path, value: path,
+                    path: start.path, start: start.start, end: start.end
                 };
             }
         }
         state.reportUnexpected("a type");
     }
 
-    function parseArgumentList(state) {
+    function parseArgumentList(state, allowMissing = false) {
         state.assertType(TokenType.ParenOpen);
         state.next();
         let args = [];
@@ -795,12 +800,18 @@ const quill = (function() {
             TokenType.Identifier, TokenType.ParenClose
         );
         while(state.curr().type == TokenType.Identifier) {
-            const name = state.curr().content;
+            const name = state.curr();
             state.next();
-            state.assertType(TokenType.Colon);
-            state.next();
-            const type = parseType(state);
-            args.push({ name, type });
+            let type = {
+                type: NodeType.Path, value: "Unit",
+                path: name.path, start: name.start, end: name.end
+            };
+            if(!allowMissing || state.curr().type === TokenType.Colon) {
+                state.assertType(TokenType.Colon);
+                state.next();
+                type = parseType(state);
+            }
+            args.push({ name: name.content, type });
             state.assertType(
                 TokenType.Comma, TokenType.ParenClose
             );
@@ -919,6 +930,24 @@ const quill = (function() {
                 path: start.path, start: start.start, end
             };
         };
+        const parseEnumeration = isPublic => {
+            assertTopLevel(true);
+            state.assertType(TokenType.KeywordEnum);
+            state.next();
+            state.assertType(TokenType.Identifier);
+            const name = state.curr().content;
+            state.next();
+            let end = state.curr().end;
+            const members = parseArgumentList(state, true);
+            if(members.length > 0) {
+                end = members.at(-1).type.end;
+            }
+            return {
+                type: NodeType.Enumeration, isPublic,
+                name, members,
+                path: start.path, start: start.start, end
+            };
+        };
         const parseVariable = (isPublic, isExternal) => {
             const isMutable = state.curr().type 
                 == TokenType.KeywordMut;
@@ -977,7 +1006,8 @@ const quill = (function() {
                     TokenType.KeywordFun, 
                     TokenType.KeywordVal,
                     TokenType.KeywordMut,
-                    TokenType.KeywordStruct
+                    TokenType.KeywordStruct,
+                    TokenType.KeywordEnum
                 );
                 switch(state.curr().type) {
                     case TokenType.KeywordExt:
@@ -989,6 +1019,8 @@ const quill = (function() {
                         return parseVariable(true, false);
                     case TokenType.KeywordStruct:
                         return parseStructure(true);
+                    case TokenType.KeywordEnum:
+                        return parseEnumeration(true);
                 }
             }
             case TokenType.KeywordExt: {
@@ -999,6 +1031,9 @@ const quill = (function() {
             }
             case TokenType.KeywordStruct: {
                 return parseStructure(false);
+            }
+            case TokenType.KeywordEnum: {
+                return parseEnumeration(false);
             }
             case TokenType.KeywordVal:
             case TokenType.KeywordMut: {
@@ -1185,6 +1220,7 @@ const quill = (function() {
             functions: {},
             variables: {},
             structs: {},
+            enums: {},
             scopes: [],
 
             enterScope: function(returnType = null) {
@@ -1236,7 +1272,8 @@ const quill = (function() {
         "Integer",
         "Float",
         "Boolean",
-        "Struct"
+        "Struct",
+        "Enum"
     );
 
     const builtinTypeNames = Object.freeze({
@@ -1258,6 +1295,12 @@ const quill = (function() {
                 if(struct !== undefined) {
                     return { 
                         type: Type.Struct, name: path, node 
+                    };
+                }
+                const enumeration = state.enums[path];
+                if(enumeration !== undefined) {
+                    return {
+                        type: Type.Enum, name: path, node
                     };
                 }
                 throw message.from(
@@ -1289,7 +1332,8 @@ const quill = (function() {
     function hasSymbol(path, state) {
         return state.functions[path] !== undefined
             || state.variables[path] !== undefined
-            || state.structs[path] !== undefined;
+            || state.structs[path] !== undefined
+            || state.enums[path] !== undefined;
     }
 
     function collectSymbols(statements, state) {
@@ -1310,6 +1354,13 @@ const quill = (function() {
                         ? node.name : state.module + "::" + node.name;
                     assertUnique(node, path);
                     state.structs[path] = null;
+                    continue;
+                }
+                case NodeType.Enumeration: {
+                    const path = state.module.length === 0
+                        ? node.name : state.module + "::" + node.name;
+                    assertUnique(node, path);
+                    state.enums[path] = null;
                     continue;
                 }
             }
@@ -1356,6 +1407,20 @@ const quill = (function() {
                     const path = state.module.length === 0
                         ? node.name : state.module + "::" + node.name;
                     state.structs[path] = {
+                        node, members
+                    };
+                    continue;
+                }
+                case NodeType.Enumeration: {
+                    const members = node.members.map(m => {
+                        return {
+                            name: m.name,
+                            type: typeFromNode(m.type, state)
+                        };
+                    });
+                    const path = state.module.length === 0
+                        ? node.name : state.module + "::" + node.name;
+                    state.enums[path] = {
                         node, members
                     };
                     continue;
@@ -1596,7 +1661,43 @@ const quill = (function() {
                                 type: Type.Struct, name: path, node 
                             };
                         }
-                        // TODO: CHECK FOR ENUM HERE, THEN CONSTRUCT
+                        const pathElems = path.split("::");
+                        if(pathElems.length > 1) {
+                            const enumPath = pathElems.slice(0, -1).join("::");
+                            const variant = pathElems.at(-1);
+                            called = state.enums[enumPath];
+                            if(called !== undefined) {
+                                assertSymbolExposed(
+                                    node, enumPath, called, state
+                                );
+                                node.called.fullPath = enumPath;
+                                if(node.args.length !== 1) {
+                                    throw message.from(
+                                        message.error(
+                                            `Enums variants take one value, but ${node.args.length} were provided`
+                                        ),
+                                        message.code(node)
+                                    );
+                                }
+                                const value = checkTypes(node.args[0], state);
+                                for(const memberI in called.members) {
+                                    const member = called.members[memberI];
+                                    if(member.name !== variant) { continue; }
+                                    assertTypesEqual(value, member.type, node);
+                                    node.type = NodeType.EnumerationInit;
+                                    node.variant = memberI;
+                                    return {
+                                        type: Type.Enum, name: enumPath, node 
+                                    };
+                                }
+                                throw message.from(
+                                    message.error(`Creation of unknown enum variant '${path}' attempted`),
+                                    message.code(node),
+                                    message.note(`'${enumPath}' originates from here:`),
+                                    message.code(called.node)
+                                );
+                            }
+                        }
                     }
                     // TODO: CALL LAMBDA
                     throw message.internalError(
@@ -1725,6 +1826,7 @@ const quill = (function() {
                 }
                 case NodeType.Structure:
                 case NodeType.StructureInit:
+                case NodeType.Enumeration:
                 case NodeType.Module:
                 case NodeType.Usage:
                     return null;
@@ -1900,6 +2002,13 @@ const quill = (function() {
                 state.scope().output += ` };\n`;
                 return out;
             }
+            case NodeType.EnumerationInit: {
+                const enumeration = state.checker.enums[node.called.fullPath];
+                const value = generateCode(node.args[0], state);
+                const out = intoOrAlloc();
+                state.scope().output += `${out} = { tag: ${node.variant}, value: ${value} };\n`;
+                return out;
+            }
             case NodeType.IfExpr: {
                 const cond = generateCode(node.cond, state);
                 const out = state.alloc();
@@ -1996,6 +2105,7 @@ const quill = (function() {
             case NodeType.Module:
             case NodeType.Usage:
             case NodeType.Structure:
+            case NodeType.Enumeration:
                 return null;
         }
         throw message.internalError(`Unhandled node type ${node.type}`);

@@ -32,9 +32,17 @@ struct Cat(age: Int, hunger: Float)
 pub fun make_cat(age: Int, hunger: Float) -> Cat 
     = Cat(age, hunger)
 
-fun feed(self: Cat) {
+pub fun feed(self: Cat) {
     self.hunger = 0.0
 }
+
+pub fun hunger_of(self: Cat) -> Float = self.hunger
+
+
+mod dyn
+
+pub enum Number(Int: Int, Float: Float)
+pub enum Role(Guest, Member, Moderator, Admin)
 
 
 mod test
@@ -47,8 +55,9 @@ fun main() {
     js::print_float(3.5)
     js::print_int(fib(10))
     print_is_even(20, 0)
-    val my_cat = pet::make_cat(5, 1.0)
-    js::print_float(my_cat.hunger)
+    val my_cat = pet::make_cat(5, TAU)
+    js::print_float(pet::hunger_of(my_cat))
+    val my_num: dyn::Number = dyn::Number::Int(5)
 }
 
 fun print_is_even(n: Int, c: Int) {
