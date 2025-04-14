@@ -2153,18 +2153,21 @@ function quill$$eq(a, b) {
                 }
                 const elseBody = node.elseBody === null? null
                     : generateBlock(node.elseBody, state);
-                state.scope().output += `switch(${matched}) {\n`;
-                for(const branch of branches) {
-                    state.scope().output += `case ${branch.value}: {\n`
+                for(const branchI in branches) {
+                    if(branchI > 0) { state.scope().output += " else "; }
+                    const branch = branches[branchI];
+                    state.scope().output += `if(quill$$eq(${matched}, ${branch.value})) {\n`
                         + branch.body
-                        + `}\n`;
+                        + "}";
                 }
-                if(node.elseBody !== null) {
+                if(node.elseBody !== null && branches.length === 0) {
+                    state.scope().output += elseBody;
+                } else if(node.elseBody !== null) {
                     state.scope().output += `default: {\n`
                         + elseBody
-                        + `}\n`;
+                        + `}`;
                 }
-                state.scope().output += `}\n`;
+                state.scope().output += "\n";
                 return null;
             }
             case NodeType.Module:
