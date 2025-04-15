@@ -4,17 +4,9 @@
  * - [*] More useful errors
  * - [*] External functions and variables
  * - [*] Module System
- * - [*] Case statements
- * - [ ] Custom Types
- *     - [*] Structs
- *     - [ ] Enums
- *         - [*] Definition
- *         - [*] Call Initialization (check for call in type checker, remove last path element to get variant name)
- *         - [*] Unit Initialization (check for path access in type checker, remove last path element to get variant name)
- *         - [ ] Error if not all enum members are handled (and if else doesn't have a body)
- *         - [ ] case ... { ... as ... { ... } ... as ... { ... } } else { ... }
- *     - 'pub' doesn't control usage of the type itself,
- *        but whether it can be created and accessed / written to
+ * - [*] Custom Types
+ * - [ ] Match statements
+ *     - [ ] Make match exhaustive if is enum and all variants handled
  * - [ ] Bi-directional type checking 
  *     - (pass nullable expected type to expressions)
  * - [ ] Template functions and types
@@ -48,22 +40,28 @@
 /*
 
 
-struct Cat { name: String, hunger: Float }
+struct Cat(name: String, hunger: Float)
 
-struct Dog { name: String, speed: Float }
+struct Dog(name: String, speed: Float)
 
-enum Pet(Cat: Cat, Dog: Dog, Birdish)
+enum Pet(Cat: Cat, Dog: Dog, Bird)
 
 enum Option<T>(Some: T, None: Unit)
 
 val my_cat: Cat = Cat("Bob", 100000.0)
 val my_pet: Pet = Pet::Cat(my_cat)
-case my_pet {
-    Pet::Cat as my_cat {
+match my_pet {
+    Pet::Cat(Cat("Bob", hunger)) {
+        return hunger > 1 { 1 } else { hunger }
+    }
+    Pet::Cat(my_cat) {
         
     }
-    Pet::Dog as my_dog {
+    Pet::Dog(my_dog) {
     
+    }
+    _ {
+        
     }
 }
 
@@ -290,10 +288,10 @@ const quill = (function() {
         "Comma",
         "ExclamationMark",
         "Dot",
+        "Pipe",
 
         "KeywordIf",
         "KeywordElse",
-        "KeywordCase",
         "KeywordExt",
         "KeywordFun",
         "KeywordReturn",
@@ -305,6 +303,7 @@ const quill = (function() {
         "KeywordPub",
         "KeywordStruct",
         "KeywordEnum",
+        "KeywordMatch",
 
         "End"
     );
@@ -335,10 +334,10 @@ const quill = (function() {
         ",": TokenType.Comma,
         "!": TokenType.ExclamationMark,
         ".": TokenType.Dot,
+        "|": TokenType.Pipe,
 
         "if": TokenType.KeywordIf,
         "else": TokenType.KeywordElse,
-        "case": TokenType.KeywordCase,
         "ext": TokenType.KeywordExt,
         "fun": TokenType.KeywordFun,
         "return": TokenType.KeywordReturn,
@@ -350,6 +349,7 @@ const quill = (function() {
         "pub": TokenType.KeywordPub,
         "struct": TokenType.KeywordStruct,
         "enum": TokenType.KeywordEnum,
+        "match": TokenType.KeywordMatch,
 
         "true": TokenType.BoolLiteral,
         "false": TokenType.BoolLiteral,
@@ -389,10 +389,10 @@ const quill = (function() {
             case TokenType.Comma: return "','";
             case TokenType.ExclamationMark: return "'!'";
             case TokenType.Dot: return "'.'";
+            case TokeNType.Pipe: return "'|'";
 
             case TokenType.KeywordIf: return "'if'";
             case TokenType.KeywordElse: return "'else'";
-            case TokenType.KeywordCase: return "'case'";
             case TokenType.KeywordExt: return "'ext'";
             case TokenType.KeywordFun: return "'fun'";
             case TokenType.KeywordReturn: return "'return'";
@@ -404,6 +404,7 @@ const quill = (function() {
             case TokenType.KeywordPub: return "'pub'";
             case TokenType.KeywordStruct: return "'struct'";
             case TokenType.KeywordEnum: return "'enum'";
+            case TokenType.KeywordMatch: return "'match'";
 
             case TokenType.End: return "the end of the file";
         }
@@ -547,8 +548,8 @@ const quill = (function() {
         "+": 4, "-": 4, 
         "<": 5, ">": 5, "<=": 5, ">=": 5,
         "==": 6, "!=": 6,
-        "&&": 7, 
-        "||": 8
+        "&&": 8, 
+        "||": 9
     });
 
     const unaryOpPrec = Object.freeze({
@@ -576,7 +577,7 @@ const quill = (function() {
         "Assignment",
         "Return",
         "If",
-        "Case",
+        "Match",
 
         "Module",
         "Usage",
@@ -1103,6 +1104,36 @@ const quill = (function() {
                     path: start.path, start: start.start, end: value.end
                 };
             }
+            case TokenType.KeywordMatch: {
+                assertTopLevel(false);
+                state.next();
+                const matched = parseExpression(state);
+                state.assertType(TokenType.BraceOpen);
+                state.next();
+                let branches = [];
+                while(state.curr().type !== TokenType.BraceClose) {
+                    let patterns = [ { node: parseExpression(state) } ];
+                    state.assertType(TokenType.BraceOpen, TokenType.Pipe);
+                    while(state.curr().type === TokenType.Pipe) {
+                        state.next();
+                        patterns.push({ node: parseExpression(state) });
+                        state.assertType(TokenType.BraceOpen, TokenType.Pipe);
+                    }
+                    state.assertType(TokenType.BraceOpen);
+                    state.next();
+                    const body = parseStatementList(state);
+                    state.assertType(TokenType.BraceClose);
+                    state.next();
+                    branches.push({ body, patterns });
+                }
+                state.assertType(TokenType.BraceClose);
+                const end = state.curr().end;
+                state.next();
+                return {
+                    type: NodeType.Match, matched, branches,
+                    path: start.path, start: start.start, end
+                };
+            }
             case TokenType.KeywordIf: {
                 assertTopLevel(false);
                 state.next();
@@ -1135,54 +1166,6 @@ const quill = (function() {
                     type: NodeType.If, cond, ifBody, elseBody,
                     path: start.path, start: start.start, end
                 };
-            }
-            case TokenType.KeywordCase: {
-                assertTopLevel(false);
-                state.next();
-                const matched = parseExpression(state);
-                state.assertType(TokenType.BraceOpen);
-                state.next();
-                let branches = [];
-                while(state.curr().type !== TokenType.BraceClose) {
-                    const value = parseExpression(state);
-                    let end = value.end;
-                    let name = null;
-                    if(state.curr().type === TokenType.KeywordAs) {
-                        state.next();
-                        state.assertType(TokenType.Identifier);
-                        name = state.curr().content;
-                        end = state.curr().end;
-                        state.next();
-                    }
-                    state.assertType(TokenType.BraceOpen);
-                    state.next();
-                    const body = parseStatementList(state);
-                    state.assertType(TokenType.BraceClose);
-                    state.next();
-                    branches.push({
-                        value, name, body,
-                        path: value.path, start: value.start, end
-                    });
-                }
-                state.assertType(TokenType.BraceClose);
-                let end = state.curr().end;
-                let elseBody = null;
-                state.next();
-                if(state.curr().type === TokenType.KeywordElse) {
-                    state.next();
-                    state.assertType(TokenType.BraceOpen);
-                    state.next();
-                    elseBody = parseStatementList(state);
-                    state.assertType(TokenType.BraceClose);
-                    end = state.curr().end;
-                    state.next();
-                }
-                return {
-                    type: NodeType.Case, value: matched,
-                    branches, elseBody,
-                    path: start.path, start: start.start, end
-                };
-            
             }
         }
         assertTopLevel(false);
@@ -1466,7 +1449,8 @@ const quill = (function() {
             case Type.Integer: return "Int";
             case Type.Float: return "Float";
             case Type.Boolean: return "Boolean";
-            case Type.Struct: return type.name;
+            case Type.Struct: 
+            case Type.Enum: return t.name;
         }
         return `<unhandled type: ${t.type}>`;
     }
@@ -1496,6 +1480,115 @@ const quill = (function() {
             message.note(`'${gotD}' originates from here:`),
             message.code(t.node)
         );
+    }
+
+    const PatternPath = makeEnum(
+        "StructMember",
+        "EnumMember"
+    );
+
+    function assertMatchingArgC(expC, gotC, path, node, symbol) {
+        if(expC === gotC) { return; }
+        throw message.from(
+            message.error(`'${path}'`
+                + ` expects ${expC} argument(s),` 
+                + ` but ${gotC} were provided`
+            ),
+            message.code(node),
+            message.note("'" + path + "' is defined here:"),
+            message.code(called.node)
+        );
+    };
+    
+    function assertMatchingArgTypes(expected, got, state) {
+        for(const argI in expected) {
+            const exp = expected[argI].type;
+            const given = checkTypes(got[argI], state);
+            assertTypesEqual(exp, given, expected[argI]);
+        }
+    };
+
+    function checkMatchPattern(node, expected, state, pattern, path = []) {
+        const check = () => {
+            switch(node.type) {
+                case NodeType.Path: {
+                    const asLocal = state.findLocalVariable(node.value);
+                    if(asLocal !== null) { break; }
+                    if(node.value.includes("::")) { break; }
+                    pattern.variables[node.value] = { path, type: expected };
+                    return expected;
+                }
+                case NodeType.Call: {
+                    if(node.called.type !== NodeType.Path) { break; }
+                    const calledPath = expandUsages(node.called.value, state);
+                    const asFunction = state.functions[calledPath];
+                    if(asFunction !== undefined) { break; }
+                    const asStruct = state.structs[calledPath];
+                    if(asStruct !== undefined) {
+                        assertTypesEqual(
+                            expected, 
+                            { type: Type.Struct, name: calledPath, node }, 
+                            node
+                        );
+                        assertSymbolExposed(node, calledPath, asStruct, state);
+                        assertMatchingArgC(
+                            asStruct.members.length, node.args.length,
+                            calledPath, node, asStruct
+                        );
+                        for(const argI in asStruct.members) {
+                            const exp = asStruct.members[argI].type;
+                            const memPath = [...path, { 
+                                type: PatternPath.StructMember,
+                                path: calledPath, 
+                                name: asStruct.members[argI].name
+                            }];
+                            checkMatchPattern(
+                                node.args[argI], exp, state, pattern, memPath
+                            );
+                        }
+                        return expected;
+                    }
+                    const rawPathElems = node.called.value.split("::");
+                    if(rawPathElems.length === 1) { break; }
+                    const enumPath = expandUsages(
+                        rawPathElems.slice(0, -1).join("::"), state
+                    );
+                    const variant = rawPathElems.at(-1);
+                    const asEnum = state.enums[enumPath];
+                    if(asEnum !== undefined) {
+                        assertTypesEqual(
+                            expected, 
+                            { type: Type.Enum, name: enumPath, node }, 
+                            node
+                        );
+                        assertSymbolExposed(node, enumPath, asEnum, state);
+                        if(node.args.length !== 1) { break; }
+                        for(const memberI in asEnum.members) {
+                            const member = asEnum.members[memberI];
+                            if(member.name !== variant) { continue; }
+                            const memPath = [...path, { 
+                                type: PatternPath.EnumMember,
+                                path: calledPath, 
+                                name: member.name
+                            }];
+                            checkMatchPattern(
+                                node.args[0], member.type, 
+                                state, pattern, memPath
+                            );
+                            pattern.isExhaustive = false;
+                            return expected;
+                        }
+                        break;
+                    }
+                    break;
+                }
+            }
+            pattern.conditions = { path, value: node };
+            pattern.isExhaustive = false;
+            return checkTypes(node, state);
+        };
+        const got = check();
+        assertTypesEqual(expected, got, node);
     }
 
     function checkTypes(node, state, assignment = false) {
@@ -1647,25 +1740,6 @@ const quill = (function() {
                 }
                 case NodeType.Call: {
                     assertReadOnly();
-                    const assertMatchingArgC = (expC, gotC, path, node, symbol) => {
-                        if(expC === gotC) { return; }
-                        throw message.from(
-                            message.error(`'${path}'`
-                                + ` expects ${expC} argument(s),` 
-                                + ` but ${gotC} were provided`
-                            ),
-                            message.code(node),
-                            message.note("'" + path + "' is defined here:"),
-                            message.code(called.node)
-                        );
-                    };
-                    const assertMatchingArgTypes = (expected, got) => {
-                        for(const argI in expected) {
-                            const exp = expected[argI].type;
-                            const given = checkTypes(got[argI], state);
-                            assertTypesEqual(exp, given, expected[argI]);
-                        }
-                    };
                     if(node.called.type === NodeType.Path) {
                         const path = expandUsages(node.called.value, state);
                         let called = state.functions[path];
@@ -1676,7 +1750,7 @@ const quill = (function() {
                                 called.args.length, node.args.length,
                                 path, node, called
                             );
-                            assertMatchingArgTypes(called.args, node.args);
+                            assertMatchingArgTypes(called.args, node.args, state);
                             return called.returnType;
                         }
                         called = state.structs[path];
@@ -1687,15 +1761,17 @@ const quill = (function() {
                                 called.members.length, node.args.length,
                                 path, node, called
                             );
-                            assertMatchingArgTypes(called.members, node.args);
+                            assertMatchingArgTypes(called.members, node.args, state);
                             node.type = NodeType.StructureInit;
                             return {
                                 type: Type.Struct, name: path, node 
                             };
                         }
-                        const pathElems = path.split("::");
+                        const pathElems = node.called.value.split("::");
                         if(pathElems.length > 1) {
-                            const enumPath = pathElems.slice(0, -1).join("::");
+                            const enumPath = expandUsages(
+                                pathElems.slice(0, -1).join("::"), state
+                            );
                             const variant = pathElems.at(-1);
                             called = state.enums[enumPath];
                             if(called !== undefined) {
@@ -1795,29 +1871,67 @@ const quill = (function() {
                     state.scope().alwaysReturns |= (ifReturns && elseReturns);
                     return null;
                 }
-                case NodeType.Case: {
-                    const matchedValue = checkTypes(node.value, state);
-                    let alwaysReturns = true;
+                case NodeType.Match: {
+                    const matched = checkTypes(node.matched, state);
+                    let anyExhaustive = false;
+                    let allReturn = true;
                     for(const branch of node.branches) {
-                        const branchValue = checkTypes(branch.value, state);
-                        state.enterScope(null);
-                        if(branch.name !== null) {
-                            throw message.internalMessage("not yet implemented - enum value");
+                        for(const pattern of branch.patterns) {
+                            pattern.isExhaustive = true;
+                            pattern.conditions = [];
+                            pattern.variables = {};
+                            checkMatchPattern(
+                                pattern.node, matched, state, pattern
+                            );
+                            anyExhaustive |= pattern.isExhaustive;
+                            if(pattern === branch.patterns[0]) { continue; }
+                            for(const name in branch.patterns[0].variables) {
+                                if(pattern.variables[name] !== undefined) { continue; }
+                                throw message.from(
+                                    message.error("'match'-pattern has partially defined variables"),
+                                    message.note(`'${name}' is defined in this pattern:`),
+                                    message.code(branch.patterns[0].node),
+                                    message.note(`...but not in this pattern:`),
+                                    message.code(pattern.node)
+                                );
+                            }
+                            for(const name in pattern.variables) {
+                                if(branch.patterns[0].variables[name] !== undefined) { continue; }
+                                throw message.from(
+                                    message.error("'match'-pattern has partially defined variables"),
+                                    message.note(`'${name}' is defined in this pattern:`),
+                                    message.code(pattern.node),
+                                    message.note(`...but not in this pattern:`),
+                                    message.code(branch.patterns[0].node)
+                                );
+                            }
+                        }
+                        state.enterScope();
+                        for(const pattern of branch.patterns) {
+                            for(const name in pattern.variables) {
+                                const vars = state.scope().variables;
+                                const expected = pattern.variables[name].type;
+                                if(vars[node.value] !== undefined) {
+                                    assertTypesEqual(vars[node.value].type, expected, node);
+                                }
+                                vars[node.value] = {
+                                    type: expected, isMutable: false, node
+                                };
+                            }
                         }
                         for(const statement of branch.body) {
                             checkTypes(statement, state);
                         }
-                        alwaysReturns &= state.exitScope();
+                        allReturn &= state.exitScope();
                     }
-                    if(node.elseBody !== null) {
-                        alwaysReturns &= checkBlock(node.elseBody, state);
-                    } else {
-                        alwaysReturns = false;
-                        // TODO! IF IS AN ENUM:
-                        //     ALWAYS RETURNS IF ALL CASES HANDLED
-                        //     BITCH AROUND IF NOT ALL CASES HANDLED
+                    if(!anyExhaustive) {
+                        throw message.from(
+                            message.error("'match' is not exhaustive"),
+                            message.code(node),
+                            message.note("'match'-statements need to provide a branch for all possible values")
+                        );
                     }
-                    state.scope().alwaysReturns |= alwaysReturns;
+                    state.scope().alwaysReturns |= allReturn;
                     return null;
                 }
 
@@ -2141,33 +2255,6 @@ function quill$$eq(a, b) {
                     + `} else {\n`
                     + elseBody
                     + `}\n`;
-                return null;
-            }
-            case NodeType.Case: {
-                const matched = generateCode(node.value, state);
-                let branches = [];
-                for(const branch of node.branches) {
-                    const value = generateCode(branch.value, state);
-                    const body = generateBlock(branch.body, state);
-                    branches.push({ value, body });
-                }
-                const elseBody = node.elseBody === null? null
-                    : generateBlock(node.elseBody, state);
-                for(const branchI in branches) {
-                    if(branchI > 0) { state.scope().output += " else "; }
-                    const branch = branches[branchI];
-                    state.scope().output += `if(quill$$eq(${matched}, ${branch.value})) {\n`
-                        + branch.body
-                        + "}";
-                }
-                if(node.elseBody !== null && branches.length === 0) {
-                    state.scope().output += elseBody;
-                } else if(node.elseBody !== null) {
-                    state.scope().output += `default: {\n`
-                        + elseBody
-                        + `}`;
-                }
-                state.scope().output += "\n";
                 return null;
             }
             case NodeType.Module:

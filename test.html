@@ -45,6 +45,35 @@ pub enum Number(Int: Int, Float: Float)
 pub enum Role(Guest, Member, Moderator, Admin)
 
 
+pub struct Vec3(x: Float, y: Float, z: Float)
+
+
+// match my_vec {
+//     Vec3(5.0, 1.0, z) {
+//         ...
+//     }
+//     Vec3(2.0, y, z) {
+//         ...
+//     }
+//     Vec3(x, y, z) {
+//     
+//     }
+// }
+
+
+// if(my_vec.x == 5.0 && my_vec.y == 1.0) {
+//    const z = my_vec.z;
+// } else if(my_vec.x == 2.0) {
+//     const y = my_vec.y;
+//     const z = my_vec.z;
+// } else {
+//     const x = my_vec.x;
+//     const y = my_vec.y;
+//     const z = my_vec.z;
+// }
+
+
+
 mod test
 
 fun fib(n: Int) -> Int =
@@ -52,12 +81,9 @@ fun fib(n: Int) -> Int =
     else { fib(n - 1) + fib(n - 2) }
 
 fun main() {
-    js::print_float(3.5)
-    js::print_int(fib(10))
-    print_is_even(20, 0)
-    val my_cat = pet::make_cat(5, TAU)
-    js::print_float(pet::hunger_of(my_cat))
     val my_num: dyn::Number = dyn::Number::Int(5)
+    val my_role: dyn::Role = dyn::Role::Guest
+    js::print_bool(my_num == dyn::Number::Int(5))
 }
 
 fun print_is_even(n: Int, c: Int) {
@@ -68,24 +94,24 @@ fun print_is_even(n: Int, c: Int) {
 
 fun abs(n: Int) -> Int = if n < 0 { -n } else { n }
 
+enum OptionalInt(Some: Int, Maybe: Float, None)
+
+fun double(n: OptionalInt) {
+    match n {
+        OptionalInt::Some(5) {}
+        OptionalInt::Some(x) {}
+        OptionalInt::Maybe(x) {}
+    }
+}
+
 fun is_even(n: Int) -> Bool {
-    case abs(n) {
-        0 { return true }
-        1 { return false }
-        2 { return true }
-        3 { return false }
-        4 { return true }
-        5 { return false }
-        6 { return true }
-        7 { return false }
-        8 { return true }
+    match abs(n) {
+        0 | 2 | 4 | 6 | 8 | 10 | 12 | 14 | 16 | 18 | 20 { return true }
+        1 | 3 | 5 | 7 | 9 | 11 | 13 | 15 | 17 | 19 | 21 { return false }
+        x {}
     }
     return js::rand() < 0.5
 }
-
-fun double(a: Float) -> Float = a * 2.0
-
-val TAU: Float = double(js::PI)
 
         `
     };
