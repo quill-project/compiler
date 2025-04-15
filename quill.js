@@ -475,7 +475,7 @@ const quill = (function() {
                 ));
                 continue;
             }
-            if(isAlphabetic(text[i])) {
+            if(isAlphabetic(text[i]) || text[i] === "_") {
                 const start = i;
                 skipWhile(isAlphanumeric);
                 output.push(tokenFrom(
@@ -1482,11 +1482,6 @@ const quill = (function() {
         );
     }
 
-    const PatternPath = makeEnum(
-        "StructMember",
-        "EnumMember"
-    );
-
     function assertMatchingArgC(expC, gotC, path, node, symbol) {
         if(expC === gotC) { return; }
         throw message.from(
@@ -1508,6 +1503,16 @@ const quill = (function() {
         }
     };
 
+    const PatternPath = makeEnum(
+        "StructMember",
+        "EnumMember"
+    );
+
+    const PatternCondition = makeEnum(
+        "Value",
+        "EnumVariant"
+    );
+
     function checkMatchPattern(node, expected, state, pattern, path = []) {
         const check = () => {
             switch(node.type) {
@@ -1515,7 +1520,11 @@ const quill = (function() {
                     const asLocal = state.findLocalVariable(node.value);
                     if(asLocal !== null) { break; }
                     if(node.value.includes("::")) { break; }
-                    pattern.variables[node.value] = { path, type: expected };
+                    if(node.value !== "_") {
+                        pattern.variables[node.value] = { 
+                            path, type: expected 
+                        };
+                    }
                     return expected;
                 }
                 case NodeType.Call: {
@@ -1571,11 +1580,14 @@ const quill = (function() {
                                 path: calledPath, 
                                 name: member.name
                             }];
+                            pattern.conditions.push({
+                                type: PatternCondition.EnumVariant,
+                                path, variant: memberI
+                            });
                             checkMatchPattern(
                                 node.args[0], member.type, 
                                 state, pattern, memPath
                             );
-                            pattern.isExhaustive = false;
                             return expected;
                         }
                         break;
@@ -1583,8 +1595,10 @@ const quill = (function() {
                     break;
                 }
             }
-            pattern.conditions = { path, value: node };
-            pattern.isExhaustive = false;
+            pattern.conditions.push({ 
+                type: PatternCondition.Value, 
+                path, value: node 
+            });
             return checkTypes(node, state);
         };
         const got = check();
@@ -1626,9 +1640,11 @@ const quill = (function() {
                         return global.type;
                     }
                     assertReadOnly();
-                    const pathElems = path.split("::");
+                    const pathElems = node.value.split("::");
                     if(pathElems.length > 1) {
-                        const enumPath = pathElems.slice(0, -1).join("::");
+                        const enumPath = expandUsages(
+                            pathElems.slice(0, -1).join("::"), state
+                        );
                         const variant = pathElems.at(-1);
                         const enumeration = state.enums[enumPath];
                         if(enumeration !== undefined) {
@@ -1877,13 +1893,12 @@ const quill = (function() {
                     let allReturn = true;
                     for(const branch of node.branches) {
                         for(const pattern of branch.patterns) {
-                            pattern.isExhaustive = true;
                             pattern.conditions = [];
                             pattern.variables = {};
                             checkMatchPattern(
                                 pattern.node, matched, state, pattern
                             );
-                            anyExhaustive |= pattern.isExhaustive;
+                            anyExhaustive |= pattern.conditions.length === 0;
                             if(pattern === branch.patterns[0]) { continue; }
                             for(const name in branch.patterns[0].variables) {
                                 if(pattern.variables[name] !== undefined) { continue; }
@@ -1911,10 +1926,10 @@ const quill = (function() {
                             for(const name in pattern.variables) {
                                 const vars = state.scope().variables;
                                 const expected = pattern.variables[name].type;
-                                if(vars[node.value] !== undefined) {
-                                    assertTypesEqual(vars[node.value].type, expected, node);
+                                if(vars[name] !== undefined) {
+                                    assertTypesEqual(vars[name].type, expected, node);
                                 }
-                                vars[node.value] = {
+                                vars[name] = {
                                     type: expected, isMutable: false, node
                                 };
                             }
@@ -2255,6 +2270,82 @@ function quill$$eq(a, b) {
                     + `} else {\n`
                     + elseBody
                     + `}\n`;
+                return null;
+            }
+            case NodeType.Match: {
+                const matched = generateCode(node.matched, state);
+                let out = "{\n";
+                for(const branchI in node.branches) {
+                    const branch = node.branches[branchI];
+                    const vars = Object.keys(branch.patterns[0].variables);
+                    state.enterScope();
+                    out += `const body${branchI} = (`;
+                    for(const varI in vars) {
+                        if(varI > 0) { out += ", "; }
+                        out += `matched${varI}`;
+                        state.scope().aliases[vars[varI]] = `matched${varI}`;
+                    }
+                    out += `) => {\n`;
+                    branch.body.forEach(n => generateCode(n, state));
+                    const body = state.scope().output;
+                    out += state.exitScope();
+                    out += `${body}return null;\n}\n`;
+                }
+                out += `let returned = null;\n`;
+                for(const branchI in node.branches) {
+                    const branch = node.branches[branchI];
+                    for(const pattern of branch.patterns) {
+                        if(branchI > 0) { out += `else `; }
+                        const generatePath = path => {
+                            for(const element of path) {
+                                switch(element.type) {
+                                    case PatternPath.StructMember: {
+                                        out += `.${element.name}`;
+                                        break;
+                                    }
+                                    case PatternPath.EnumMember: {
+                                        out += `.value`;
+                                        break;
+                                    }
+                                }
+                            }
+                        };
+                        if(pattern.conditions.length >= 1) {
+                            out += `if(`;
+                            for(const condI in pattern.conditions) {
+                                if(condI > 0) { out += " && "; }
+                                const condition = pattern.conditions[condI];
+                                switch(condition.type) {
+                                    case PatternCondition.Value: {
+                                        const value = generateCode(
+                                            condition.value, state
+                                        );
+                                        out += `quill$$eq(${matched}`;
+                                        generatePath(condition.path);
+                                        out += `, ${value})`;
+                                        break;
+                                    }
+                                    case PatternCondition.EnumVariant: {
+                                        out += matched;
+                                        generatePath(condition.path);
+                                        out += `.tag === ${condition.variant}`
+                                        break;
+                                    }
+                                }
+                            }
+                            out += `) `;
+                        }
+                        out += `{ returned = body${branchI}(`;
+                        const vars = Object.keys(pattern.variables);
+                        for(const varI in vars) {
+                            if(varI > 0) { out += ", "; }
+                            out += matched;
+                            generatePath(pattern.variables[vars[varI]].path);
+                        }
+                        out += `); }\n`;
+                    }
+                }
+                state.scope().output += out + `if(returned !== null) { return returned; }\n}\n`;
                 return null;
             }
             case NodeType.Module:

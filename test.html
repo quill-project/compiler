@@ -48,69 +48,36 @@ pub enum Role(Guest, Member, Moderator, Admin)
 pub struct Vec3(x: Float, y: Float, z: Float)
 
 
-// match my_vec {
-//     Vec3(5.0, 1.0, z) {
-//         ...
-//     }
-//     Vec3(2.0, y, z) {
-//         ...
-//     }
-//     Vec3(x, y, z) {
-//     
-//     }
-// }
-
-
-// if(my_vec.x == 5.0 && my_vec.y == 1.0) {
-//    const z = my_vec.z;
-// } else if(my_vec.x == 2.0) {
-//     const y = my_vec.y;
-//     const z = my_vec.z;
-// } else {
-//     const x = my_vec.x;
-//     const y = my_vec.y;
-//     const z = my_vec.z;
-// }
-
-
-
 mod test
 
-fun fib(n: Int) -> Int =
-    if n <= 1 { n }
-    else { fib(n - 1) + fib(n - 2) }
-
-fun main() {
-    val my_num: dyn::Number = dyn::Number::Int(5)
-    val my_role: dyn::Role = dyn::Role::Guest
-    js::print_bool(my_num == dyn::Number::Int(5))
+fun fib(n: Int) -> Int {
+    match n {
+        0 | 1 { return n }
+        _ { return fib(n - 1) + fib(n - 2) }
+    }
 }
 
-fun print_is_even(n: Int, c: Int) {
-    if c == n { return unit }
-    js::print_bool(is_even(c))
-    print_is_even(n, c + 1)
+fun main() {
+    js::print_int(unwrap_or(double(OptionalInt::None), -1))
 }
 
 fun abs(n: Int) -> Int = if n < 0 { -n } else { n }
 
-enum OptionalInt(Some: Int, Maybe: Float, None)
+enum OptionalInt(Some: Int, None)
 
-fun double(n: OptionalInt) {
+fun double(n: OptionalInt) -> OptionalInt {
     match n {
-        OptionalInt::Some(5) {}
-        OptionalInt::Some(x) {}
-        OptionalInt::Maybe(x) {}
+        OptionalInt::Some(69) { return OptionalInt::Some(420) }
+        OptionalInt::Some(x) { return OptionalInt::Some(x * 2) }
+        _ { return OptionalInt::None }
     }
 }
 
-fun is_even(n: Int) -> Bool {
-    match abs(n) {
-        0 | 2 | 4 | 6 | 8 | 10 | 12 | 14 | 16 | 18 | 20 { return true }
-        1 | 3 | 5 | 7 | 9 | 11 | 13 | 15 | 17 | 19 | 21 { return false }
-        x {}
+fun unwrap_or(self: OptionalInt, other: Int) -> Int {
+    match self {
+        OptionalInt::Some(x) { return x }
+        _ { return other }
     }
-    return js::rand() < 0.5
 }
 
         `
