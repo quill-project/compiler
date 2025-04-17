@@ -5,8 +5,7 @@
  * - [*] External functions and variables
  * - [*] Module System
  * - [*] Custom Types
- * - [ ] Match statements
- *     - [ ] Make match exhaustive if is enum and all variants handled
+ * - [*] Match statements
  * - [ ] Bi-directional type checking 
  *     - (pass nullable expected type to expressions)
  * - [ ] Template functions and types
@@ -1520,11 +1519,10 @@ const quill = (function() {
                     const asLocal = state.findLocalVariable(node.value);
                     if(asLocal !== null) { break; }
                     if(node.value.includes("::")) { break; }
-                    if(node.value !== "_") {
-                        pattern.variables[node.value] = { 
-                            path, type: expected 
-                        };
-                    }
+                    pattern.variables.push({
+                        name: (node.value === "_"? null : node.value),
+                        path, type: expected
+                    });
                     return expected;
                 }
                 case NodeType.Call: {
@@ -1603,6 +1601,185 @@ const quill = (function() {
         };
         const got = check();
         assertTypesEqual(expected, got, node);
+    }
+
+    const PatternValue = makeEnum(
+        "Unit",
+        "Bool",
+        "Enum",
+        "Struct",
+        "Any"
+    );
+
+    function patternValuesOf(type, state, seenTypes = []) {
+        switch(type.type) {
+            case Type.Unit: return [{ type: PatternValue.Unit }];
+            case Type.Boolean: return [
+                { type: PatternValue.Bool, value: "true" },
+                { type: PatternValue.Bool, value: "false" }
+            ];
+            case Type.Enum: {
+                if(seenTypes.includes(type.name)) { break; }
+                let output = [];
+                const mems = state.enums[type.name].members;
+                for(const memI in mems) {
+                    const vals = patternValuesOf(
+                        mems[memI].type, state, [...seenTypes, type.name]
+                    ).map(value => {
+                        return {
+                            type: PatternValue.Enum, 
+                            name: type.name,
+                            variant: memI, value
+                        };
+                    });
+                    output.push(...vals);
+                }
+                return output;
+            }
+            case Type.Struct: {
+                if(seenTypes.includes(type.name)) { break; }
+                let output = [];
+                const mems = state.structs[type.name].members;
+                for(const memI in mems) {
+                    const vals = patternValuesOf(
+                        mems[memI].type, state, [...seenTypes, type.name]
+                    );
+                    if(output.length === 0) { 
+                        output.push(...vals.map(v => [v]));
+                        continue;
+                    }
+                    const prev = output;
+                    output = [];
+                    for(const p of prev) {
+                        for(const v of vals) {
+                            output.push([...p, v]);
+                        }
+                    }
+                }
+                return output.map(members => {
+                    return {
+                        type: PatternValue.Struct, 
+                        name: type.name, members
+                    };
+                });
+            };
+        }
+        return [{ type: PatternValue.Any }];
+    }
+
+    function displayPatternValue(value, state) {
+        switch(value.type) {
+            case PatternValue.Unit: return "unit";
+            case PatternValue.Bool: return value.value;
+            case PatternValue.Enum: {
+                const enumeration = state.enums[value.name];
+                const variant = enumeration.members[value.variant].name;
+                const val = displayPatternValue(value.value, state);
+                return `${value.name}::${variant}(${val})`;
+            }
+            case PatternValue.Struct: {
+                const structure = state.structs[value.name];
+                const members = value.members
+                    .map(v => displayPatternValue(v, state)).join(", ");
+                return `${value.name}(${members})`;
+            }
+            case PatternValue.Any: { return "all values"; }
+        }
+        console.warn(`Unhandled pattern value type ${value.type}!`);
+        return "<UNHANDLED PATTERN VALUE!>";
+    }
+
+    function patternHandlesValue(pattern, path, value, state) {
+        const pathEq = (lhs, rhs) => {
+            if(lhs.length !== rhs.length) { return false; }
+            for(const i in lhs) {
+                const a = lhs[i];
+                const b = rhs[i];
+                if(a.type !== b.type) { return false; }
+                switch(a.type) {
+                    case PatternPath.StructMember:
+                    case PatternPath.EnumMember:
+                        if(a.name !== b.name) { return false; }
+                        break;
+                }
+            }
+            return true;
+        };
+        for(const variable of pattern.variables) {
+            if(pathEq(path, variable.path)) { return true; }
+        }
+        switch(value.type) {
+            case PatternValue.Struct: {
+                const members = state.structs[value.name].members;
+                for(const memI in value.members) {
+                    const memPath = [...path, { 
+                        type: PatternPath.StructMember,
+                        path: value.name, 
+                        name: members[memI].name
+                    }];
+                    const memHandled = patternHandlesValue(
+                        pattern, memPath, value.members[memI], state
+                    );
+                    if(!memHandled) { return false; }
+                }
+                return true;
+            }
+            case PatternValue.Any:
+                return false;
+        }
+        for(const cond of pattern.conditions) {
+            if(!pathEq(path, cond.path)) { continue; }
+            switch(value.type) {
+                case PatternValue.Unit: {
+                    let matches = cond.type === PatternCondition.Value
+                        && cond.value.type === NodeType.UnitLiteral;
+                    if(matches) { return true; }
+                    continue;
+                }
+                case PatternValue.Bool: {
+                    let matches = cond.type === PatternCondition.Value
+                        && cond.value.type === NodeType.BoolLiteral
+                        && cond.value.value === value.value;
+                    if(matches) { return true; }
+                    continue;
+                }
+                case PatternValue.Enum: {
+                    switch(cond.type) {
+                        case PatternCondition.Value: {
+                            let matches = cond.value.type === NodeType.EnumerationInit
+                                && cond.value.fullPath === value.name;
+                            if(matches) { return true; }
+                            break;
+                        }
+                        case PatternCondition.EnumVariant: {
+                            const memPath = () => {
+                                const members = state.enums[value.name].members;
+                                return [...path, { 
+                                    type: PatternPath.EnumMember,
+                                    path: value.name, 
+                                    name: members[cond.variant].name
+                                }];
+                            };
+                            let matches = cond.variant === value.variant
+                                && patternHandlesValue(
+                                    pattern, memPath(), value.value, state
+                                );
+                            if(matches) { return true; }
+                            break;
+                        }
+                    }
+                    continue;
+                }
+                case PatternValue.Struct: 
+                case PatternValue.Any: 
+                    return false;
+                default: 
+                    throw message.internalError(
+                        `Unhandled pattern value type ${value.type}!`
+                    );
+            }
+        }
+        return false;
     }
 
     function checkTypes(node, state, assignment = false) {
@@ -1889,16 +2066,14 @@ const quill = (function() {
                 }
                 case NodeType.Match: {
                     const matched = checkTypes(node.matched, state);
-                    let anyExhaustive = false;
                     let allReturn = true;
                     for(const branch of node.branches) {
                         for(const pattern of branch.patterns) {
                             pattern.conditions = [];
-                            pattern.variables = {};
+                            pattern.variables = [];
                             checkMatchPattern(
                                 pattern.node, matched, state, pattern
                             );
-                            anyExhaustive |= pattern.conditions.length === 0;
                             if(pattern === branch.patterns[0]) { continue; }
                             for(const name in branch.patterns[0].variables) {
                                 if(pattern.variables[name] !== undefined) { continue; }
@@ -1923,14 +2098,16 @@ const quill = (function() {
                         }
                         state.enterScope();
                         for(const pattern of branch.patterns) {
-                            for(const name in pattern.variables) {
+                            for(const variable of pattern.variables) {
+                                if(variable.name === null) { continue; }
                                 const vars = state.scope().variables;
-                                const expected = pattern.variables[name].type;
-                                if(vars[name] !== undefined) {
-                                    assertTypesEqual(vars[name].type, expected, node);
+                                if(vars[variable.name] !== undefined) {
+                                    assertTypesEqual(
+                                        vars[variable.name].type, variable.type, node
+                                    );
                                 }
-                                vars[name] = {
-                                    type: expected, isMutable: false, node
+                                vars[variable.name] = {
+                                    type: variable.type, isMutable: false, node
                                 };
                             }
                         }
@@ -1939,11 +2116,22 @@ const quill = (function() {
                         }
                         allReturn &= state.exitScope();
                     }
-                    if(!anyExhaustive) {
+                    const possibleVals = patternValuesOf(matched, state);
+                    for(const val of possibleVals) {
+                        let handled = false;
+                        for(const branch of node.branches) {
+                            for(const pattern of branch.patterns) {
+                                handled |= patternHandlesValue(pattern, [], val, state);
+                                if(handled) { break; }
+                            }
+                            if(handled) { break; }
+                        }
+                        if(handled) { continue; }
+                        const dVal = displayPatternValue(val, state);
                         throw message.from(
-                            message.error("'match' is not exhaustive"),
+                            message.error(`'match' does not handle ${dVal}`),
                             message.code(node),
-                            message.note("'match'-statements need to provide a branch for all possible values")
+                            message.note("'match'-statements need to provide a branch for all possible values of the matched type")
                         );
                     }
                     state.scope().alwaysReturns |= allReturn;
@@ -2049,8 +2237,7 @@ function quill$$eq(a, b) {
     }
     return true;
 }
-    
-    `;
+    \n`;
 
     function createGeneratorState(checker) {
         return {

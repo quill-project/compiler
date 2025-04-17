@@ -57,8 +57,20 @@ fun fib(n: Int) -> Int {
     }
 }
 
+struct BoolPair(left: Bool, right: Bool)
+
+fun xor(left: Bool, right: Bool) -> Bool {
+    match BoolPair(left, right) {
+        BoolPair(true, true) { return false }
+        BoolPair(true, false) { return true }
+        BoolPair(false, true) { return true }
+        BoolPair(false, false) {  return false }
+    }
+}
+
 fun main() {
     js::print_int(unwrap_or(double(OptionalInt::None), -1))
+    js::print_bool(xor(true, false))
 }
 
 fun abs(n: Int) -> Int = if n < 0 { -n } else { n }
@@ -69,7 +81,7 @@ fun double(n: OptionalInt) -> OptionalInt {
     match n {
         OptionalInt::Some(69) { return OptionalInt::Some(420) }
         OptionalInt::Some(x) { return OptionalInt::Some(x * 2) }
-        _ { return OptionalInt::None }
+        OptionalInt::None { return n }
     }
 }
 
@@ -89,7 +101,7 @@ fun unwrap_or(self: OptionalInt, other: Int) -> Int {
         eval(result.code);
         test$main();
     } else {
-        console.log(result.errors
+        console.error(result.errors
             .map(e => quill.message.display(e, sources))
             .join("\n\n")
         );
