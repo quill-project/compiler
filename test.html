@@ -106,16 +106,13 @@ mod std
 
 pub ext fun log_int(n: Int) = print
 pub ext fun log_float(n: Float) = print
+pub ext fun log(n: String) = print
 
 
 mod test
 
-val PI = 3.1415
-
 fun main() {
-    val multiply: Fun(Float) -> Fun(Float) -> Float = |a| |b| a * b
-    val double = multiply(2.0)
-    log_float(double(PI))
+    log("Hello, world!")
 }
 
         `

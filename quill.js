@@ -136,6 +136,7 @@ const quill = (function() {
         "FloatLiteral",
         "BoolLiteral",
         "UnitLiteral",
+        "StringLiteral",
 
         "LessThanEqual",
         "GreaterThanEqual",
@@ -239,6 +240,7 @@ const quill = (function() {
             case TokenType.FloatLiteral: return "a float";
             case TokenType.BoolLiteral: return "a boolean";
             case TokenType.UnitLiteral: return "the unit value";
+            case TokenType.StringLiteral: return "a string";
 
             case TokenType.LessThanEqual: return "'<='";
             case TokenType.GreaterThanEqual: return "'>='";
@@ -362,6 +364,39 @@ const quill = (function() {
                 ));
                 continue;
             }
+            if(text[i] === '"') {
+                const start = i;
+                i += 1;
+                let content = "";
+                let isEscaped = false;
+                for(; i < text.length && text[i] !== '"'; i += 1) {
+                    const c = text[i];
+                    if(!isEscaped) {
+                        isEscaped = c === '\\';
+                        if(!isEscaped) { content += c; }
+                        continue;
+                    }
+                    switch(c) {
+                        case '"': content += '"'; break;
+                        case '\n': break;
+                        case 'n': content += '\n'; break;
+                        case 'r': content += '\r'; break;
+                        default: content += c; break;
+                    }
+                }
+                if(i >= text.length) {
+                    errors.push(message.from(
+                        message.error(`Unclosed string literal`),
+                        message.code({ path, start, end: text.length })
+                    ));
+                }
+                i += 1;
+                output.push(tokenFrom(
+                    TokenType.StringLiteral, content,
+                    path, start, i
+                ));
+                continue;
+            }
             errors.push(message.from(
                 message.error(`Usage of unrecognized character '${text[i]}'`),
                 message.code({ path, start: i, end: i + 1 })
@@ -442,6 +477,7 @@ const quill = (function() {
         "FloatLiteral",
         "BoolLiteral",
         "UnitLiteral",
+        "StringLiteral",
         "FunctionLiteral",
     
         "Multiplicative",
@@ -540,6 +576,10 @@ const quill = (function() {
             case TokenType.UnitLiteral: {
                 state.next();
                 return valueNodeFrom(NodeType.UnitLiteral, value, start);
+            }
+            case TokenType.StringLiteral: {
+                state.next();
+                return valueNodeFrom(NodeType.StringLiteral, value, start);
             }
             case TokenType.Pipe:
             case TokenType.DoublePipe: {
@@ -1209,6 +1249,7 @@ const quill = (function() {
         "Integer",
         "Float",
         "Boolean",
+        "String",
         "Struct",
         "Enum",
         "Function"
@@ -1218,7 +1259,8 @@ const quill = (function() {
         "Unit": Type.Unit,
         "Int": Type.Integer,
         "Float": Type.Float,
-        "Bool": Type.Boolean
+        "Bool": Type.Boolean,
+        "String": Type.String
     });
 
     function typeFromNode(node, state) {
@@ -1444,6 +1486,7 @@ const quill = (function() {
             case Type.Integer: return "Int";
             case Type.Float: return "Float";
             case Type.Boolean: return "Boolean";
+            case Type.String: return "String";
             case Type.Struct: 
             case Type.Enum: return t.name;
             case Type.Function: {
@@ -1906,6 +1949,10 @@ const quill = (function() {
                 case NodeType.UnitLiteral: {
                     assertReadOnly();
                     return { type: Type.Unit, node };
+                }
+                case NodeType.StringLiteral: {
+                    assertReadOnly();
+                    return { type: Type.String, node };
                 }
                 case NodeType.FunctionLiteral: {
                     if(expected === null) {
@@ -2421,6 +2468,11 @@ function quill$$eq(a, b) {
             }
             case NodeType.UnitLiteral: {
                 return intoOrAlloc();
+            }
+            case NodeType.StringLiteral: {
+                const out = intoOrAlloc();
+                state.scope().output += `${out} = ${JSON.stringify(node.value)};\n`;
+                return out;
             }
             case NodeType.FunctionLiteral: {
                 state.enterScope();
