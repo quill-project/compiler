@@ -182,7 +182,7 @@ const quill = (function() {
         "End"
     );
 
-    const fixedTokens = Object.freeze({
+    const operatorTokens = Object.freeze({
         "<=": TokenType.LessThanEqual,
         ">=": TokenType.GreaterThanEqual,
         "==": TokenType.DoubleEqual,
@@ -208,8 +208,10 @@ const quill = (function() {
         ",": TokenType.Comma,
         "!": TokenType.ExclamationMark,
         ".": TokenType.Dot,
-        "|": TokenType.Pipe,
+        "|": TokenType.Pipe
+    });
 
+    const keywordTokens = Object.freeze({
         "if": TokenType.KeywordIf,
         "else": TokenType.KeywordElse,
         "ext": TokenType.KeywordExt,
@@ -320,8 +322,8 @@ const quill = (function() {
                 continue;
             }
             let madeFixed = false;
-            for(const content in fixedTokens) {
-                const type = fixedTokens[content];
+            for(const content in operatorTokens) {
+                const type = operatorTokens[content];
                 const matches = i + content.length <= text.length
                     && text.substring(i, i + content.length) === content;
                 if(!matches) { continue; }
@@ -352,9 +354,11 @@ const quill = (function() {
             if(isAlphabetic(text[i]) || text[i] === "_") {
                 const start = i;
                 skipWhile(isAlphanumeric);
+                const content = text.substring(start, i);
+                let keywordType = keywordTokens[content];
                 output.push(tokenFrom(
-                    TokenType.Identifier, text.substring(start, i),
-                    path, start, i
+                    keywordType === undefined? TokenType.Identifier : keywordType, 
+                    content, path, start, i
                 ));
                 continue;
             }
@@ -431,6 +435,8 @@ const quill = (function() {
     });
 
     const NodeType = makeEnum(
+        "FunctionType",
+    
         "Path",
         "IntLiteral",
         "FloatLiteral",
@@ -654,6 +660,34 @@ const quill = (function() {
     }
 
     function parseType(state) {
+        if(state.curr().content === "Fun") {
+            const start = state.curr();
+            state.next();
+            state.assertType(TokenType.ParenOpen);
+            state.next();
+            let argTypes = [];
+            while(state.curr().type !== TokenType.ParenClose) {
+                argTypes.push(parseType(state));
+                state.assertType(TokenType.Comma, TokenType.ParenClose);
+                if(state.curr().type === TokenType.Comma) {
+                    state.next();
+                }
+            }
+            state.assertType(TokenType.ParenClose);
+            let returnType = { 
+                type: NodeType.Path, value: "Unit", 
+                path: start.path, start: start.start, end: state.curr().end
+            };
+            state.next();
+            if(state.curr().type === TokenType.ArrowRight) {
+                state.next();
+                returnType = parseType(state);
+            }
+            return {
+                type: NodeType.FunctionType, argTypes, returnType,
+                path: start.path, start: start.start, end: returnType.end
+            };
+        }
         switch(state.curr().type) {
             case TokenType.Identifier: {
                 const start = state.curr();
@@ -1130,7 +1164,8 @@ const quill = (function() {
         "Float",
         "Boolean",
         "Struct",
-        "Enum"
+        "Enum",
+        "Function"
     );
 
     const builtinTypeNames = Object.freeze({
@@ -1164,6 +1199,14 @@ const quill = (function() {
                     message.error(`Unknown type '${node.value}'`),
                     message.code(node)
                 );
+            }
+            case NodeType.FunctionType: {
+                const arguments = node.argTypes
+                    .map(n => typeFromNode(n, state));
+                const returned = typeFromNode(node.returnType, state);
+                return {
+                    type: Type.Function, arguments, returned, node
+                };
             }
         }
         throw message.internalError(`Unhandled node type ${node.type}`);
@@ -1357,14 +1400,31 @@ const quill = (function() {
             case Type.Boolean: return "Boolean";
             case Type.Struct: 
             case Type.Enum: return t.name;
+            case Type.Function: {
+                const a = t.arguments.map(displayType).join(", ");
+                const r = displayType(t.returned);
+                return `Fun(${a}) -> ${r}`;
+            }
         }
         return `<unhandled type: ${t.type}>`;
     }
 
     function assertTypesEqual(exp, got, source) {
-        const typesEqual = exp.type === got.type;
-        const namesEqual = exp.name === got.name;
-        if(typesEqual && namesEqual) { return; }
+        const check = (exp, got) => {
+            if(exp.type !== got.type) { return false; }
+            if(exp.name !== got.name) { return false; }
+            if(exp.type === Type.Function) {
+                if(exp.arguments.length !== got.arguments.length) {
+                    return false;
+                }
+                for(let i = 0; i < exp.arguments.length; i += 1) {
+                    if(!check(exp.arguments[i], got.arguments[i])) { return false; }
+                }
+                if(!check(exp.returned, got.returned)) { return false; }
+            }
+            return true;
+        };
+        if(check(exp, got)) { return; }
         const expD = displayType(exp);
         const gotD = displayType(got);
         throw message.from(
