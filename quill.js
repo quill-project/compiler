@@ -1,92 +1,4 @@
 
-/*
-
-
-struct Cat(name: String, hunger: Float)
-
-struct Dog(name: String, speed: Float)
-
-enum Pet(Cat: Cat, Dog: Dog, Bird)
-
-enum Option<T>(Some: T, None: Unit)
-
-val my_cat: Cat = Cat("Bob", 100000.0)
-val my_pet: Pet = Pet::Cat(my_cat)
-match my_pet {
-    Pet::Cat(Cat("Bob", hunger)) {
-        return hunger > 1 { 1 } else { hunger }
-    }
-    Pet::Cat(my_cat) {
-        
-    }
-    Pet::Dog(my_dog) {
-    
-    }
-    _ {
-        
-    }
-}
-
-fun map<T, R>(i: Iterator<T>, f: Fun(T) -> R) -> Iterator<R> 
-    = Iterator(|| i |> next() ?Some |> f() |> Option::Some())
-
-0..20 |> map(|n| n * 2)
-
-
-enum Value {
-    I64: Int,
-    F64: Float,
-    Str: String,
-    Undefined,
-    ...
-}
-
-fun add(a: Value, b: Value) -> Value {
-    case a {
-        
-    }
-}
-
-
-
-mod cool::example
-
-use std::(iter, opt, int, io as console)
-
-case my_iter |> next() {
-    10 {  }
-    5 {  }
-    5 {  }
-    Some as x {  }
-    None
-}
-
-my_iter |> next() |> unwrap_or_else(|| console::inputln()
-    |> int::parse()
-    |> expect("Invalid input!")
-)
-
-my_optional_value |> unwrap()
-// this will try the following:
-
-
-/*
-// not writing a type makes it 'Unit'
-enum Option<T>(Some: T, None: Unit)
-
-struct Member(name: String, friend: List<Member>) 
-enum User(Guest, Member: Member, Moderator: Member, Admin: Member)
-
-fun add<T>(a: T, b: T) -> T = a + b
-
-struct Cat(name: String, age: Int, hunger: Float)
-
-fun feed(self: Cat, amount: Int) {
-    self.hunger -= amount
-}
-
-*/
-
 const quill = (function() {
 
     // Utilities
@@ -1015,33 +927,33 @@ const quill = (function() {
                 const parseUsages = base => {
                     let path = [...base];
                     state.assertType(TokenType.Identifier);
-                    while(state.curr().type === TokenType.Identifier) {
+                    const pathContinues = () => state.curr().type === TokenType.Identifier 
+                        || state.curr().type === TokenType.Asterisk;
+                    while(pathContinues()) {
+                        const isWildcard = state.curr().type === TokenType.Asterisk;
                         path.push(state.curr().content);
                         state.next();
-                        if(state.curr().type === TokenType.PathSeparator) {
+                        if(state.curr().type === TokenType.PathSeparator && !isWildcard) {
                             state.next();
                             continue;
                         }
-                        let usages = {};
-                        if(state.curr().type === TokenType.KeywordAs) {
+                        let usages = [];
+                        if(state.curr().type === TokenType.KeywordAs && !isWildcard) {
                             state.next();
                             state.assertType(TokenType.Identifier);
                             usages[state.curr().content] = path.join("::");
                             state.next();
                         } else {
                             const end = path.at(-1);
-                            usages[end] = path.join("::");
+                            usages.push({ pattern: end, replacement: path.join("::") });
                         }
                         return usages;
                     }
                     state.assertType(TokenType.ParenOpen);
                     state.next();
-                    let usages = {};
+                    let usages = [];
                     while(state.curr().type !== TokenType.ParenClose) {
-                        const branch = parseUsages(path);
-                        for(const usage in branch) {
-                            usages[usage] = branch[usage];
-                        }
+                        usages.push(...parseUsages(path));
                         state.assertType(TokenType.Comma, TokenType.ParenClose);
                         if(state.curr().type === TokenType.Comma) {
                             state.next();
@@ -1257,21 +1169,49 @@ const quill = (function() {
         throw message.internalError(`Unhandled node type ${node.type}`);
     }
 
+    const defaultUsages = Object.freeze([
+        { pattern: "*", replacement: "std::*" }
+    ]);
+
     function handleModules(node, state) {
+        const addUsage = (usage) => {
+            if(usage.pattern !== "*") {
+                state.usages[usage.pattern] = usage.replacement;
+                return;
+            }
+            const prefixParts = usage.replacement
+                .split("::").slice(0, -1);
+            const prefix = prefixParts.join("::");
+            for(const path of allSymbolPaths(state)) {
+                if(!path.startsWith(prefix)) { continue; }
+                const pathParts = path.split("::");
+                if(pathParts.length <= prefixParts.length) { continue; }
+                const full = pathParts.slice(0, prefixParts.length + 1).join("::");
+                const pattern = pathParts[prefixParts.length];
+                state.usages[pattern] = full;
+            }
+        };
         switch(node.type) {
             case NodeType.Module: {
                 state.module = node.name;
                 state.usages = {};
+                defaultUsages.forEach(addUsage);
                 break;
             }
             case NodeType.Usage: {
-                for(const usage in node.usages) {
-                    const replacement = node.usages[usage];
-                    state.usages[usage] = replacement;
-                }
+                node.usages.forEach(addUsage);
                 break;
             }
         }
+    }
+
+    function allSymbolPaths(state) {
+        return [
+            ...Object.keys(state.functions), 
+            ...Object.keys(state.variables),
+            ...Object.keys(state.structs),
+            ...Object.keys(state.enums)
+        ];
     }
 
     function hasSymbol(path, state) {
@@ -1281,15 +1221,17 @@ const quill = (function() {
             || state.enums[path] !== undefined;
     }
 
-    function collectSymbols(statements, state) {
-        const assertUnique = (node, path) => {
-            if(!hasSymbol(path, state)) { return; }
-            throw message.from(
-                message.error(`The symbol '${path}' exists more than once`),
-                message.code(node),
-                message.note("There may only be one symbol of the same name in the same module")
-            );
-        };
+    function assertSymbolUnique(node, path, state) {
+        if(!hasSymbol(path, state)) { return; }
+        throw message.from(
+            message.error(`The symbol '${path}' exists more than once`),
+            message.code(node),
+            message.note("There may only be one symbol of the same name in the same module")
+        );
+    };
+        
+
+    function collectTypes(statements, state) {
         // collect all types
         for(const node of statements) {
             handleModules(node, state);
@@ -1297,20 +1239,22 @@ const quill = (function() {
                 case NodeType.Structure: {
                     const path = state.module.length === 0
                         ? node.name : state.module + "::" + node.name;
-                    assertUnique(node, path);
+                    assertSymbolUnique(node, path, state);
                     state.structs[path] = null;
                     continue;
                 }
                 case NodeType.Enumeration: {
                     const path = state.module.length === 0
                         ? node.name : state.module + "::" + node.name;
-                    assertUnique(node, path);
+                    assertSymbolUnique(node, path, state);
                     state.enums[path] = null;
                     continue;
                 }
             }
         }
-        state.reset();
+    }
+
+    function collectSymbols(statements, state) {
         // collect all symbols, fully collect types
         for(const node of statements) {
             handleModules(node, state);
@@ -1324,7 +1268,7 @@ const quill = (function() {
                     });
                     const path = state.module.length === 0
                         ? node.name : state.module + "::" + node.name;
-                    assertUnique(node, path);
+                    assertSymbolUnique(node, path, state);
                     state.functions[path] = {
                         node, args, 
                         returnType: typeFromNode(node.returnType, state)
@@ -1336,7 +1280,7 @@ const quill = (function() {
                         : typeFromNode(node.valueType, state);
                     const path = state.module.length === 0
                         ? node.name : state.module + "::" + node.name;
-                    assertUnique(node, path);
+                    assertSymbolUnique(node, path, state);
                     state.variables[path] = {
                         node, type, isMutable: node.isMutable
                     };
@@ -2556,7 +2500,7 @@ function quill$$eq(a, b) {
         let code = runtime;
         const checker = createCheckerState();
         let nodes = {};
-        // tokenizing, parsing and symbol collection
+        // tokenizing, parsing and type collection
         for(const path in sources) {
             const text = sources[path];
             if(text.length == 0) { continue; }
@@ -2565,6 +2509,18 @@ function quill$$eq(a, b) {
             try {
                 const statements = parseStatementList(parser, true);
                 nodes[path] = statements;
+                collectTypes(statements, checker);
+            } catch(error) {
+                if(error.sections === undefined) { throw error; }
+                errors.push(error);
+            }
+        }
+        if(errors.length > 0) { return makeError(errors); }
+        // full symbol collection
+        for(const path in nodes) {
+            const statements = nodes[path];
+            checker.reset();
+            try {
                 collectSymbols(statements, checker);
             } catch(error) {
                 if(error.sections === undefined) { throw error; }

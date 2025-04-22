@@ -10,6 +10,7 @@
     const rand = () => Math.random();
     const PI = Math.PI;
 
+/*
     const sources = {
         "test.quill": `
 
@@ -92,6 +93,32 @@ fun unwrap_or(self: OptionalInt, other: Int) -> Int {
     }
 }
 
+        `
+    };
+    */
+
+    const sources = {
+        "test.quill": `
+        
+mod std
+
+pub ext fun log_int(n: Int) = print
+pub ext fun log_float(n: Float) = print
+
+pub struct Cat(age: Int, hunger: Float)
+
+
+mod test
+
+fun main() {
+    val x = 5
+    log_int(x)
+    log_float(3.14)
+    val kitty = Cat(5, 0.5)
+}
+        
+
+        
         `
     };
 
