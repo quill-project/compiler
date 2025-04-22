@@ -97,6 +97,8 @@ fun unwrap_or(self: OptionalInt, other: Int) -> Int {
     };
     */
 
+    const curryMultiply = a => b => a * b;
+
     const sources = {
         "test.quill": `
         
@@ -105,20 +107,17 @@ mod std
 pub ext fun log_int(n: Int) = print
 pub ext fun log_float(n: Float) = print
 
-pub struct Cat(age: Int, hunger: Float)
-
 
 mod test
 
-fun main() {
-    val x = 5
-    log_int(x)
-    log_float(3.14)
-    val kitty = Cat(5, 0.5)
-}
-        
+val PI = 3.1415
 
-        
+fun main() {
+    val multiply: Fun(Float) -> Fun(Float) -> Float = |a| |b| a * b
+    val double = multiply(2.0)
+    log_float(double(PI))
+}
+
         `
     };
 

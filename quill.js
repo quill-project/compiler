@@ -442,6 +442,7 @@ const quill = (function() {
         "FloatLiteral",
         "BoolLiteral",
         "UnitLiteral",
+        "FunctionLiteral",
     
         "Multiplicative",
         "Additive",
@@ -539,6 +540,47 @@ const quill = (function() {
             case TokenType.UnitLiteral: {
                 state.next();
                 return valueNodeFrom(NodeType.UnitLiteral, value, start);
+            }
+            case TokenType.Pipe:
+            case TokenType.DoublePipe: {
+                let args = [];
+                if(state.curr().type === TokenType.Pipe) {
+                    state.next();
+                    while(state.curr().type !== TokenType.Pipe) {
+                        state.assertType(TokenType.Identifier);
+                        args.push({ name: state.curr().content, type: null });
+                        state.next();
+                        state.assertType(TokenType.Comma, TokenType.Pipe);
+                        if(state.curr().type === TokenType.Comma) {
+                            state.next();
+                        }
+                    }
+                    state.assertType(TokenType.Pipe);
+                    state.next();
+                } else {
+                    state.next();
+                }
+                let body = null;
+                let end = null;
+                if(state.curr().type === TokenType.BraceOpen) {
+                    state.next();
+                    body = parseStatementList(state);
+                    state.assertType(TokenType.BraceClose);
+                    end = state.curr().end;
+                    state.next();
+                } else {
+                    const value = parseExpression(state);
+                    body = [{
+                        type: NodeType.Return, value,
+                        path: value.path, start: value.start,
+                        end: value.end
+                    }];
+                    end = value.end;
+                }
+                return {
+                    type: NodeType.FunctionLiteral, args, body,
+                    path: start.path, start: start.start, end
+                };
             }
             case TokenType.KeywordIf: {
                 state.next();
@@ -975,11 +1017,15 @@ const quill = (function() {
                         if(state.curr().type === TokenType.KeywordAs && !isWildcard) {
                             state.next();
                             state.assertType(TokenType.Identifier);
-                            usages[state.curr().content] = path.join("::");
+                            usages.push({ 
+                                pattern: state.curr().content, replacement: path.join("::") 
+                            });
                             state.next();
                         } else {
                             const end = path.at(-1);
-                            usages.push({ pattern: end, replacement: path.join("::") });
+                            usages.push({ 
+                                pattern: end, replacement: path.join("::") 
+                            });
                         }
                         return usages;
                     }
@@ -1448,16 +1494,27 @@ const quill = (function() {
         );
     }
 
-    function assertMatchingArgC(expC, gotC, path, node, symbol) {
+    function assertFunctionType(t, node) {
+        if(t.type === Type.Function) { return; }
+        const gotD = displayType(t);
+        throw message.from(
+            message.error(`Expected function type, gut got '${gotD}'`),
+            message.code(node),
+            message.note(`'${gotD}' originates from here:`),
+            message.code(t.node)
+        );
+    }
+
+    function assertMatchingArgC(expC, gotC, called, node, calledSymbol) {
         if(expC === gotC) { return; }
         throw message.from(
-            message.error(`'${path}'`
-                + ` expects ${expC} argument(s),` 
-                + ` but ${gotC} were provided`
+            message.error(called
+                + ` expects ${expC} argument${expC === 1? '' : 's'},` 
+                + ` but ${gotC} ${gotC == 1? "was" : "were"} provided`
             ),
             message.code(node),
-            message.note("'" + path + "' is defined here:"),
-            message.code(called.node)
+            message.note(`${called} is defined here:`),
+            message.code(calledSymbol.node)
         );
     };
     
@@ -1507,7 +1564,7 @@ const quill = (function() {
                         assertSymbolExposed(node, calledPath, asStruct, state);
                         assertMatchingArgC(
                             asStruct.members.length, node.args.length,
-                            calledPath, node, asStruct
+                            `The structure '${calledPath}'`, node, asStruct
                         );
                         for(const argI in asStruct.members) {
                             const exp = asStruct.members[argI].type;
@@ -1818,11 +1875,17 @@ const quill = (function() {
                             );
                         }
                     }
-                    // TODO: NON-VARIABLE ACCESSES
-                    //     FUNCTIONS -> TO EQUAL LAMBDA TYPE
-                    //         fun test(a: Int) -> Int  =>  fun(Int) -> Int
-                    //     STRUCTS / ENUMS -> TO CONSTRUCTOR LAMBDA TYPE
-                    //         struct Cat(name: str)    =>  fun(str) -> Cat
+                    const func = state.functions[path];
+                    if(func !== undefined) {
+                        assertSymbolExposed(node, path, func, state);
+                        node.fullPath = path;
+                        const arguments = func.args.map(a => a.type);
+                        const returned = func.returnType;
+                        return {
+                            type: Type.Function, arguments, returned,
+                            node
+                        };
+                    }
                     throw message.from(
                         message.error(`Access of unknown variable '${node.value}'`),
                         message.code(node)
@@ -1843,6 +1906,60 @@ const quill = (function() {
                 case NodeType.UnitLiteral: {
                     assertReadOnly();
                     return { type: Type.Unit, node };
+                }
+                case NodeType.FunctionLiteral: {
+                    if(expected === null) {
+                        throw message.from(
+                            message.error("Insufficient context for function literal"),
+                            message.code(node),
+                            message.note("Function literals can only be used if their types can be determined based on context."),
+                            message.note("Consider adding type annotations to resolve this issue.")
+                        );
+                    }
+                    assertFunctionType(expected, node);
+                    if(expected.arguments.length !== node.args.length) {
+                        const expectedD = displayType(expected);
+                        throw message.from(
+                            message.error(`${expectedD}`
+                                + ` expects ${expected.arguments.length} argument`
+                                + (expected.arguments.length === 1? '' : 's')
+                                + `, but ${node.args.length} `
+                                + (node.args.length === 1? "was" : "were")
+                                + ` provided`
+                            ),
+                            message.code(node),
+                            message.note(`'${expectedD}' originates from here:`),
+                            message.code(expected.node)
+                        );
+                    }
+                    state.enterScope(expected.returned);
+                    const scope = state.scope();
+                    for(const argI in expected.arguments) {
+                        const exp = expected.arguments[argI];
+                        const arg = node.args[argI];
+                        arg.type = exp;
+                        scope.variables[arg.name] = {
+                            type: exp, isMutable: false, node
+                        };
+                    }
+                    for(const statement of node.body) {
+                        checkTypes(statement, state);
+                    }
+                    const alwaysReturns = state.exitScope();
+                    const missingReturn = !alwaysReturns && expected.returned.type !== Type.Unit
+                    if(missingReturn) {
+                        throw message.from(
+                            message.error(`Function does not always return a value`),
+                            message.note(`The function type '${displayType(expected)}' specifies '${displayType(expected.returned)}' as the return type here:`),
+                            message.code(expected.returnType),
+                            message.note(`However, the end of the function can be reached:`),
+                            message.code(
+                                node.body.length === 0? node : node.body.at(-1)
+                            ),
+                            message.note(`This is only allowed if the function returns 'Unit'`)
+                        );
+                    }
+                    return expected;
                 }
                 case NodeType.Multiplicative:
                 case NodeType.Additive:
@@ -1910,7 +2027,7 @@ const quill = (function() {
                             node.called.fullPath = path;
                             assertMatchingArgC(
                                 called.args.length, node.args.length,
-                                path, node, called
+                                `The function '${path}'`, node, called
                             );
                             assertMatchingArgTypes(called.args, node.args, state);
                             return called.returnType;
@@ -1921,7 +2038,7 @@ const quill = (function() {
                             node.fullPath = path;
                             assertMatchingArgC(
                                 called.members.length, node.args.length,
-                                path, node, called
+                                `The structure '${path}'`, node, called
                             );
                             assertMatchingArgTypes(called.members, node.args, state);
                             node.type = NodeType.StructureInit;
@@ -1943,6 +2060,8 @@ const quill = (function() {
                                 node.fullPath = enumPath;
                                 if(node.args.length !== 1) {
                                     throw message.from(
+                                        // 'were' always works, since the error only happens
+                                        // if there is a non-1 number of arguments
                                         message.error(
                                             `Enums variants take one value, but ${node.args.length} were provided`
                                         ),
@@ -1969,10 +2088,29 @@ const quill = (function() {
                             }
                         }
                     }
-                    // TODO: CALL LAMBDA
-                    throw message.internalError(
-                        "not yet implemented - lambdas"
-                    );   
+                    const called = checkTypes(node.called, state);
+                    assertFunctionType(called, node);
+                    if(called.arguments.length !== node.args.length) {
+                        const calledD = displayType(called);
+                        throw message.from(
+                            message.error(`${calledD}`
+                                + ` expects ${called.arguments.length} argument`
+                                + (called.arguments.length === 1? '' : 's')
+                                + `, but ${node.args.length} `
+                                + (node.args.length === 1? "was" : "were")
+                                + ` provided`
+                            ),
+                            message.code(node),
+                            message.note(`'${calledD}' originates from here:`),
+                            message.code(called.node)
+                        );
+                    }
+                    for(const argI in called.arguments) {
+                        const exp = called.arguments[argI];
+                        const given = checkTypes(node.args[argI], state, exp);
+                        assertTypesEqual(exp, given, node.args[argI]);
+                    }
+                    return called.returned;
                 }
                 case NodeType.IfExpr: {
                     assertReadOnly();
@@ -2232,12 +2370,15 @@ function quill$$eq(a, b) {
                 this.scopes.pop();
                 return scope.vars;
             },
-            
-            alloc: function() {
+
+            allocName: function() {
                 const i = this.nextVarNumber;
                 this.nextVarNumber += 1;
+                return `local${i}`;
+            },
+            alloc: function() {
                 const scope = this.scope();
-                const variable = `local${i}`;
+                const variable = this.allocName();
                 scope.vars += `let ${variable};\n`;
                 scope.variables.push(variable);
                 return variable;
@@ -2280,6 +2421,25 @@ function quill$$eq(a, b) {
             }
             case NodeType.UnitLiteral: {
                 return intoOrAlloc();
+            }
+            case NodeType.FunctionLiteral: {
+                state.enterScope();
+                const args = node.args
+                    .map((n, i) => {
+                        const name = state.allocName();
+                        state.scope().aliases[n.name] = name;
+                        return name;
+                    })
+                    .join(", ");
+                node.body.forEach(n => generateCode(n, state));
+                const body = state.scope().output;
+                const vars = state.exitScope();
+                const out = intoOrAlloc();
+                state.scope().output 
+                    += `${out} = (${args}) => {\n`
+                    + `${vars}${body}`
+                    + `}\n`;
+                return out;
             }
             case NodeType.Multiplicative:
             case NodeType.Additive: {
@@ -2401,10 +2561,13 @@ function quill$$eq(a, b) {
             case NodeType.Function: {
                 if(node.isExternal) { return null; }
                 state.enterScope();
-                const args = node.args.map((n, i) => `param${i}`).join(", ");
-                node.args.forEach((n, i) => {
-                    state.scope().aliases[n.name] = `param${i}`;
-                });
+                const args = node.args
+                    .map((n, i) => {
+                        const name = state.allocName();
+                        state.scope().aliases[n.name] = name;
+                        return name;
+                    })
+                    .join(", ");
                 node.body.forEach(n => generateCode(n, state));
                 const body = state.scope().output;
                 const vars = state.exitScope();
