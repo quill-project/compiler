@@ -1,42 +1,5 @@
 
 /*
- * - ...
- * - [*] More useful errors
- * - [*] External functions and variables
- * - [*] Module System
- * - [*] Custom Types
- * - [*] Match statements
- * - [ ] Bi-directional type checking 
- *     - (pass nullable expected type to expressions)
- * - [ ] Template functions and types
- *     - Template types must specify arguments
- *     - Function template args must be inferrable 
- *       from return type and provided arguments
- * - [ ] Anonymous Functions
- *     - Type must be inferrable from expected type,
- *       otherwise error
- * - [ ] Strings
- * - [ ] Arrays
- * - [ ] Pipes and method calls (smart pipes)
- *     1. Extend it normally
- *         - If this exists, it only tries that
- *     2. Append the called path to all imported paths
- *        and choose the one which both exists and has
- *        a fitting first argument type
- *        (e.g. if 'use std::io', then 'std::io' :: 'unwrap')
- *        (if multiple can work, throw an error)
- *         - ('use std::(iter, opt, res)')
- *         = '|> std::iter::unwrap()'
- *         = '|> std::opt::unwrap()'
- *         = '|> std::res::unwrap()'
- * - [ ] Enum unwrapping ('?Some')
- * - [ ] 'while' and 'loop' loops, 'continue' and 'break'
- *     - Have instructions in the same block after
- *        a 'continue' or 'break' be an error
- * - [ ] Any?
- */
-
-/*
 
 
 struct Cat(name: String, hunger: Float)
@@ -1497,7 +1460,7 @@ const quill = (function() {
     function assertMatchingArgTypes(expected, got, state) {
         for(const argI in expected) {
             const exp = expected[argI].type;
-            const given = checkTypes(got[argI], state);
+            const given = checkTypes(got[argI], state, exp);
             assertTypesEqual(exp, given, expected[argI]);
         }
     };
@@ -1597,7 +1560,7 @@ const quill = (function() {
                 type: PatternCondition.Value, 
                 path, value: node 
             });
-            return checkTypes(node, state);
+            return checkTypes(node, state, expected);
         };
         const got = check();
         assertTypesEqual(expected, got, node);
@@ -1782,7 +1745,7 @@ const quill = (function() {
         return false;
     }
 
-    function checkTypes(node, state, assignment = false) {
+    function checkTypes(node, state, expected = null, assignment = false) {
         const assertReadOnly = () => {
             if(!assignment) { return; }
             throw message.from(
@@ -1882,7 +1845,7 @@ const quill = (function() {
                 case NodeType.Comparative: {
                     assertReadOnly();
                     const lhs = checkTypes(node.lhs, state);
-                    const rhs = checkTypes(node.rhs, state);
+                    const rhs = checkTypes(node.rhs, state, lhs);
                     assertTypesEqual(lhs, rhs, node);
                     const op = node.op;
                     if(op != "==" && op != "!=") {
@@ -1893,11 +1856,13 @@ const quill = (function() {
                 }
                 case NodeType.Negation: {
                     assertReadOnly();
-                    const value = checkTypes(node.value, state);
+                    let value;
                     if(node.op === "-") {
+                        value = checkTypes(node.value, state);
                         assertNumberType(value, node, node);
                     } else {
                         const bool = { type: Type.Boolean, node };
+                        value = checkTypes(node.value, state, bool);
                         assertTypesEqual(value, bool, node);
                     }
                     return value;
@@ -1980,11 +1945,11 @@ const quill = (function() {
                                         message.code(node)
                                     );
                                 }
-                                const value = checkTypes(node.args[0], state);
                                 for(const memberI in called.members) {
                                     const member = called.members[memberI];
                                     if(member.name !== variant) { continue; }
-                                    assertTypesEqual(value, member.type, node);
+                                    const value = checkTypes(node.args[0], state, member.type);
+                                    assertTypesEqual(member.type, value, node);
                                     node.type = NodeType.EnumerationInit;
                                     node.variant = memberI;
                                     return {
@@ -2007,8 +1972,9 @@ const quill = (function() {
                 }
                 case NodeType.IfExpr: {
                     assertReadOnly();
-                    const cond = checkTypes(node.cond, state);
-                    assertTypesEqual(cond, { type: Type.Boolean, node }, node);
+                    const bool = { type: Type.Boolean, node };
+                    const cond = checkTypes(node.cond, state, bool);
+                    assertTypesEqual(bool, cond, node);
                     const ifType = checkTypes(node.ifValue, state);
                     const elseType = checkTypes(node.elseValue, state);
                     assertTypesEqual(ifType, elseType, node);
@@ -2016,10 +1982,10 @@ const quill = (function() {
                 }
 
                 case NodeType.Variable: {
-                    const got = node.value === null? null
-                        : checkTypes(node.value, state);
                     const exp = node.valueType === null? null
                         : typeFromNode(node.valueType, state);
+                    const got = node.value === null? null
+                        : checkTypes(node.value, state, exp);
                     if(got !== null && exp !== null) {
                         assertTypesEqual(exp, got, node);
                     }
@@ -2039,8 +2005,8 @@ const quill = (function() {
                 }
                 case NodeType.Assignment: {
                     const scope = state.scope();
-                    const lhs = checkTypes(node.to, state, true);
-                    const rhs = checkTypes(node.value, state);
+                    const lhs = checkTypes(node.to, state, null, true);
+                    const rhs = checkTypes(node.value, state, lhs);
                     assertTypesEqual(lhs, rhs, node);
                     return null;
                 }
@@ -2051,14 +2017,15 @@ const quill = (function() {
                             "'return' used outside function (should not parse)"
                         ); 
                     }
-                    const value = checkTypes(node.value, state);
+                    const value = checkTypes(node.value, state, returnType);
                     assertTypesEqual(returnType, value, node);
                     state.scope().alwaysReturns = true;
                     return null;
                 }
                 case NodeType.If: {
-                    const cond = checkTypes(node.cond, state);
-                    assertTypesEqual(cond, { type: Type.Boolean, node }, node);
+                    const bool = { type: Type.Boolean, node };
+                    const cond = checkTypes(node.cond, state, bool);
+                    assertTypesEqual(cond, bool, node);
                     const ifReturns = checkBlock(node.ifBody, state);
                     const elseReturns = checkBlock(node.elseBody, state);
                     state.scope().alwaysReturns |= (ifReturns && elseReturns);
