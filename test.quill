@@ -1,0 +1,29 @@
+
+mod std::io
+
+pub ext fun println(value: String) = "
+	console.log(value);
+"
+
+
+mod std::String
+
+pub ext fun concat(low: String, high: String) -> String = "
+    return low + high;
+"
+pub ext fun slice(self: String, start: Int, end: Int) -> String = "
+    return self.substring(Number(start), Number(end));
+"
+
+
+mod test
+
+fun greet(thing: String) -> String 
+	= String::concat(
+		"Hello, ",
+		String::concat(thing, "!")
+	)
+
+fun main() {
+    io::println(greet("world"))
+}
