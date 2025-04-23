@@ -96,24 +96,57 @@ fun unwrap_or(self: OptionalInt, other: Int) -> Int {
         `
     };
     */
-
-    const curryMultiply = a => b => a * b;
-
+    
     const sources = {
         "test.quill": `
-        
+
 mod std
 
-pub ext fun log_int(n: Int) = print
-pub ext fun log_float(n: Float) = print
-pub ext fun log(n: String) = print
+pub ext fun addr_eq[T](a: T, b: T) -> Bool = "return a === b;"
+
+pub ext fun tag_of[T](e: T) -> Int = "
+    const obj_valid = typeof e === "object"
+        && e !== null;
+    if(!obj_valid) { return 0; }
+    const t = e.tag;
+    const tag_valid = typeof t === "number"
+        && t !== Infinity
+        && t !== -Infinity
+        && !isNaN(t);
+    if(!tag_valid} { return 0; }
+    return t;
+"
+
+
+mod std::io
+
+pub ext fun println(value: String) = "console.log(value);"
+
+
+mod std::String
+
+pub ext fun concat(low: String, high: String) -> String = "
+    return low + high;
+"
+pub ext fun slice(self: String, start: Int, end: Int) -> String = "
+    return self.substring(Number(start), Number(end));
+"
 
 
 mod test
 
 fun main() {
-    log("Hello, world!")
+    io::println("Hello, world!")
 }
+
+//fun greet(thing: String) -> String = "Hello, "
+//    |> concat(thing)
+//    |> concat("!")
+
+//fun main() = "world" 
+//    |> greet() 
+//    |> slice(0, 4) 
+//    |> println()
 
         `
     };

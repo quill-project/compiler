@@ -440,9 +440,9 @@ const quill = (function() {
             },
             reportUnexpected: function(expected = null) {
                 const token = this.curr().type == TokenType.End
-                    ? "end of file" : `token '${this.curr().content}'`;
+                    ? "the end of the file" : tokenDescription(this.curr().type);
                 let msg = message.from(
-                    message.error(`Unexpected ${token}`),
+                    message.error(`Did not expect ${token} here`),
                     message.code(this.curr())
                 );
                 if(expected != null) {
@@ -865,7 +865,6 @@ const quill = (function() {
                 };
             }
             let body = null;
-            let externalName = null;
             let end = returnType.end;
             if(!isExternal) {
                 state.assertType(
@@ -893,13 +892,13 @@ const quill = (function() {
             } else {
                 state.assertType(TokenType.Equal);
                 state.next();
-                state.assertType(TokenType.Identifier);
-                externalName = state.curr().content;
+                state.assertType(TokenType.StringLiteral);
+                body = state.curr().content;
                 state.next();
             }
             return {
                 type: NodeType.Function, isPublic, isExternal, 
-                name, args, returnType, body, externalName,
+                name, args, returnType, body,
                 path: start.path, start: start.start, end
             };
         };
@@ -1267,7 +1266,7 @@ const quill = (function() {
         switch(node.type) {
             case NodeType.Path: {
                 const path = expandUsages(node.value, state);
-                const builtin = builtinTypeNames[path];
+                const builtin = builtinTypeNames[node.value];
                 if(builtin !== undefined) { 
                     return { type: builtin, node }; 
                 }
@@ -2536,16 +2535,7 @@ function quill$$eq(a, b) {
                 return `${accessed}.${node.name}`;
             }
             case NodeType.Call: {
-                let called = null;
-                if(node.called.type === NodeType.Path) {
-                    const func = state.checker.functions[node.called.fullPath];
-                    if(func !== undefined && func.node.isExternal) {
-                        called = func.node.externalName;
-                    }
-                }
-                if(called === null) {
-                    called = generateCode(node.called, state);
-                }
+                const called = generateCode(node.called, state);
                 const args = node.args
                     .map(n => generateCode(n, state))
                     .join(", ");
@@ -2611,21 +2601,28 @@ function quill$$eq(a, b) {
                 return null;
             }
             case NodeType.Function: {
-                if(node.isExternal) { return null; }
-                state.enterScope();
-                const args = node.args
-                    .map((n, i) => {
-                        const name = state.allocName();
-                        state.scope().aliases[n.name] = name;
-                        return name;
-                    })
-                    .join(", ");
-                node.body.forEach(n => generateCode(n, state));
-                const body = state.scope().output;
-                const vars = state.exitScope();
-                state.scope().output 
-                    += `function ${manglePath(node.fullPath)}(${args}) {\n`
-                    + `${vars}${body}`
+                let args = null;
+                let impl = null;
+                if(node.isExternal) {
+                    args = node.args.map(a => a.name).join(", ");
+                    impl = node.body;
+                } else {
+                    state.enterScope();
+                    args = node.args
+                        .map((n, i) => {
+                            const name = state.allocName();
+                            state.scope().aliases[n.name] = name;
+                            return name;
+                        })
+                        .join(", ");
+                    node.body.forEach(n => generateCode(n, state));
+                    const body = state.scope().output;
+                    const vars = state.exitScope();
+                    impl = "\n" + vars + body;
+                }
+                state.scope().output
+                    += `function ${manglePath(node.fullPath)}(${args}) {`
+                    + impl
                     + `}\n`;
                 return null;
             }
