@@ -2,7 +2,10 @@
 mod std::io
 
 pub ext fun println[T](value: T) = "
-	console.log(value);
+    if(typeof value === 'object') { console.log('(object)'); }
+	else if(typeof value === 'function') { console.log('(function)'); }
+    else if(value === undefined) { console.log('unit'); }
+    else { console.log('' + value); }
 "
 
 
@@ -20,16 +23,17 @@ mod test
 
 enum Option[T](Some: T, None)
 
-fun greet(thing: String) -> String 
-	= String::concat(
-		"Hello, ",
-		String::concat(thing, "!")
-	)
+fun unwrap_add[A, B, R](a: Option[A], fallback_a: A, b: Option[B], fallback_b: B) -> R
+    = unwrap_or[A](a, fallback_a) + unwrap_or[B](b, fallback_b)
 
-fun add[T](a: T, b: T) -> T = a + b
+fun unwrap_or[T](self: Option[T], fallback: T) -> T {
+    match self {
+        Option::Some[T](value) { return value }
+    }
+}
 
 fun main() {
-    val test: Option[Int] = Option::Some[Int](5)
-    io::println[Int](add[Int](5, 10))
-    io::println[String](greet("world"))
+    io::println[Int](unwrap_add[Int, Int, Int](
+        Option::Some[Int](5), 10, Option::None[Int], 20
+    ))
 }
