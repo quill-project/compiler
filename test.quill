@@ -1,7 +1,7 @@
 
 mod std::io
 
-pub ext fun println(value: String) = "
+pub ext fun println[T](value: T) = "
 	console.log(value);
 "
 
@@ -18,12 +18,18 @@ pub ext fun slice(self: String, start: Int, end: Int) -> String = "
 
 mod test
 
+enum Option[T](Some: T, None)
+
 fun greet(thing: String) -> String 
 	= String::concat(
 		"Hello, ",
 		String::concat(thing, "!")
 	)
 
+fun add[T](a: T, b: T) -> T = a + b
+
 fun main() {
-    io::println(greet("world"))
+    val test: Option[Int] = Option::Some[Int](5)
+    io::println[Int](add[Int](5, 10))
+    io::println[String](greet("world"))
 }

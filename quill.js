@@ -37,11 +37,11 @@ const quill = (function() {
         function code(origin) {
             return { type: Section.Code, origin };
         }
-        
+
         function from(...sections) {
             return {
-                sections 
-            };        
+                sections
+            };
         }
 
         function internalError(text) {
@@ -117,7 +117,7 @@ const quill = (function() {
             }
             return output;
         }
-        
+
         return {
             Section,
             error, warning, note, code,
@@ -151,7 +151,9 @@ const quill = (function() {
         "ParenClose",
         "BraceOpen",
         "BraceClose",
-        
+        "BracketOpen",
+        "BracketClose",
+
         "LessThan",
         "GreaterThan",
         "Equal",
@@ -197,6 +199,8 @@ const quill = (function() {
         ")": TokenType.ParenClose,
         "{": TokenType.BraceOpen,
         "}": TokenType.BraceClose,
+        "[": TokenType.BracketOpen,
+        "]": TokenType.BracketClose,
 
         "<": TokenType.LessThan,
         ">": TokenType.GreaterThan,
@@ -255,6 +259,8 @@ const quill = (function() {
             case TokenType.ParenClose: return "')'";
             case TokenType.BraceOpen: return "'{'";
             case TokenType.BraceClose: return "'}'";
+            case TokenType.BracketOpen: return "[";
+            case TokenType.BracketClose: return "]";
 
             case TokenType.LessThan: return "'<'";
             case TokenType.GreaterThan: return "'>'";
@@ -267,7 +273,7 @@ const quill = (function() {
             case TokenType.Comma: return "','";
             case TokenType.ExclamationMark: return "'!'";
             case TokenType.Dot: return "'.'";
-            case TokeNType.Pipe: return "'|'";
+            case TokenType.Pipe: return "'|'";
 
             case TokenType.KeywordIf: return "'if'";
             case TokenType.KeywordElse: return "'else'";
@@ -546,6 +552,21 @@ const quill = (function() {
         return result;
     }
 
+    function parseGivenTypeArgs(state) {
+        if(state.curr().type !== TokenType.BracketOpen) { return undefined; }
+        state.next();
+        let typeArgs = [];
+        while(state.curr().type !== TokenType.BracketClose) {
+            typeArgs.push(parseType(state));
+            state.assertType(TokenType.Comma, TokenType.BracketClose);
+            if(state.curr().type === TokenType.Comma) {
+                state.next();
+            }
+        }
+        state.next();
+        return typeArgs;
+    }
+
     function parseValue(state) {
         const start = state.curr();
         const value = start.content;
@@ -559,6 +580,12 @@ const quill = (function() {
             }
             case TokenType.Identifier: {
                 const path = parsePath(state);
+                const typeArgs = parseGivenTypeArgs(state);
+                return {
+                    type: NodeType.Path, value: path,
+                    path: start.path, start: start.start, end: start.end,
+                    typeArgs
+                };
                 return valueNodeFrom(NodeType.Path, path, start);
             }
             case TokenType.IntLiteral: {
@@ -774,13 +801,33 @@ const quill = (function() {
             case TokenType.Identifier: {
                 const start = state.curr();
                 const path = parsePath(state);
+                const typeArgs = parseGivenTypeArgs(state);
                 return {
                     type: NodeType.Path, value: path,
-                    path: start.path, start: start.start, end: start.end
+                    path: start.path, start: start.start, end: start.end,
+                    typeArgs
                 };
             }
         }
         state.reportUnexpected("a type");
+    }
+
+    function parseTypeArgList(state) {
+        if(state.curr().type !== TokenType.BracketOpen) { return []; }
+        state.next();
+        let args = [];
+        while(state.curr().type !== TokenType.BracketClose) {
+            state.assertType(TokenType.Identifier);
+            args.push(state.curr().content);
+            state.next();
+            state.assertType(TokenType.Comma, TokenType.BracketClose);
+            if(state.curr().type === TokenType.Comma) {
+                state.next();
+            }
+        }
+        state.assertType(TokenType.BracketClose);
+        state.next();
+        return args;
     }
 
     function parseArgumentList(state, allowMissing = false) {
@@ -842,6 +889,7 @@ const quill = (function() {
             state.assertType(TokenType.Identifier);
             const name = state.curr().content;
             state.next();
+            const typeArgs = parseTypeArgList(state);
             const args = parseArgumentList(state);
             let returnType;
             if(isExternal) {
@@ -898,7 +946,7 @@ const quill = (function() {
             }
             return {
                 type: NodeType.Function, isPublic, isExternal, 
-                name, args, returnType, body,
+                name, typeArgs, args, returnType, body,
                 path: start.path, start: start.start, end
             };
         };
@@ -910,13 +958,14 @@ const quill = (function() {
             const name = state.curr().content;
             state.next();
             let end = state.curr().end;
+            const typeArgs = parseTypeArgList(state);
             const members = parseArgumentList(state);
             if(members.length > 0) { 
                 end = members.at(-1).type.end; 
             } 
             return {
                 type: NodeType.Structure, isPublic,
-                name, members,
+                name, typeArgs, members,
                 path: start.path, start: start.start, end
             };
         };
@@ -928,13 +977,14 @@ const quill = (function() {
             const name = state.curr().content;
             state.next();
             let end = state.curr().end;
+            const typeArgs = parseTypeArgList(state);
             const members = parseArgumentList(state, true);
             if(members.length > 0) {
                 end = members.at(-1).type.end;
             }
             return {
                 type: NodeType.Enumeration, isPublic,
-                name, members,
+                name, typeArgs, members,
                 path: start.path, start: start.start, end
             };
         };
@@ -1193,16 +1243,14 @@ const quill = (function() {
         return {
             module: "",
             usages: {},
-            functions: {},
-            variables: {},
-            structs: {},
-            enums: {},
+            symbols: {},
             scopes: [],
 
-            enterScope: function(returnType = null) {
+            enterScope: function(typeArgs = null) {
                 this.scopes.push({
                     variables: {},
-                    returnType,
+                    returnType: null,
+                    typeArgs,
                     alwaysReturns: false
                 });
             },
@@ -1237,6 +1285,14 @@ const quill = (function() {
                 }
                 return null;
             },
+            findTypeArgs: function() {
+                for(let i = this.scopes.length - 1; i >= 0; i -= 1) {
+                    const scope = this.scopes[i];
+                    const typeArgs = scope.typeArgs;
+                    if(typeArgs !== null) { return typeArgs; }
+                }
+                return {};
+            },
             isBase: function() {
                 return this.scopes.length === 0;
             }
@@ -1270,22 +1326,29 @@ const quill = (function() {
                 if(builtin !== undefined) { 
                     return { type: builtin, node }; 
                 }
-                const struct = state.structs[path];
-                if(struct !== undefined) {
-                    return { 
-                        type: Type.Struct, name: path, node 
-                    };
+                const typeScope = state.findTypeArgs();
+                if(typeScope[node.value] !== undefined) {
+                    return typeScope[node.value];
                 }
-                const enumeration = state.enums[path];
-                if(enumeration !== undefined) {
-                    return {
-                        type: Type.Enum, name: path, node
-                    };
+                const typeArgs = node.typeArgs === undefined
+                    ? [] : node.typeArgs.map(t => typeFromNode(t, state));
+                const s = instantiateSymbol(
+                    node, path, typeArgs, 
+                    [NodeType.Structure, NodeType.Enumeration],
+                    state
+                )
+                if(s === null) {
+                    throw message.from(
+                        message.error(`Unknown type '${node.value}'`),
+                        message.code(node)
+                    );
                 }
-                throw message.from(
-                    message.error(`Unknown type '${node.value}'`),
-                    message.code(node)
-                );
+                let r = { type: null, name: path, typeArgs, node };
+                switch(s.type) {
+                    case NodeType.Structure: r.type = Type.Struct; break;
+                    case NodeType.Enum: r.type = Type.Enum; break;
+                }
+                return r;
             }
             case NodeType.FunctionType: {
                 const arguments = node.argTypes
@@ -1336,19 +1399,11 @@ const quill = (function() {
     }
 
     function allSymbolPaths(state) {
-        return [
-            ...Object.keys(state.functions), 
-            ...Object.keys(state.variables),
-            ...Object.keys(state.structs),
-            ...Object.keys(state.enums)
-        ];
+        return Object.keys(state.symbols);
     }
 
     function hasSymbol(path, state) {
-        return state.functions[path] !== undefined
-            || state.variables[path] !== undefined
-            || state.structs[path] !== undefined
-            || state.enums[path] !== undefined;
+        return state.symbols[path] !== undefined;
     }
 
     function assertSymbolUnique(node, path, state) {
@@ -1359,94 +1414,149 @@ const quill = (function() {
             message.note("There may only be one symbol of the same name in the same module")
         );
     };
-        
 
-    function collectTypes(statements, state) {
-        // collect all types
-        for(const node of statements) {
-            handleModules(node, state);
+    function instantiateSymbol(usageNode, path, typeArgs, allowedTypes, state) {
+        const s = state.symbols[path];
+        if(s === undefined) { return null; }
+        const node = s.node;
+        if(!allowedTypes.includes(node.type)) {
+            return null;
+        }
+        if(typeArgs.length !== s.typeArgs.length) {
+            throw message.from(
+                message.error(`The symbol '${path}' takes ${s.typeArgs.length}`
+                    + " type argument" + (s.typeArgs.length === 1? "" : "s")
+                    + `, but ${typeArgs.length} ` 
+                    + (typeArgs.length === 1? "was" : "were") + " provided"
+                ),
+                message.code(usageNode),
+                message.note(`'${path}' is defined here:`),
+                message.code(node)
+            );
+        }
+        const instanceKey = typeArgs.map(displayType).join(", ");
+        let instance = s.instances[instanceKey];
+        if(instance === undefined) {
+            const namedTypeArgs = {};
+            for(const i in typeArgs) {
+                namedTypeArgs[s.typeArgs[i]] = typeArgs[i];
+            }
             switch(node.type) {
-                case NodeType.Structure: {
-                    const path = state.module.length === 0
-                        ? node.name : state.module + "::" + node.name;
-                    assertSymbolUnique(node, path, state);
-                    state.structs[path] = null;
-                    continue;
-                }
+                case NodeType.Structure: 
                 case NodeType.Enumeration: {
-                    const path = state.module.length === 0
-                        ? node.name : state.module + "::" + node.name;
-                    assertSymbolUnique(node, path, state);
-                    state.enums[path] = null;
-                    continue;
+                    s.instances[instanceKey] = null;
+                    state.enterScope(namedTypeArgs);
+                    const members = node.members.map(m => {
+                        return {
+                            name: m.name,
+                            type: typeFromNode(m.type, state)
+                        };
+                    });
+                    instance = { s, members };
+                    state.exitScope();
+                    break;
+                }
+                case NodeType.Function: {
+                    state.enterScope(namedTypeArgs);
+                    const scope = state.scope();
+                    const returnType = typeFromNode(node.returnType, state);
+                    scope.returnType = returnType;
+                    const argTypes = node.args.map(arg => {
+                        const argType = typeFromNode(arg.type, state);
+                        scope.variables[arg.name] = {
+                            type: argType, isMutable: false, node
+                        };
+                        return { name: arg.name, type: argType };
+                    });
+                    instance = { s, argTypes, returnType };
+                    s.instances[instanceKey] = instance;
+                    if(!node.isExternal) {
+                        for(const statement of node.body) {
+                            checkTypes(statement, state);
+                        }
+                    }
+                    const alwaysReturns = state.exitScope();
+                    const missingReturn = !node.isExternal
+                        && !alwaysReturns && returnType.type !== Type.Unit;
+                    if(missingReturn) {
+                        throw message.from(
+                            message.error(`Function '${node.name}' does not always return a value`),
+                            message.note(`The function specifies '${displayType(returnType)}' as the return type here:`),
+                            message.code(node.returnType),
+                            message.note(`However, the end of the function can be reached:`),
+                            message.code(
+                                node.body.length === 0? node : node.body.at(-1)
+                            ),
+                            message.note(`This is only allowed if the function returns 'Unit'`)
+                        );
+                    }
+                    break;
+                }
+                case NodeType.Variable: {
+                    state.enterScope(namedTypeArgs);
+                    const exp = node.valueType === null? null
+                        : typeFromNode(node.valueType, state);
+                    const got = node.value === null? null
+                        : checkTypes(node.value, state, exp);
+                    if(got !== null && exp !== null) {
+                        assertTypesEqual(exp, got, node);
+                    }
+                    const type = got !== null? got : exp;
+                    node.fullPath = path;
+                    instance = { s, type };
+                    state.exitScope();
+                    break;
                 }
             }
+            if(instance === undefined) {
+                throw message.internalError(`Unhandled symbol type ${node.type}`);
+            }
+            s.instances[instanceKey] = instance;
         }
+        return instance;
     }
 
     function collectSymbols(statements, state) {
-        // collect all symbols, fully collect types
         for(const node of statements) {
             handleModules(node, state);
             switch(node.type) {
-                case NodeType.Function: {
-                    const args = node.args.map(a => {
-                        return { 
-                            name: a.name, 
-                            type: typeFromNode(a.type, state)
-                        };
-                    });
-                    const path = state.module.length === 0
-                        ? node.name : state.module + "::" + node.name;
-                    assertSymbolUnique(node, path, state);
-                    state.functions[path] = {
-                        node, args, 
-                        returnType: typeFromNode(node.returnType, state)
-                    };
-                    continue;
-                }
+                case NodeType.Structure:
+                case NodeType.Enumeration:
+                case NodeType.Function:
                 case NodeType.Variable: {
-                    const type = node.valueType === null? null
-                        : typeFromNode(node.valueType, state);
                     const path = state.module.length === 0
                         ? node.name : state.module + "::" + node.name;
+                    node.fullPath = path;
                     assertSymbolUnique(node, path, state);
-                    state.variables[path] = {
-                        node, type, isMutable: node.isMutable
+                    const typeArgs = node.typeArgs === undefined
+                        ? [] : node.typeArgs;
+                    state.symbols[path] = {
+                        name: node.name,
+                        node,
+                        typeArgs,
+                        instances: {} 
                     };
-                    continue;
-                }
-                case NodeType.Structure: {
-                    const members = node.members.map(m => {
-                        return {
-                            name: m.name,
-                            type: typeFromNode(m.type, state)
-                        };
-                    });
-                    const path = state.module.length === 0
-                        ? node.name : state.module + "::" + node.name;
-                    state.structs[path] = {
-                        node, members
-                    };
-                    continue;
-                }
-                case NodeType.Enumeration: {
-                    const members = node.members.map(m => {
-                        return {
-                            name: m.name,
-                            type: typeFromNode(m.type, state)
-                        };
-                    });
-                    const path = state.module.length === 0
-                        ? node.name : state.module + "::" + node.name;
-                    state.enums[path] = {
-                        node, members
-                    };
-                    continue;
                 }
             }
         }
     }
+
+    function checkBaseSymbols(statements, state) {
+        for(const node of statements) {
+            handleModules(node, state);
+            switch(node.type) {
+                case NodeType.Function:
+                case NodeType.Variable: {
+                    const path = state.module.length === 0
+                        ? node.name : state.module + "::" + node.name;
+                    const s = state.symbols[path];
+                    if(s.typeArgs.length >= 1) { continue; }
+                    instantiateSymbol(node, path, [], [node.type], state);  
+                } 
+            }
+        }
+    }
+        
 
     function expandUsages(path, state) {
         const inModule = state.module.length === 0
@@ -1501,6 +1611,12 @@ const quill = (function() {
         const check = (exp, got) => {
             if(exp.type !== got.type) { return false; }
             if(exp.name !== got.name) { return false; }
+            if(exp.typeArgs !== undefined) {
+                if(exp.typeArgs.length !== got.typeArgs.length) { return false; }
+                for(let i = 0; i < exp.typeArgs.length; i += 1) {
+                    if(!check(exp.typeArgs[i], got.typeArgs[i])) { return false; }
+                }
+            }
             if(exp.type === Type.Function) {
                 if(exp.arguments.length !== got.arguments.length) {
                     return false;
@@ -1568,6 +1684,11 @@ const quill = (function() {
         }
     };
 
+    function getPassedTypeArguments(node, state) {
+        if(node.typeArgs === undefined) { return []; }
+        return node.typeArgs.map(n => typeFromNode(n, state));
+    }
+
     const PatternPath = makeEnum(
         "StructMember",
         "EnumMember"
@@ -1594,19 +1715,24 @@ const quill = (function() {
                 case NodeType.Call: {
                     if(node.called.type !== NodeType.Path) { break; }
                     const calledPath = expandUsages(node.called.value, state);
-                    const asFunction = state.functions[calledPath];
-                    if(asFunction !== undefined) { break; }
-                    const asStruct = state.structs[calledPath];
-                    if(asStruct !== undefined) {
+                    const typeArgs = getPassedTypeArguments(node, state);
+                    const asFunction = instantiateSymbol(
+                        node, calledPath, typeArgs, [NodeType.Function], state
+                    );
+                    if(asFunction !== null) { break; }
+                    const asStruct = instantiateSymbol(
+                        node, calledPath, typeArgs, [NodeType.Structure], state
+                    );
+                    if(asStruct !== null) {
                         assertTypesEqual(
                             expected, 
-                            { type: Type.Struct, name: calledPath, node }, 
+                            { type: Type.Struct, name: calledPath, node, typeArgs }, 
                             node
                         );
                         assertSymbolExposed(node, calledPath, asStruct, state);
                         assertMatchingArgC(
                             asStruct.members.length, node.args.length,
-                            `The structure '${calledPath}'`, node, asStruct
+                            `The structure '${calledPath}'`, node, asStruct.s
                         );
                         for(const argI in asStruct.members) {
                             const exp = asStruct.members[argI].type;
@@ -1627,11 +1753,13 @@ const quill = (function() {
                         rawPathElems.slice(0, -1).join("::"), state
                     );
                     const variant = rawPathElems.at(-1);
-                    const asEnum = state.enums[enumPath];
+                    const asEnum = instantiateSymbol(
+                        node, enumPath, typeArgs, [NodeType.Enumeration], state
+                    );
                     if(asEnum !== undefined) {
                         assertTypesEqual(
                             expected, 
-                            { type: Type.Enum, name: enumPath, node }, 
+                            { type: Type.Enum, name: enumPath, node, typeArgs }, 
                             node
                         );
                         assertSymbolExposed(node, enumPath, asEnum, state);
@@ -1687,7 +1815,10 @@ const quill = (function() {
             case Type.Enum: {
                 if(seenTypes.includes(type.name)) { break; }
                 let output = [];
-                const mems = state.enums[type.name].members;
+                const mems = instantiateSymbol(
+                    type.node, type.name, type.typeArgs, [NodeType.Enumeration], 
+                    state
+                ).members;
                 for(const memI in mems) {
                     const vals = patternValuesOf(
                         mems[memI].type, state, [...seenTypes, type.name]
@@ -1695,7 +1826,9 @@ const quill = (function() {
                         return {
                             type: PatternValue.Enum, 
                             name: type.name,
-                            variant: memI, value
+                            typeArgs: type.typeArgs,
+                            variant: memI, value,
+                            node: type.node
                         };
                     });
                     output.push(...vals);
@@ -1705,7 +1838,10 @@ const quill = (function() {
             case Type.Struct: {
                 if(seenTypes.includes(type.name)) { break; }
                 let output = [];
-                const mems = state.structs[type.name].members;
+                const mems = instantiateSymbol(
+                    type.node, type.name, type.typeArgs, [NodeType.Structure],
+                    state
+                ).members;
                 for(const memI in mems) {
                     const vals = patternValuesOf(
                         mems[memI].type, state, [...seenTypes, type.name]
@@ -1725,7 +1861,9 @@ const quill = (function() {
                 return output.map(members => {
                     return {
                         type: PatternValue.Struct, 
-                        name: type.name, members
+                        name: type.name, members,
+                        typeArgs: type.typeArgs,
+                        node: type.node
                     };
                 });
             };
@@ -1738,13 +1876,19 @@ const quill = (function() {
             case PatternValue.Unit: return "unit";
             case PatternValue.Bool: return value.value;
             case PatternValue.Enum: {
-                const enumeration = state.enums[value.name];
+                const enumeration = instantiateSymbol(
+                    value.node, value.name, value.typeArgs, [NodeType.Enumeration],
+                    state
+                );
                 const variant = enumeration.members[value.variant].name;
                 const val = displayPatternValue(value.value, state);
                 return `${value.name}::${variant}(${val})`;
             }
             case PatternValue.Struct: {
-                const structure = state.structs[value.name];
+                const structure = instantiateSymbol(
+                    value.node, value.name, value.typeArgs, [NodeType.Structure],
+                    state
+                );
                 const members = value.members
                     .map(v => displayPatternValue(v, state)).join(", ");
                 return `${value.name}(${members})`;
@@ -1776,7 +1920,10 @@ const quill = (function() {
         }
         switch(value.type) {
             case PatternValue.Struct: {
-                const members = state.structs[value.name].members;
+                const members = instantiateSymbol(
+                    value.node, value.name, value.typeArgs, [NodeType.Structure],
+                    state
+                ).members;
                 for(const memI in value.members) {
                     const memPath = [...path, { 
                         type: PatternPath.StructMember,
@@ -1819,7 +1966,10 @@ const quill = (function() {
                         }
                         case PatternCondition.EnumVariant: {
                             const memPath = () => {
-                                const members = state.enums[value.name].members;
+                                const members = instantiateSymbol(
+                                    value.node, value.name, value.typeArgs,
+                                    [NodeType.Structure], state
+                                ).members;
                                 return [...path, { 
                                     type: PatternPath.EnumMember,
                                     path: value.name, 
@@ -1875,9 +2025,12 @@ const quill = (function() {
                         return variable.type;
                     }
                     const path = expandUsages(node.value, state);
-                    const global = state.variables[path];
-                    if(global !== undefined) {
-                        assertSymbolExposed(node, path, global, state);
+                    const typeArgs = getPassedTypeArguments(node, state);
+                    const global = instantiateSymbol(
+                        node, path, typeArgs, [NodeType.Variable], state
+                    );
+                    if(global !== null) {
+                        assertSymbolExposed(node, path, global.s, state);
                         node.fullPath = path;
                         assertImmutable(global);
                         return global.type;
@@ -1889,10 +2042,12 @@ const quill = (function() {
                             pathElems.slice(0, -1).join("::"), state
                         );
                         const variant = pathElems.at(-1);
-                        const enumeration = state.enums[enumPath];
-                        if(enumeration !== undefined) {
+                        const enumeration = instantiateSymbol(
+                            node, enumPath, typeArgs, [NodeType.Enumeration], state
+                        );
+                        if(enumeration !== null) {
                             assertSymbolExposed(
-                                node, enumPath, enumeration, state
+                                node, enumPath, enumeration.s, state
                             );
                             node.fullPath = enumPath;
                             const value = { type: Type.Unit, node };
@@ -1917,11 +2072,13 @@ const quill = (function() {
                             );
                         }
                     }
-                    const func = state.functions[path];
-                    if(func !== undefined) {
-                        assertSymbolExposed(node, path, func, state);
+                    const func = instantiateSymbol(
+                        node, path, typeArgs, [NodeType.Function], state
+                    );
+                    if(func !== null) {
+                        assertSymbolExposed(node, path, func.s, state);
                         node.fullPath = path;
-                        const arguments = func.args.map(a => a.type);
+                        const arguments = func.argsTypes.map(a => a.type);
                         const returned = func.returnType;
                         return {
                             type: Type.Function, arguments, returned,
@@ -1978,7 +2135,8 @@ const quill = (function() {
                             message.code(expected.node)
                         );
                     }
-                    state.enterScope(expected.returned);
+                    state.enterScope();
+                    state.scope().returnType = expected.returned;
                     const scope = state.scope();
                     for(const argI in expected.arguments) {
                         const exp = expected.arguments[argI];
@@ -2047,8 +2205,11 @@ const quill = (function() {
                             message.code(accessed.node)
                         );
                     }
-                    const struct = state.structs[accessed.name];
-                    assertSymbolExposed(node, accessed.name, struct, state);
+                    const struct = instantiateSymbol(
+                        node, accessed.name, accessed.typeArgs, [NodeType.Structure],
+                        state
+                    );
+                    assertSymbolExposed(node, accessed.name, struct.s, state);
                     for(const member of struct.members) {
                         if(member.name !== node.name) { continue; }
                         return member.type;
@@ -2067,29 +2228,34 @@ const quill = (function() {
                     assertReadOnly();
                     if(node.called.type === NodeType.Path) {
                         const path = expandUsages(node.called.value, state);
-                        let called = state.functions[path];
-                        if(called !== undefined) {
-                            assertSymbolExposed(node, path, called, state);
+                        const typeArgs = getPassedTypeArguments(node.called, state);
+                        const asFunction = instantiateSymbol(
+                            node.called, path, typeArgs, [NodeType.Function], state
+                        );
+                        if(asFunction !== null) {
+                            assertSymbolExposed(node, path, asFunction.s, state);
                             node.called.fullPath = path;
                             assertMatchingArgC(
-                                called.args.length, node.args.length,
-                                `The function '${path}'`, node, called
+                                asFunction.argTypes.length, node.args.length,
+                                `The function '${path}'`, node, asFunction.s
                             );
-                            assertMatchingArgTypes(called.args, node.args, state);
-                            return called.returnType;
+                            assertMatchingArgTypes(asFunction.argTypes, node.args, state);
+                            return asFunction.returnType;
                         }
-                        called = state.structs[path];
-                        if(called !== undefined) {
-                            assertSymbolExposed(node, path, called, state);
+                        const asStruct = instantiateSymbol(
+                            node.called, path, typeArgs, [NodeType.Structure], state
+                        );
+                        if(asStruct !== null) {
+                            assertSymbolExposed(node, path, asStruct.s, state);
                             node.fullPath = path;
                             assertMatchingArgC(
-                                called.members.length, node.args.length,
-                                `The structure '${path}'`, node, called
+                                asStruct.members.length, node.args.length,
+                                `The structure '${path}'`, node, asStruct.s
                             );
-                            assertMatchingArgTypes(called.members, node.args, state);
+                            assertMatchingArgTypes(asStruct.members, node.args, state);
                             node.type = NodeType.StructureInit;
                             return {
-                                type: Type.Struct, name: path, node 
+                                type: Type.Struct, name: path, node, typeArgs
                             };
                         }
                         const pathElems = node.called.value.split("::");
@@ -2098,10 +2264,13 @@ const quill = (function() {
                                 pathElems.slice(0, -1).join("::"), state
                             );
                             const variant = pathElems.at(-1);
-                            called = state.enums[enumPath];
-                            if(called !== undefined) {
+                            const asEnum = instantiateSymbol(
+                                node.called, enumPath, typeArgs, 
+                                [NodeType.Enumeration], state
+                            );
+                            if(asEnum !== null) {
                                 assertSymbolExposed(
-                                    node, enumPath, called, state
+                                    node, enumPath, asEnum.s, state
                                 );
                                 node.fullPath = enumPath;
                                 if(node.args.length !== 1) {
@@ -2114,15 +2283,16 @@ const quill = (function() {
                                         message.code(node)
                                     );
                                 }
-                                for(const memberI in called.members) {
-                                    const member = called.members[memberI];
+                                for(const memberI in asEnum.members) {
+                                    const member = asEnum.members[memberI];
                                     if(member.name !== variant) { continue; }
                                     const value = checkTypes(node.args[0], state, member.type);
                                     assertTypesEqual(member.type, value, node);
                                     node.type = NodeType.EnumerationInit;
                                     node.variant = memberI;
                                     return {
-                                        type: Type.Enum, name: enumPath, node 
+                                        type: Type.Enum, name: enumPath, 
+                                        node, typeArgs
                                     };
                                 }
                                 throw message.from(
@@ -2178,17 +2348,11 @@ const quill = (function() {
                         assertTypesEqual(exp, got, node);
                     }
                     const type = got !== null? got : exp;
-                    if(state.isBase()) {
-                        const path = state.module.length === 0
-                            ? node.name : state.module + "::" + node.name;
-                        node.fullPath = path;
-                        state.variables[path].type = type;
-                    } else {
-                        const scope = state.scope();
-                        scope.variables[node.name] = {
-                            type, isMutable: node.isMutable, node
-                        };
-                    }
+                    const scope = state.scope();
+                    if(scope === undefined) { return null; }
+                    scope.variables[node.name] = {
+                        type, isMutable: node.isMutable, node
+                    };
                     return null;
                 }
                 case NodeType.Assignment: {
@@ -2293,41 +2457,7 @@ const quill = (function() {
                     return null;
                 }
 
-                case NodeType.Function: {
-                    const path = state.module.length === 0
-                        ? node.name : state.module + "::" + node.name;
-                    node.fullPath = path;
-                    const returnType = typeFromNode(node.returnType, state);
-                    state.enterScope(returnType);
-                    const scope = state.scope();
-                    for(const arg of node.args) {
-                        const argType = typeFromNode(arg.type, state);
-                        scope.variables[arg.name] = {
-                            type: argType, isMutable: false, node
-                        };
-                    }
-                    if(!node.isExternal) {
-                        for(const statement of node.body) {
-                            checkTypes(statement, state);
-                        }
-                    }
-                    const alwaysReturns = state.exitScope();
-                    const missingReturn = !node.isExternal 
-                        && !alwaysReturns && returnType.type !== Type.Unit
-                    if(missingReturn) {
-                        throw message.from(
-                            message.error(`Function '${node.name}' does not always return a value`),
-                            message.note(`The function specifies '${displayType(returnType)}' as the return type here:`),
-                            message.code(node.returnType),
-                            message.note(`However, the end of the function can be reached:`),
-                            message.code(
-                                node.body.length === 0? node : node.body.at(-1)
-                            ),
-                            message.note(`This is only allowed if the function returns 'Unit'`)
-                        );
-                    }
-                    return null;
-                }
+                case NodeType.Function:
                 case NodeType.Structure:
                 case NodeType.StructureInit:
                 case NodeType.Enumeration:
@@ -2451,9 +2581,7 @@ function quill$$eq(a, b) {
                     state.scope().output += `${into} = ${value};\n`;
                     return into;
                 }
-                const read = state.checker.variables[node.fullPath];
-                return read !== undefined && read.node.isExternal
-                    ? read.node.externalName : manglePath(node.fullPath);
+                return manglePath(node.fullPath);
             }
             case NodeType.IntLiteral:
                 const out = intoOrAlloc();
@@ -2544,7 +2672,7 @@ function quill$$eq(a, b) {
                 return out;
             }
             case NodeType.StructureInit: {
-                const struct = state.checker.structs[node.fullPath];
+                const struct = state.checker.symbols[node.fullPath];
                 const args = node.args.map(n => generateCode(n, state));
                 const out = intoOrAlloc();
                 state.scope().output += `${out} = {`;
@@ -2557,7 +2685,7 @@ function quill$$eq(a, b) {
                 return out;
             }
             case NodeType.EnumerationInit: {
-                const enumeration = state.checker.enums[node.fullPath];
+                const enumeration = state.checker.symbols[node.fullPath];
                 const value = generateCode(node.args[0], state);
                 const out = intoOrAlloc();
                 state.scope().output += `${out} = { tag: ${node.variant}, value: ${value} };\n`;
@@ -2781,7 +2909,7 @@ function quill$$eq(a, b) {
             try {
                 const statements = parseStatementList(parser, true);
                 nodes[path] = statements;
-                collectTypes(statements, checker);
+                collectSymbols(statements, checker);
             } catch(error) {
                 if(error.sections === undefined) { throw error; }
                 errors.push(error);
@@ -2793,7 +2921,7 @@ function quill$$eq(a, b) {
             const statements = nodes[path];
             checker.reset();
             try {
-                collectSymbols(statements, checker);
+                checkBaseSymbols(statements, checker);
             } catch(error) {
                 if(error.sections === undefined) { throw error; }
                 errors.push(error);
