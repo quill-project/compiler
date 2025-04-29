@@ -19,21 +19,32 @@ pub ext fun slice(self: String, start: Int, end: Int) -> String = "
 "
 
 
+mod foo
+
+pub enum Option[T](Some: T, None)
+
+
+
+mod balls
+
+use foo::Option
+
+pub fun unwrap_add[A, B, R](a: Option[A], fallback_a: A, b: Option[B], fallback_b: B) -> R
+    = test::unwrap_or[A](a, fallback_a) + test::unwrap_or[B](b, fallback_b)
+
+
+
 mod test
 
-enum Option[T](Some: T, None)
-
-fun unwrap_add[A, B, R](a: Option[A], fallback_a: A, b: Option[B], fallback_b: B) -> R
-    = unwrap_or[A](a, fallback_a) + unwrap_or[B](b, fallback_b)
-
-fun unwrap_or[T](self: Option[T], fallback: T) -> T {
+pub fun unwrap_or[T](self: foo::Option[T], fallback: T) -> T {
     match self {
-        Option::Some[T](value) { return value }
+        foo::Option::Some[T](value) { return value }
+        foo::Option::None[T] { return fallback }
     }
 }
 
 fun main() {
-    io::println[Int](unwrap_add[Int, Int, Int](
-        Option::Some[Int](5), 10, Option::None[Int], 20
+    io::println[Int](balls::unwrap_add[Int, Int, Int](
+        foo::Option::Some[Int](5), 10, foo::Option::None[Int], 20
     ))
 }

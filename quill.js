@@ -1386,8 +1386,15 @@ const quill = (function() {
                 }
                 return {};
             },
-            isBase: function() {
-                return this.scopes.length === 0;
+            
+            clone: function() {
+                let r = createCheckerState(this.messages);
+                r.module = this.module;
+                r.usages = JSON.parse(JSON.stringify(this.usages));
+                r.symbols = this.symbols;
+                r.scopes = this.scopes;
+                r.messages = this.messages;
+                return r;
             }
         };
     }
@@ -1511,9 +1518,10 @@ const quill = (function() {
         );
     };
 
-    function instantiateSymbol(usageNode, path, typeArgs, allowedTypes, state) {
-        const s = state.symbols[path];
+    function instantiateSymbol(usageNode, path, typeArgs, allowedTypes, callerState) {
+        const s = callerState.symbols[path];
         if(s === undefined) { return null; }
+        const state = s.checker;
         const node = s.node;
         if(!allowedTypes.includes(node.type)) {
             return null;
@@ -1646,7 +1654,8 @@ const quill = (function() {
                         name: node.name,
                         node,
                         typeArgs,
-                        instances: {} 
+                        instances: {},
+                        checker: state.clone()
                     };
                 }
             }
@@ -1756,6 +1765,29 @@ const quill = (function() {
             message.code(got.node)
         );
     }
+
+    // function inferTypeArguments(exp, got, typeArgNames, inferredArgs) {
+    //     // 'exp' = TYPE NODE, 'got' = TYPE INSTANCE
+    //     const infer = (exp, got) => {
+    //         switch(exp.type) {
+    //             case NodeType.Path: {
+    //                 const typeNameI = typeArgNames.indexOf(exp.value);
+    //                 if(typeNameI !== -1) {
+    //                     inferredArgs[typeNameI] = got;
+    //                     return;
+    //                 }
+    //                 const path = 
+    //             }
+    //             case NodeType.FunctionType: {
+
+    //             }
+    //             default: throw message.internalError(
+    //                 `Unhandled type node type ${exp.type}`
+    //             );
+    //         }
+    //     };
+    //     infer(exp, got, typeArgNames, inferredArgs);
+    // }
 
     function assertNumberType(t, node) {
         if(t.type === Type.Integer || t.type === Type.Float) { return; }
