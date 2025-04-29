@@ -2049,7 +2049,6 @@ const quill = (function() {
                             node, expected.name, expected.typeArgs, 
                             [NodeType.Enumeration], state
                         );
-                        console.log(enumeration);
                         for(const memberI in enumeration.members) {
                             const member = enumeration.members[memberI];
                             if(member.name !== variant) { continue; }
