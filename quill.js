@@ -1975,9 +1975,24 @@ const quill = (function() {
         const check = () => {
             switch(node.type) {
                 case NodeType.Path: {
+                    if(node.value.includes("::")) { break; }
+                    if(expected.type === Type.Enum) {
+                        const enumeration = instantiateSymbol(
+                            node, expected.name, expected.typeArgs, 
+                            [NodeType.Enumeration], state
+                        );
+                        let found = false;
+                        for(const memberI in enumeration.members) {
+                            const member = enumeration.members[memberI];
+                            if(member.name !== node.value) { continue; }
+                            node.value = expected.name + "::" + member.name;
+                            found = true;
+                            break;
+                        }
+                        if(!found) { break; }
+                    }
                     const asLocal = state.findLocalVariable(node.value);
                     if(asLocal !== null) { break; }
-                    if(node.value.includes("::")) { break; }
                     pattern.variables.push({
                         name: (node.value === "_"? null : node.value),
                         path, type: expected
@@ -1989,16 +2004,22 @@ const quill = (function() {
                     const calledPath = expandUsages(node.called.value, state);
                     const typeArgs = getPassedTypeArguments(node.called, state);
                     const asFunction = instantiateSymbol(
-                        node, calledPath, typeArgs, [NodeType.Function], state
+                        node, calledPath, typeArgs, [NodeType.Function], state,
+                        null, expected
                     );
                     if(asFunction !== null) { break; }
                     const asStruct = instantiateSymbol(
-                        node, calledPath, typeArgs, [NodeType.Structure], state
+                        node, calledPath, typeArgs, 
+                        [NodeType.Structure], state,
+                        null, expected
                     );
                     if(asStruct !== null) {
                         assertTypesEqual(
                             expected, 
-                            { type: Type.Struct, name: calledPath, node, typeArgs }, 
+                            { 
+                                type: Type.Struct, name: calledPath, node, 
+                                typeArgs: asStruct.typeArgs
+                            }, 
                             node
                         );
                         assertSymbolExposed(node, calledPath, asStruct.s, state);
@@ -2020,18 +2041,38 @@ const quill = (function() {
                         return expected;
                     }
                     const rawPathElems = node.called.value.split("::");
-                    if(rawPathElems.length === 1) { break; }
-                    const enumPath = expandUsages(
-                        rawPathElems.slice(0, -1).join("::"), state
-                    );
                     const variant = rawPathElems.at(-1);
+                    let enumPath = null;
+                    if(rawPathElems.length === 1) { 
+                        if(expected.type !== Type.Enum) { break; }
+                        const enumeration = instantiateSymbol(
+                            node, expected.name, expected.typeArgs, 
+                            [NodeType.Enumeration], state
+                        );
+                        console.log(enumeration);
+                        for(const memberI in enumeration.members) {
+                            const member = enumeration.members[memberI];
+                            if(member.name !== variant) { continue; }
+                            enumPath = expected.name;
+                            break;
+                        }
+                    }
+                    if(enumPath === null) {
+                        enumPath = expandUsages(
+                            rawPathElems.slice(0, -1).join("::"), state
+                        );
+                    }
                     const asEnum = instantiateSymbol(
-                        node, enumPath, typeArgs, [NodeType.Enumeration], state
+                        node, enumPath, typeArgs, [NodeType.Enumeration], state,
+                        null, expected
                     );
-                    if(asEnum !== undefined) {
+                    if(asEnum !== null) {
                         assertTypesEqual(
                             expected, 
-                            { type: Type.Enum, name: enumPath, node, typeArgs }, 
+                            { 
+                                type: Type.Enum, name: enumPath, node, 
+                                typeArgs: asEnum.typeArgs
+                            }, 
                             node
                         );
                         assertSymbolExposed(node, enumPath, asEnum.s, state);

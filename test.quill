@@ -21,13 +21,17 @@ pub ext fun slice(self: String, start: Int, end: Int) -> String = "
 
 mod test
 
-fun test[T](some: Option[T, T]) {}
-
-fun add[T](a: T, b: T) -> T = a + b
-
 enum Option[T](Some: T, None)
 
+fun unwrap_or[T](self: Option[T], fallback: T) -> T {
+    match self {
+        Some(value) { return value }
+        None { return fallback }
+    }
+}
+
 fun main() {
-    val x: Option[Int] = Option::None
-    test(x)
+    val x = Option::Some(25)
+    val v = unwrap_or(x, 5)
+    io::println(v)
 }
