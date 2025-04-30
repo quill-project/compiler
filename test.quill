@@ -21,9 +21,24 @@ mod std::List
 pub fun of[T](...values: List[T]) -> List[T] = values
 
 
+
+mod pets
+
+pub struct Cat(name: String, hunger: Float)
+
+pub fun Cat::feed(self: Cat) {
+    self.hunger = 0.0
+}
+
+
 mod test
 
+fun feed[T](self: T) {
+    T::feed(self)
+}
+
 fun main() {
-    val x = List::of(1, 2, 3)
-    io::println(x)
+    val c = pets::Cat("Snowball", 5.0)
+    feed(c)
+    io::println(c.hunger)
 }

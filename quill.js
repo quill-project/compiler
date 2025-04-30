@@ -992,9 +992,7 @@ const quill = (function() {
             assertTopLevel(true);
             state.assertType(TokenType.KeywordFun);
             state.next();
-            state.assertType(TokenType.Identifier);
-            const name = state.curr().content;
-            state.next();
+            const name = parsePath(state);
             const typeArgs = parseTypeArgList(state);
             const args = parseArgumentList(state, false, true);
             let returnType;
@@ -1060,9 +1058,7 @@ const quill = (function() {
             assertTopLevel(true);
             state.assertType(TokenType.KeywordStruct);
             state.next();
-            state.assertType(TokenType.Identifier);
-            const name = state.curr().content;
-            state.next();
+            const name = parsePath(state);
             let end = state.curr().end;
             const typeArgs = parseTypeArgList(state);
             const members = parseArgumentList(state);
@@ -1079,9 +1075,7 @@ const quill = (function() {
             assertTopLevel(true);
             state.assertType(TokenType.KeywordEnum);
             state.next();
-            state.assertType(TokenType.Identifier);
-            const name = state.curr().content;
-            state.next();
+            const name = parsePath(state);
             let end = state.curr().end;
             const typeArgs = parseTypeArgList(state);
             const members = parseArgumentList(state, true);
@@ -1098,9 +1092,14 @@ const quill = (function() {
             const isMutable = state.curr().type 
                 == TokenType.KeywordMut;
             state.next();
-            state.assertType(TokenType.Identifier);
-            const name = state.curr().content;
-            state.next();
+            let name;
+            if(topLevel) {
+                name = parsePath(state);
+            } else {
+                state.assertType(TokenType.Identifier);
+                name = state.curr().content;
+                state.next();
+            }
             if(!isExternal) {
                 state.assertType(TokenType.Equal, TokenType.Colon);
             } else {
@@ -1440,6 +1439,18 @@ const quill = (function() {
                 const path = expandUsages(node.value, state);
                 const typeArgs = node.typeArgs === undefined
                     ? [] : node.typeArgs.map(t => typeFromNode(t, state));
+                const typeScope = state.findTypeArgs();
+                if(typeScope[node.value] !== undefined) {
+                    if(typeArgs.length > 0) {
+                        throw message.from(
+                            message.error(
+                                `Attempt to pass type arguments to a type argument`
+                            ),
+                            message.code(node)
+                        );
+                    }
+                    return typeScope[node.value];
+                }
                 const builtin = builtinTypes[node.value];
                 if(builtin !== undefined) {
                     if(typeArgs.length !== builtin.argC) {
@@ -1455,10 +1466,6 @@ const quill = (function() {
                         );
                     }
                     return { type: builtin.type, node, typeArgs }; 
-                }
-                const typeScope = state.findTypeArgs();
-                if(typeScope[node.value] !== undefined) {
-                    return typeScope[node.value];
                 }
                 const s = instantiateSymbol(
                     node, path, typeArgs, 
@@ -1816,23 +1823,37 @@ const quill = (function() {
             }
         }
     }
-        
+       
+    
+    function pathOfType(t) {
+        switch(t.type) {
+            case Type.Unit: return "std::Unit";
+            case Type.Integer: return "std::Int";
+            case Type.Float: return "std::Float";
+            case Type.Boolean: return "std::Bool";
+            case Type.String: return "std::String";
+            case Type.List: return "std::List";
+            case Type.Function: return "std::Fun";
+            case Type.Struct: case Type.Enum: return t.name;
+        }
+        throw message.internalError(`Unhandled type type ${t.type}`);
+    }
 
     function expandUsages(path, state) {
         const inModule = state.module.length === 0
             ? path : state.module + "::" + path;
         if(hasSymbol(inModule, state)) { return inModule; }
+        const typeScope = state.findTypeArgs();
         const pathSegs = path.split("::");
         const start = pathSegs.at(0);
-        const expansion = state.usages[start];
-        if(expansion !== undefined) {
-            let result = expansion; 
-            if(pathSegs.length > 1) {
-                result += "::" + pathSegs.slice(1).join("::");
-            }
-            return result;
+        const expansion = typeScope[start] !== undefined? typeScope[start].name
+            : state.usages[start];
+        if(expansion === undefined) { return path; }
+        let result = expansion; 
+        if(pathSegs.length > 1) {
+            result += "::" + pathSegs.slice(1).join("::");
         }
-        return path;
+        return result;
     }
 
     function assertSymbolExposed(node, symbolPath, symbol, state) {
@@ -1851,12 +1872,13 @@ const quill = (function() {
 
     function displayType(t) {
         const typeArgs = () => t.typeArgs === undefined? ""
+            : t.typeArgs.length === 0? ""
             : "[" + t.typeArgs.map(displayType).join(", ") + "]";
         switch(t.type) {
             case Type.Unit: return "Unit";
             case Type.Integer: return "Int";
             case Type.Float: return "Float";
-            case Type.Boolean: return "Boolean";
+            case Type.Boolean: return "Bool";
             case Type.String: return "String";
             case Type.Struct: 
             case Type.Enum: return t.name + typeArgs();
