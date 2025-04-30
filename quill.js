@@ -212,6 +212,8 @@ const quill = (function() {
         "UnitLiteral",
         "StringLiteral",
 
+        "TripleDots",
+
         "LessThanEqual",
         "GreaterThanEqual",
         "DoubleEqual",
@@ -259,36 +261,38 @@ const quill = (function() {
         "End"
     );
 
-    const operatorTokens = Object.freeze({
-        "<=": TokenType.LessThanEqual,
-        ">=": TokenType.GreaterThanEqual,
-        "==": TokenType.DoubleEqual,
-        "!=": TokenType.NotEqual,
-        "->": TokenType.ArrowRight,
-        "&&": TokenType.DoubleAmpersand,
-        "||": TokenType.DoublePipe,
-        "::": TokenType.PathSeparator,
+    const operatorTokens = Object.freeze([
+        { content: "...", type: TokenType.TripleDots },
 
-        "(": TokenType.ParenOpen,
-        ")": TokenType.ParenClose,
-        "{": TokenType.BraceOpen,
-        "}": TokenType.BraceClose,
-        "[": TokenType.BracketOpen,
-        "]": TokenType.BracketClose,
+        { content: "<=", type: TokenType.LessThanEqual },
+        { content: ">=", type: TokenType.GreaterThanEqual },
+        { content: "==", type: TokenType.DoubleEqual },
+        { content: "!=", type: TokenType.NotEqual },
+        { content: "->", type: TokenType.ArrowRight },
+        { content: "&&", type: TokenType.DoubleAmpersand },
+        { content: "||", type: TokenType.DoublePipe },
+        { content: "::", type: TokenType.PathSeparator },
 
-        "<": TokenType.LessThan,
-        ">": TokenType.GreaterThan,
-        "=": TokenType.Equal,
-        "+": TokenType.Plus,
-        "-": TokenType.Minus,
-        "*": TokenType.Asterisk,
-        "/": TokenType.Slash,
-        ":": TokenType.Colon,
-        ",": TokenType.Comma,
-        "!": TokenType.ExclamationMark,
-        ".": TokenType.Dot,
-        "|": TokenType.Pipe
-    });
+        { content: "(", type: TokenType.ParenOpen },
+        { content: ")", type: TokenType.ParenClose },
+        { content: "{", type: TokenType.BraceOpen },
+        { content: "}", type: TokenType.BraceClose },
+        { content: "[", type: TokenType.BracketOpen },
+        { content: "]", type: TokenType.BracketClose },
+
+        { content: "<", type: TokenType.LessThan },
+        { content: ">", type: TokenType.GreaterThan },
+        { content: "=", type: TokenType.Equal },
+        { content: "+", type: TokenType.Plus },
+        { content: "-", type: TokenType.Minus },
+        { content: "*", type: TokenType.Asterisk },
+        { content: "/", type: TokenType.Slash },
+        { content: ":", type: TokenType.Colon },
+        { content: ",", type: TokenType.Comma },
+        { content: "!", type: TokenType.ExclamationMark },
+        { content: ".", type: TokenType.Dot },
+        { content: "|", type: TokenType.Pipe }
+    ]);
 
     const keywordTokens = Object.freeze({
         "if": TokenType.KeywordIf,
@@ -319,6 +323,8 @@ const quill = (function() {
             case TokenType.BoolLiteral: return "a boolean";
             case TokenType.UnitLiteral: return "the unit value";
             case TokenType.StringLiteral: return "a string";
+
+            case TokenType.TripleDots: return "'...'";
 
             case TokenType.LessThanEqual: return "'<='";
             case TokenType.GreaterThanEqual: return "'>='";
@@ -406,17 +412,18 @@ const quill = (function() {
                 continue;
             }
             let madeFixed = false;
-            for(const content in operatorTokens) {
-                const type = operatorTokens[content];
-                const matches = i + content.length <= text.length
-                    && text.substring(i, i + content.length) === content;
+            for(const mapping of operatorTokens) {
+                const matches = i + mapping.content.length <= text.length
+                    && text.substring(i, i + mapping.content.length)
+                        === mapping.content;
                 if(!matches) { continue; }
                 output.push(tokenFrom(
-                    type, content, 
-                    path, i, i + content.length
+                    mapping.type, mapping.content, 
+                    path, i, i + mapping.content.length
                 ));
-                i += content.length;
+                i += mapping.content.length;
                 madeFixed = true;
+                break;
             }
             if(madeFixed) { continue; } 
             if(isNumeric(text[i])) {
@@ -922,14 +929,21 @@ const quill = (function() {
         return args;
     }
 
-    function parseArgumentList(state, allowMissing = false) {
+    function parseArgumentList(state, allowMissing = false, allowVarC = false) {
         state.assertType(TokenType.ParenOpen);
         state.next();
         let args = [];
-        state.assertType(
-            TokenType.Identifier, TokenType.ParenClose
-        );
-        while(state.curr().type == TokenType.Identifier) {
+        while(true) {
+            if(allowVarC) {
+                state.assertType(TokenType.Identifier, TokenType.ParenClose, TokenType.TripleDots);
+            } else {
+                state.assertType(TokenType.Identifier, TokenType.ParenClose);
+            }
+            if(state.curr().type === TokenType.ParenClose) { break; }
+            const isVarC = allowVarC
+                && state.curr().type === TokenType.TripleDots;
+            if(isVarC) { state.next(); }
+            state.assertType(TokenType.Identifier);
             const name = state.curr();
             state.next();
             let type = {
@@ -941,16 +955,16 @@ const quill = (function() {
                 state.next();
                 type = parseType(state);
             }
-            args.push({ name: name.content, type });
+            args.push({ name: name.content, type, isVarC });
+            if(isVarC) {
+                state.assertType(TokenType.ParenClose);
+            }
             state.assertType(
                 TokenType.Comma, TokenType.ParenClose
             );
             if(state.curr().type === TokenType.Comma) {
                 state.next();
             }
-            state.assertType(
-                TokenType.Identifier, TokenType.ParenClose
-            );
         }
         state.assertType(TokenType.ParenClose);
         state.next();
@@ -982,7 +996,7 @@ const quill = (function() {
             const name = state.curr().content;
             state.next();
             const typeArgs = parseTypeArgList(state);
-            const args = parseArgumentList(state);
+            const args = parseArgumentList(state, false, true);
             let returnType;
             if(isExternal) {
                 state.assertType(
@@ -1407,31 +1421,45 @@ const quill = (function() {
         "String",
         "Struct",
         "Enum",
-        "Function"
+        "Function",
+        "List"
     );
 
-    const builtinTypeNames = Object.freeze({
-        "Unit": Type.Unit,
-        "Int": Type.Integer,
-        "Float": Type.Float,
-        "Bool": Type.Boolean,
-        "String": Type.String
+    const builtinTypes = Object.freeze({
+        "Unit": { type: Type.Unit, argC: 0 },
+        "Int": { type: Type.Integer, argC: 0 },
+        "Float": { type: Type.Float, argC: 0 },
+        "Bool": { type: Type.Boolean, argC: 0 },
+        "String": { type: Type.String, argC: 0 },
+        "List": { type: Type.List, argC: 1 }
     });
 
     function typeFromNode(node, state) {
         switch(node.type) {
             case NodeType.Path: {
                 const path = expandUsages(node.value, state);
-                const builtin = builtinTypeNames[node.value];
-                if(builtin !== undefined) { 
-                    return { type: builtin, node }; 
+                const typeArgs = node.typeArgs === undefined
+                    ? [] : node.typeArgs.map(t => typeFromNode(t, state));
+                const builtin = builtinTypes[node.value];
+                if(builtin !== undefined) {
+                    if(typeArgs.length !== builtin.argC) {
+                        throw message.from(
+                            message.error(`${node.value}`
+                                + ` expects ${builtin.argC} argument`
+                                + (builtin.argC === 1? '' : 's')
+                                + `, but ${typeArgs.length} `
+                                + (typeArgs.length === 1? "was" : "were")
+                                + ` provided`
+                            ),
+                            message.code(node)
+                        );
+                    }
+                    return { type: builtin.type, node, typeArgs }; 
                 }
                 const typeScope = state.findTypeArgs();
                 if(typeScope[node.value] !== undefined) {
                     return typeScope[node.value];
                 }
-                const typeArgs = node.typeArgs === undefined
-                    ? [] : node.typeArgs.map(t => typeFromNode(t, state));
                 const s = instantiateSymbol(
                     node, path, typeArgs, 
                     [NodeType.Structure, NodeType.Enumeration],
@@ -1663,7 +1691,7 @@ const quill = (function() {
                             scope.variables[arg.name] = {
                                 type: argType, isMutable: false, node
                             };
-                            return { name: arg.name, type: argType };
+                            return { name: arg.name, type: argType, isVarC: arg.isVarC };
                         });
                         instance = { 
                             s, argTypes, returnType, typeArgs: inferredTypeArgs
@@ -1821,6 +1849,7 @@ const quill = (function() {
                 const r = displayType(t.returned);
                 return `Fun(${a}) -> ${r}`;
             }
+            case Type.List: return "List" + typeArgs();
         }
         return `<unhandled type: ${t.type}>`;
     }
@@ -1925,11 +1954,27 @@ const quill = (function() {
         );
     }
 
-    function assertMatchingArgC(expC, gotC, called, node, calledSymbol) {
+    function assertListType(t, node) {
+        if(t.type === Type.List) { return t.typeArgs[0]; }
+        const gotD = displayType(t);
+        throw message.from(
+            message.error(`Expected list, gut got '${gotD}'`),
+            message.code(node),
+            message.note(`'${gotD}' originates from here:`),
+            message.code(t.node)
+        );
+    }
+
+    function assertMatchingArgC(expected, got, called, node, calledSymbol) {
+        const isVarC = expected.length >= 1 && expected.at(-1).isVarC === true;
+        const expC = isVarC? expected.length - 1 : expected.length;
+        const gotC = got.length;
+        if(isVarC && gotC >= expC) { return; }
         if(expC === gotC) { return; }
         throw message.from(
             message.error(called
-                + ` expects ${expC} argument${expC === 1? '' : 's'},` 
+                + ` expects ` + (isVarC? "at least " : "")
+                + `${expC} argument${expC === 1? '' : 's'},` 
                 + ` but ${gotC} ${gotC == 1? "was" : "were"} provided`
             ),
             message.code(node),
@@ -1939,8 +1984,16 @@ const quill = (function() {
     };
     
     function assertMatchingArgTypes(expected, got, state) {
-        for(const argI in expected) {
+        for(let argI = 0; argI < expected.length; argI += 1) {
             const exp = expected[argI].type;
+            if(expected[argI].isVarC) {
+                const valT = assertListType(exp, exp.node);
+                for(let i = argI; i < got.length; i += 1) {
+                    const given = checkTypes(got[i], state, valT);
+                    assertTypesEqual(valT, given, got[i]);
+                }
+                break;
+            }
             const given = checkTypes(got[argI], state, exp);
             assertTypesEqual(exp, given, got[argI]);
         }
@@ -2024,7 +2077,7 @@ const quill = (function() {
                         );
                         assertSymbolExposed(node, calledPath, asStruct.s, state);
                         assertMatchingArgC(
-                            asStruct.members.length, node.args.length,
+                            asStruct.members, node.args,
                             `The structure '${calledPath}'`, node, asStruct.s
                         );
                         for(const argI in asStruct.members) {
@@ -2555,7 +2608,7 @@ const quill = (function() {
                             assertSymbolExposed(node, path, asFunction.s, state);
                             node.called.fullPath = path;
                             assertMatchingArgC(
-                                asFunction.argTypes.length, node.args.length,
+                                asFunction.argTypes, node.args,
                                 `The function '${path}'`, node, asFunction.s
                             );
                             assertMatchingArgTypes(asFunction.argTypes, node.args, state);
@@ -2569,7 +2622,7 @@ const quill = (function() {
                             assertSymbolExposed(node, path, asStruct.s, state);
                             node.fullPath = path;
                             assertMatchingArgC(
-                                asStruct.members.length, node.args.length,
+                                asStruct.members, node.args,
                                 `The structure '${path}'`, node, asStruct.s
                             );
                             assertMatchingArgTypes(asStruct.members, node.args, state);
@@ -3048,7 +3101,7 @@ function quill$$eq(a, b) {
                         .map((n, i) => {
                             const name = state.allocName();
                             state.scope().aliases[n.name] = name;
-                            return name;
+                            return (n.isVarC? "..." : "") + name;
                         })
                         .join(", ");
                     node.body.forEach(n => generateCode(n, state));

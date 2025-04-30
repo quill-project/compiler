@@ -2,10 +2,7 @@
 mod std::io
 
 pub ext fun println[T](value: T) = "
-    if(typeof value === 'object') { console.log('(object)'); }
-	else if(typeof value === 'function') { console.log('(function)'); }
-    else if(value === undefined) { console.log('unit'); }
-    else { console.log('' + value); }
+    console.log(value)
 "
 
 
@@ -19,19 +16,14 @@ pub ext fun slice(self: String, start: Int, end: Int) -> String = "
 "
 
 
+mod std::List
+
+pub fun from[T](...values: List[T]) -> List[T] = values
+
+
 mod test
 
-enum Option[T](Some: T, None)
-
-fun unwrap_or[T](self: Option[T], fallback: T) -> T {
-    match self {
-        Some(value) { return value }
-        None { return fallback }
-    }
-}
-
 fun main() {
-    val x = Option::Some(25)
-    val v = unwrap_or(x, 5)
-    io::println(v)
+    val x = List::from[Int]()
+    io::println(x)
 }
