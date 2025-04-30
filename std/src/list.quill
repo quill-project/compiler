@@ -1,0 +1,71 @@
+
+mod std
+
+pub fun List::as_string[T](self: List[T]) -> String {
+    val contents = self
+        |> iter()
+        |> map(T::as_string)
+        |> join(", ")
+    return "List(" |> concat(contents) |> concat(")")
+}
+
+pub fun List::of[T](...values: List[T]) -> List[T] = values
+
+pub ext fun List::slice[T](self: List[T], start: Int, end: Int) -> List[T] = "
+    return self.slice(Number(start), Number(end));
+"
+
+pub ext fun List::concat[T](low: List[T], high: List[T]) -> List[T] = "
+    return [...low, ...high];
+"
+
+pub ext fun List::length[T](self: List[T]) -> Int = "
+    return BigInt(self.length);
+"
+
+pub ext fun List::push[T](self: List[T], value: T) -> List[T] = "
+    self.push(value);
+    return self;
+"
+
+ext fun List::pop_impl[T](self: List[T]) = "
+    self.pop();
+"
+
+pub fun List::pop[T](self: List[T]) -> Option[T] {
+    val r = self |> get((self |> length()) - 1)
+    self |> pop_impl()
+    return r
+}
+
+ext fun List::get_impl[T](self: List[T], position: Int) -> T = "
+    return self[Number(position)]
+"
+
+pub fun List::get[T](self: List[T], position: Int) -> Option[T] {
+    mut idx = position
+    if idx < 0 { idx = (self |> length()) + idx }
+    if idx < 0 { return Option::None }
+    if idx >= (self |> length()) { return Option::None }
+    return Option::Some(self |> get_impl(idx))
+}
+
+pub fun List::at[T](self: List[T], position: Int) -> T = self
+    |> get(position)
+    |> unwrap_or_else(|| panic("Index " 
+        |> concat(position |> as_string())
+        |> concat(" is out of bounds for a list of range ")
+        |> concat(self |> length() |> as_string())
+    ))
+
+pub fun List::iter[T](self: List[T]) -> Sequence[T]
+    = range(0, self |> length())
+    |> map(|i| self |> at(i))
+
+pub fun List::collect[T](from: Sequence[T]) -> List[T] {
+    val r = List::of[T]()
+    from |> Sequence::for_each(|v| {
+        r |> push(v)
+    })
+    return r
+}

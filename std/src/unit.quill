@@ -1,0 +1,4 @@
+
+mod std
+
+pub fun Unit::as_string(self: Unit) -> String = "unit"

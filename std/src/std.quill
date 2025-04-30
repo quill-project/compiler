@@ -1,0 +1,23 @@
+
+mod std
+
+ext fun println_impl(line: String) = "
+    console.log(line)
+"
+
+pub fun println[T](value: T) = value 
+    |> T::as_string()
+    |> println_impl()
+
+pub ext fun panic[T](reason: String) -> T = "
+    throw reason;
+"
+
+pub fun range(start: Int, end: Int) -> Sequence[Int] {
+    mut n = start
+    return Sequence::new(|| {
+        if n >= end { return Option::None }
+        n = n + 1
+        return Option::Some(n - 1)
+    })
+}

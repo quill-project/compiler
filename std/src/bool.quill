@@ -1,0 +1,5 @@
+
+mod std
+
+pub fun Bool::as_string(self: Bool) -> String 
+    = if self == true { "true" } else { "false" }

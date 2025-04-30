@@ -1549,6 +1549,7 @@ const quill = (function() {
                 state.module = node.name;
                 state.usages = {};
                 defaultUsages.forEach(addUsage);
+                addUsage({ pattern: "*", replacement: (node.name + "::*") });
                 break;
             }
             case NodeType.Usage: {
@@ -1814,8 +1815,22 @@ const quill = (function() {
                 case NodeType.Variable: {
                     const path = state.module.length === 0
                         ? node.name : state.module + "::" + node.name;
-                    node.fullPath = path;
                     assertSymbolUnique(node, path, state);
+                    state.symbols[path] = null;
+                }
+            }
+        }
+        state.reset();
+        for(const node of statements) {
+            handleModules(node, state);
+            switch(node.type) {
+                case NodeType.Structure:
+                case NodeType.Enumeration:
+                case NodeType.Function:
+                case NodeType.Variable: {
+                    const path = state.module.length === 0
+                        ? node.name : state.module + "::" + node.name;
+                    node.fullPath = path;
                     const typeArgs = node.typeArgs === undefined
                         ? [] : node.typeArgs;
                     state.symbols[path] = {
@@ -1924,16 +1939,16 @@ const quill = (function() {
             ? 0 : got.typeArgs.length;
         if(expTAC !== gotTAC) { return false; }
         for(let i = 0; i < expTAC; i += 1) {
-            if(!check(exp.typeArgs[i], got.typeArgs[i])) { return false; }
+            if(!typesEqual(exp.typeArgs[i], got.typeArgs[i])) { return false; }
         }
         if(exp.type === Type.Function) {
             if(exp.arguments.length !== got.arguments.length) {
                 return false;
             }
             for(let i = 0; i < exp.arguments.length; i += 1) {
-                if(!check(exp.arguments[i], got.arguments[i])) { return false; }
+                if(!typesEqual(exp.arguments[i], got.arguments[i])) { return false; }
             }
-            if(!check(exp.returned, got.returned)) { return false; }
+            if(!typesEqual(exp.returned, got.returned)) { return false; }
         }
         return true;
     }
@@ -1961,6 +1976,7 @@ const quill = (function() {
         state.enterScope(dummyTypeArgs);
         typeFromNode(exp, state);
         state.exitScope();
+        if(got === null) { return; }
         // 'exp' = TYPE NODE, 'got' = TYPE INSTANCE
         const infer = (exp, got) => {
             switch(exp.type) {
@@ -2790,16 +2806,16 @@ const quill = (function() {
                             typeArgs = new Array(s.typeArgs.length).fill(null);
                             inferTypeArguments(
                                 s.node.args[0].type, selfT,
-                                s.typeArgs, typeArgs, state
+                                s.typeArgs, typeArgs, s.checker
                             );
                         }
                         const namedTypeArgs = {};
                         for(const i in typeArgs) {
                             namedTypeArgs[s.typeArgs[i]] = typeArgs[i];
                         }
-                        state.enterScope(namedTypeArgs);
-                        const expSelfT = typeFromNode(s.node.args[0].type, state);
-                        state.exitScope();
+                        s.checker.enterScope(namedTypeArgs);
+                        const expSelfT = typeFromNode(s.node.args[0].type, s.checker);
+                        s.checker.exitScope();
                         if(!typesEqual(expSelfT, selfT)) { continue; }
                         if(resolved !== null) {
                             throw message.from(
@@ -3201,6 +3217,8 @@ function quill$$eq(a, b) {
                 return null;
             }
             case NodeType.Function: {
+                const s = state.checker.symbols[node.fullPath];
+                if(Object.keys(s.instances).length === 0) { return null; }
                 let args = null;
                 let impl = null;
                 if(node.isExternal) {

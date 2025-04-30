@@ -1,0 +1,6 @@
+
+mod std
+
+pub ext fun Float::as_string(self: Float) -> String = "
+    return '' + self
+"
