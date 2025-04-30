@@ -18,12 +18,12 @@ pub ext fun slice(self: String, start: Int, end: Int) -> String = "
 
 mod std::List
 
-pub fun from[T](...values: List[T]) -> List[T] = values
+pub fun of[T](...values: List[T]) -> List[T] = values
 
 
 mod test
 
 fun main() {
-    val x = List::from[Int]()
+    val x = List::of(1, 2, 3)
     io::println(x)
 }

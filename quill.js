@@ -1593,9 +1593,25 @@ const quill = (function() {
                         const argC = Math.min(
                             givenArgTypes.length, s.node.args.length
                         );
-                        for(let i = 0; i < argC; i += 1) {
+                        for(let argI = 0; argI < argC; argI += 1) {
+                            const arg = s.node.args[argI];
+                            if(arg.isVarC === true) {
+                                const gArgC = givenArgTypes.length;
+                                const gArgT = givenArgTypes[argI];
+                                const gListT = {
+                                    type: Type.List, node: gArgT.node,
+                                    typeArgs: [gArgT]
+                                };
+                                for(let i = argI; i < gArgC; i += 1) {
+                                    inferTypeArguments(
+                                        arg.type, gListT, 
+                                        s.typeArgs, inferredTypeArgs, state
+                                    );
+                                }
+                                break;
+                            }
                             inferTypeArguments(
-                                s.node.args[i].type, givenArgTypes[i], 
+                                arg.type, givenArgTypes[argI], 
                                 s.typeArgs, inferredTypeArgs, state
                             );
                         }
