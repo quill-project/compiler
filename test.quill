@@ -24,21 +24,24 @@ pub fun of[T](...values: List[T]) -> List[T] = values
 
 mod pets
 
-pub struct Cat(name: String, hunger: Float)
+pub struct Pet(name: String, hunger: Float)
 
-pub fun Cat::feed(self: Cat) {
+pub fun Cat::feed(self: Pet) {
+    self.hunger = 0.0
+}
+
+pub fun Dog::feed(self: Pet) {
     self.hunger = 0.0
 }
 
 
 mod test
 
-fun feed[T](self: T) {
-    T::feed(self)
-}
+use pets::(Pet, Cat, Dog)
 
 fun main() {
-    val c = pets::Cat("Snowball", 5.0)
-    feed(c)
+    val c = Pet("Snowball", 5.0)
     io::println(c.hunger)
+    c |> feed()
+    io::println(c.hunger)    
 }

@@ -222,6 +222,7 @@ const quill = (function() {
         "DoubleAmpersand",
         "DoublePipe",
         "PathSeparator",
+        "Triangle",
 
         "ParenOpen",
         "ParenClose",
@@ -272,6 +273,7 @@ const quill = (function() {
         { content: "&&", type: TokenType.DoubleAmpersand },
         { content: "||", type: TokenType.DoublePipe },
         { content: "::", type: TokenType.PathSeparator },
+        { content: "|>", type: TokenType.Triangle },
 
         { content: "(", type: TokenType.ParenOpen },
         { content: ")", type: TokenType.ParenClose },
@@ -334,6 +336,7 @@ const quill = (function() {
             case TokenType.DoubleAmpersand: return "'&&'";
             case TokenType.DoublePipe: return "'||'";
             case TokenType.PathSeparator: return "'::'";
+            case TokenType.Triangle: return "'|>'";
 
             case TokenType.ParenOpen: return "'('";
             case TokenType.ParenClose: return "')'";
@@ -567,7 +570,8 @@ const quill = (function() {
         "<": 5, ">": 5, "<=": 5, ">=": 5,
         "==": 6, "!=": 6,
         "&&": 8, 
-        "||": 9
+        "||": 9,
+        "|>": 10
     });
 
     const unaryOpPrec = Object.freeze({
@@ -591,6 +595,7 @@ const quill = (function() {
         "Negation",
         "MemberAccess",
         "Call",
+        "PipedCall",
         "StructureInit",
         "EnumerationInit",
         "IfExpr",
@@ -815,6 +820,23 @@ const quill = (function() {
                         end: end.end
                     };
                     continue;                
+                }
+                case TokenType.Triangle: {
+                    state.next();
+                    const call = parseExpression(state, binaryOpPrec["|>"]);
+                    if(call.type !== NodeType.Call) {
+                        throw message.from(
+                            message.error("Attempt to pipe into non-call expression"),
+                            message.code({
+                                path: collected.path, 
+                                start: collected.start, end: call.end
+                            })
+                        );
+                    }
+                    call.type = NodeType.PipedCall;
+                    call.args.splice(0, 0, collected);
+                    collected = call;
+                    continue;
                 }
                 case TokenType.Dot: {
                     state.next();
@@ -1846,7 +1868,8 @@ const quill = (function() {
         const typeScope = state.findTypeArgs();
         const pathSegs = path.split("::");
         const start = pathSegs.at(0);
-        const expansion = typeScope[start] !== undefined? typeScope[start].name
+        const expansion = typeScope[start] !== undefined
+            ? pathOfType(typeScope[start])
             : state.usages[start];
         if(expansion === undefined) { return path; }
         let result = expansion; 
@@ -1892,30 +1915,31 @@ const quill = (function() {
         return `<unhandled type: ${t.type}>`;
     }
 
+    function typesEqual(exp, got) {
+        if(exp.type !== got.type) { return false; }
+        if(exp.name !== got.name) { return false; }
+        const expTAC = exp.typeArgs === undefined
+            ? 0 : exp.typeArgs.length;
+        const gotTAC = got.typeArgs === undefined
+            ? 0 : got.typeArgs.length;
+        if(expTAC !== gotTAC) { return false; }
+        for(let i = 0; i < expTAC; i += 1) {
+            if(!check(exp.typeArgs[i], got.typeArgs[i])) { return false; }
+        }
+        if(exp.type === Type.Function) {
+            if(exp.arguments.length !== got.arguments.length) {
+                return false;
+            }
+            for(let i = 0; i < exp.arguments.length; i += 1) {
+                if(!check(exp.arguments[i], got.arguments[i])) { return false; }
+            }
+            if(!check(exp.returned, got.returned)) { return false; }
+        }
+        return true;
+    }
+
     function assertTypesEqual(exp, got, source) {
-        const check = (exp, got) => {
-            if(exp.type !== got.type) { return false; }
-            if(exp.name !== got.name) { return false; }
-            const expTAC = exp.typeArgs === undefined
-                ? 0 : exp.typeArgs.length;
-            const gotTAC = got.typeArgs === undefined
-                ? 0 : got.typeArgs.length;
-            if(expTAC !== gotTAC) { return false; }
-            for(let i = 0; i < expTAC; i += 1) {
-                if(!check(exp.typeArgs[i], got.typeArgs[i])) { return false; }
-            }
-            if(exp.type === Type.Function) {
-                if(exp.arguments.length !== got.arguments.length) {
-                    return false;
-                }
-                for(let i = 0; i < exp.arguments.length; i += 1) {
-                    if(!check(exp.arguments[i], got.arguments[i])) { return false; }
-                }
-                if(!check(exp.returned, got.returned)) { return false; }
-            }
-            return true;
-        };
-        if(check(exp, got)) { return; }
+        if(typesEqual(exp, got)) { return; }
         const expD = displayType(exp);
         const gotD = displayType(got);
         throw message.from(
@@ -2741,6 +2765,55 @@ const quill = (function() {
                     }
                     return called.returned;
                 }
+                case NodeType.PipedCall: {
+                    node.type = NodeType.Call;
+                    if(node.called.type !== NodeType.Path) { 
+                        return check(); 
+                    }
+                    const path = expandUsages(node.called.value, state);
+                    if(hasSymbol(path, state) || node.called.value.includes("::")) {
+                        return check(); 
+                    }
+                    const selfT = checkTypes(node.args[0], state);
+                    let resolved = null;
+                    for(const usageAlias in state.usages) {
+                        const usedPath = state.usages[usageAlias];
+                        const attPath = usedPath + "::" + node.called.value;
+                        const s = state.symbols[attPath];
+                        if(s === undefined) { continue; }
+                        if(s.node.args.length < 1) { continue; }
+                        const expltypeArgs = getPassedTypeArguments(
+                            node.called, state
+                        );
+                        let typeArgs = expltypeArgs;
+                        if(typeArgs === undefined) {
+                            typeArgs = new Array(s.typeArgs.length).fill(null);
+                            inferTypeArguments(
+                                s.node.args[0].type, selfT,
+                                s.typeArgs, typeArgs, state
+                            );
+                        }
+                        const namedTypeArgs = {};
+                        for(const i in typeArgs) {
+                            namedTypeArgs[s.typeArgs[i]] = typeArgs[i];
+                        }
+                        state.enterScope(namedTypeArgs);
+                        const expSelfT = typeFromNode(s.node.args[0].type, state);
+                        state.exitScope();
+                        if(!typesEqual(expSelfT, selfT)) { continue; }
+                        if(resolved !== null) {
+                            throw message.from(
+                                message.error(`Ambiguous piped call - both '${resolved}' and '${attPath}' are valid candidates`),
+                                message.code(node)
+                            );
+                        }
+                        resolved = attPath;
+                    }
+                    if(resolved !== null) {
+                        node.called.value = resolved;
+                    }
+                    return check();
+                }
                 case NodeType.IfExpr: {
                     assertReadOnly();
                     const bool = { type: Type.Boolean, node };
@@ -3252,6 +3325,7 @@ function quill$$eq(a, b) {
             case NodeType.Usage:
             case NodeType.Structure:
             case NodeType.Enumeration:
+            case NodeType.PipedCall:
                 return null;
         }
         throw message.internalError(`Unhandled node type ${node.type} in 'generateCode'`);
