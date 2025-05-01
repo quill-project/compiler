@@ -58,9 +58,9 @@ pub fun List::at[T](self: List[T], position: Int) -> T = self
         |> concat(self |> length() |> as_string())
     ))
 
-pub fun List::iter[T](self: List[T]) -> Sequence[T]
+pub fun List::as_seq[T](self: List[T]) -> Sequence[T]
     = range(0, self |> length())
-    |> map(|i| self |> at(i))
+    |> map[Int, T](|i| self |> at(i))
 
 pub fun List::collect[T](from: Sequence[T]) -> List[T] {
     val r = List::of[T]()

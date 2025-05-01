@@ -14,7 +14,7 @@ pub ext fun Sequence::for_each[T](self: Sequence[T], f: Fun(T)) = "
     while(true) {
         const value = self.next();
         if(value.value === undefined) { return; }
-        f(value);
+        f(value.value);
     }
 "
 

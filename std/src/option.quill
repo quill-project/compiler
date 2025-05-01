@@ -3,16 +3,9 @@ mod std
 
 pub enum Option[T](Some: T, None)
 
-pub fun Option::as_string[T](self: Option[T]) -> String {
-    match self {
-        None { return "None" }
-        Some(value) { 
-            return "Some("
-                |> concat(T::as_string(value)) 
-                |> concat(")")
-        }
-    }
-}
+pub fun Option::as_string[T](self: Option[T]) -> String = self 
+    |> map[T, String](|v| "Some(" |> concat(T::as_string(v)) |> concat(")"))
+    |> unwrap_or("None")
 
 pub fun Option::expect[T](self: Option[T], reason: String) -> T {
     match self {

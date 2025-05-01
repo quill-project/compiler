@@ -3,8 +3,9 @@ mod quill::cli
 
 fun main() {
     val nums = List::of(1, 2, 3, 4, 5) 
-        |> iter() 
-        |> Sequence::map[Int, Int](|n| n * 2) 
-        |> List::collect[Int]()
-    println(nums)
+        |> as_seq() 
+        |> map[Int, Int](|n| n * 2) 
+        |> List::collect()
+    println(nums |> as_string())
+    //println(nums)
 }

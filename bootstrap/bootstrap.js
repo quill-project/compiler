@@ -32,7 +32,7 @@ console.error(result.messages
     .join("\n\n")
 );
 if(result.success) {
-    result.code += "quill$cli$main();";
+    result.code += "quill$cli$main$$0();";
     fs.writeFileSync("bootstrap/build.js", result.code);
 	console.log(`Wrote output to 'bootstrap/build.js'`);
 } else {

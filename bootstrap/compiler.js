@@ -1576,6 +1576,8 @@ const quill = (function() {
         );
     };
 
+    const instanceKeyOf = typeArgs => typeArgs.map(displayType).join(", ");
+
     function instantiateSymbol(
         usageNode, path, typeArgs, allowedTypes, callerState,
         givenArgTypes = null, expectedReturnType = null, givenEnumVariantName = null
@@ -1704,7 +1706,7 @@ const quill = (function() {
                 message.code(node)
             );
         }
-        const instanceKey = inferredTypeArgs.map(displayType).join(", ");
+        const instanceKey = instanceKeyOf(inferredTypeArgs);
         let instance = s.instances[instanceKey];
         if(instance === undefined) {
             const namedTypeArgs = {};
@@ -1744,7 +1746,9 @@ const quill = (function() {
                         };
                         s.instances[instanceKey] = instance;
                         if(!node.isExternal) {
-                            for(const statement of node.body) {
+                            instance.checkedBody
+                                = JSON.parse(JSON.stringify(node.body));
+                            for(const statement of instance.checkedBody) {
                                 checkTypes(statement, state);
                             }
                         }
@@ -1802,10 +1806,12 @@ const quill = (function() {
                 throw error;
             }
         }
+        instance.instanceI = s.instanceC;
+        s.instanceC += 1;
         return instance;
     }
 
-    function collectSymbols(statements, state) {
+    function collectSymbolNames(statements, state) {
         for(const node of statements) {
             handleModules(node, state);
             switch(node.type) {
@@ -1820,7 +1826,9 @@ const quill = (function() {
                 }
             }
         }
-        state.reset();
+    }
+
+    function collectSymbols(statements, state) {
         for(const node of statements) {
             handleModules(node, state);
             switch(node.type) {
@@ -1838,6 +1846,7 @@ const quill = (function() {
                         node,
                         typeArgs,
                         instances: {},
+                        instanceC: 0,
                         checker: state.clone()
                     };
                 }
@@ -1845,19 +1854,11 @@ const quill = (function() {
         }
     }
 
-    function checkBaseSymbols(statements, state) {
-        for(const node of statements) {
-            handleModules(node, state);
-            switch(node.type) {
-                case NodeType.Function:
-                case NodeType.Variable: {
-                    const path = state.module.length === 0
-                        ? node.name : state.module + "::" + node.name;
-                    const s = state.symbols[path];
-                    if(s.typeArgs.length >= 1) { continue; }
-                    instantiateSymbol(node, path, [], [node.type], state);  
-                } 
-            }
+    function checkBaseSymbols(state) {
+        for(const path in state.symbols) {
+            const s = state.symbols[path];
+            if(s.typeArgs.length >= 1) { continue; }
+            instantiateSymbol(s.node, path, [], [s.node.type], state);  
         }
     }
        
@@ -1896,9 +1897,7 @@ const quill = (function() {
 
     function assertSymbolExposed(node, symbolPath, symbol, state) {
         if(symbol.node.isPublic) { return; }
-        const symbolModule = symbolPath
-            .split("::").slice(0, -1).join("::");
-        if(symbolModule === state.module) { return; }
+        if(symbol.checker.module === state.module) { return; }
         throw message.from(
             message.error(`'${symbolPath}' is not public but accessed from a different module`),
             message.code(node),
@@ -1931,6 +1930,8 @@ const quill = (function() {
     }
 
     function typesEqual(exp, got) {
+        if(typeof exp !== "object" || exp === null) { return false; }
+        if(typeof got !== "object" || got === null) { return false; }
         if(exp.type !== got.type) { return false; }
         if(exp.name !== got.name) { return false; }
         const expTAC = exp.typeArgs === undefined
@@ -2084,8 +2085,10 @@ const quill = (function() {
 
     function getPassedArgTypes(nodes, state) {
         return nodes.map(n => {
+            if(n.valueType !== undefined) { return n.valueType; }
+            const cn = JSON.parse(JSON.stringify(n));
             try {
-                return checkTypes(n, state);
+                return checkTypes(cn, state);
             } catch(e) {
                 return null;
             }
@@ -2527,6 +2530,7 @@ const quill = (function() {
                     if(func !== null) {
                         assertSymbolExposed(node, path, func.s, state);
                         node.fullPath = path;
+                        node.instanceKey = instanceKeyOf(func.typeArgs);
                         const arguments = func.argTypes.map(a => a.type);
                         const returned = func.returnType;
                         return {
@@ -2685,6 +2689,8 @@ const quill = (function() {
                         if(asFunction !== null) {
                             assertSymbolExposed(node, path, asFunction.s, state);
                             node.called.fullPath = path;
+                            node.called.instanceKey
+                                = instanceKeyOf(asFunction.typeArgs);
                             assertMatchingArgC(
                                 asFunction.argTypes, node.args,
                                 `The function '${path}'`, node, asFunction.s
@@ -2798,35 +2804,37 @@ const quill = (function() {
                         const s = state.symbols[attPath];
                         if(s === undefined) { continue; }
                         if(s.node.args.length < 1) { continue; }
-                        const expltypeArgs = getPassedTypeArguments(
-                            node.called, state
-                        );
-                        let typeArgs = expltypeArgs;
-                        if(typeArgs === undefined) {
-                            typeArgs = new Array(s.typeArgs.length).fill(null);
-                            inferTypeArguments(
-                                s.node.args[0].type, selfT,
-                                s.typeArgs, typeArgs, s.checker
+                        try {
+                            let typeArgs = getPassedTypeArguments(
+                                node.called, state
                             );
+                            if(typeArgs === undefined) {
+                                typeArgs = new Array(s.typeArgs.length).fill(null);
+                                inferTypeArguments(
+                                    s.node.args[0].type, selfT,
+                                    s.typeArgs, typeArgs, s.checker
+                                );
+                            }
+                            const namedTypeArgs = {};
+                            for(const i in typeArgs) {
+                                namedTypeArgs[s.typeArgs[i]] = typeArgs[i];
+                            }
+                            s.checker.enterScope(namedTypeArgs);
+                            const expSelfT = typeFromNode(s.node.args[0].type, s.checker);
+                            s.checker.exitScope();
+                            if(!typesEqual(expSelfT, selfT)) { continue; }
+                        } catch(error) {
+                            if(error.sections === undefined) { throw error; }
+                            continue;
                         }
-                        const namedTypeArgs = {};
-                        for(const i in typeArgs) {
-                            namedTypeArgs[s.typeArgs[i]] = typeArgs[i];
-                        }
-                        s.checker.enterScope(namedTypeArgs);
-                        const expSelfT = typeFromNode(s.node.args[0].type, s.checker);
-                        s.checker.exitScope();
-                        if(!typesEqual(expSelfT, selfT)) { continue; }
                         if(resolved !== null) {
                             throw message.from(
                                 message.error(`Ambiguous piped call - both '${resolved}' and '${attPath}' are valid candidates`),
                                 message.code(node)
                             );
                         }
+                        node.called.value = attPath;
                         resolved = attPath;
-                    }
-                    if(resolved !== null) {
-                        node.called.value = resolved;
                     }
                     return check();
                 }
@@ -3070,7 +3078,13 @@ function quill$$eq(a, b) {
                     state.scope().output += `${into} = ${value};\n`;
                     return into;
                 }
-                return manglePath(node.fullPath);
+                let r = manglePath(node.fullPath);
+                const s = state.checker.symbols[node.fullPath];
+                if(s.node.type === NodeType.Function) {
+                    const inst = s.instances[node.instanceKey];
+                    r += `$$${inst.instanceI}`;
+                }
+                return r;
             }
             case NodeType.IntLiteral:
                 const out = intoOrAlloc();
@@ -3216,34 +3230,6 @@ function quill$$eq(a, b) {
                 }
                 return null;
             }
-            case NodeType.Function: {
-                const s = state.checker.symbols[node.fullPath];
-                if(Object.keys(s.instances).length === 0) { return null; }
-                let args = null;
-                let impl = null;
-                if(node.isExternal) {
-                    args = node.args.map(a => a.name).join(", ");
-                    impl = node.body;
-                } else {
-                    state.enterScope();
-                    args = node.args
-                        .map((n, i) => {
-                            const name = state.allocName();
-                            state.scope().aliases[n.name] = name;
-                            return (n.isVarC? "..." : "") + name;
-                        })
-                        .join(", ");
-                    node.body.forEach(n => generateCode(n, state));
-                    const body = state.scope().output;
-                    const vars = state.exitScope();
-                    impl = "\n" + vars + body;
-                }
-                state.scope().output
-                    += `function ${manglePath(node.fullPath)}(${args}) {`
-                    + impl
-                    + `}\n`;
-                return null;
-            }
             case NodeType.Return: {
                 const value = generateCode(node.value, state);
                 state.scope().output += `return ${value};\n`;
@@ -3339,6 +3325,7 @@ function quill$$eq(a, b) {
                 state.scope().output += out + `if(returned !== null) { return returned; }\n}\n`;
                 return null;
             }
+            case NodeType.Function:
             case NodeType.Module:
             case NodeType.Usage:
             case NodeType.Structure:
@@ -3371,8 +3358,45 @@ function quill$$eq(a, b) {
     function generateSymbols(statements, state) {
         state.enterScope();
         for(const node of statements) {
-            if(node.type === NodeType.Variable) { continue; }
-            generateCode(node, state);
+            switch(node.type) {
+                case NodeType.Structure:
+                case NodeType.Enumeration:
+                case NodeType.Variable:
+                    break;
+                case NodeType.Function: {
+                    const s = state.checker.symbols[node.fullPath];
+                    for(const instanceKey in s.instances) {
+                        const inst = s.instances[instanceKey];
+                        let args = null;
+                        let impl = null;
+                        if(node.isExternal) {
+                            args = node.args.map(a => a.name).join(", ");
+                            impl = node.body;
+                        } else {
+                            state.enterScope();
+                            args = node.args
+                                .map(a => {
+                                    const name = state.allocName();
+                                    state.scope().aliases[a.name] = name;
+                                    return (a.isVarC? "..." : "") + name;
+                                })
+                                .join(", ");
+                            inst.checkedBody
+                                .forEach(n => generateCode(n, state));
+                            const body = state.scope().output;
+                            const vars = state.exitScope();
+                            impl = "\n" + vars + body;
+                        }
+                        state.scope().output
+                            += `function ${manglePath(node.fullPath)}`
+                            + `$$${inst.instanceI}`
+                            + `(${args}) {`
+                            + impl
+                            + `}\n`;
+                    }
+                    break;
+                }
+            }
         }
         const body = state.scope().output;
         const vars = state.exitScope();
@@ -3395,7 +3419,7 @@ function quill$$eq(a, b) {
         let code = runtime;
         const checker = createCheckerState(errors);
         let nodes = {};
-        // tokenizing, parsing and type collection
+        // tokenizing, parsing and symbol name collection
         for(const path in sources) {
             const text = sources[path];
             if(text.length == 0) { continue; }
@@ -3404,6 +3428,18 @@ function quill$$eq(a, b) {
             try {
                 const statements = parseStatementList(parser, true);
                 nodes[path] = statements;
+                collectSymbolNames(statements, checker);
+            } catch(error) {
+                if(error.sections === undefined) { throw error; }
+                errors.push(error);
+            }
+        }
+        if(hasError(errors)) { return makeError(errors); }
+        // collect full symbol info
+        for(const path in nodes) {
+            const statements = nodes[path];
+            checker.reset();
+            try {
                 collectSymbols(statements, checker);
             } catch(error) {
                 if(error.sections === undefined) { throw error; }
@@ -3411,16 +3447,13 @@ function quill$$eq(a, b) {
             }
         }
         if(hasError(errors)) { return makeError(errors); }
-        // full symbol checking
-        for(const path in nodes) {
-            const statements = nodes[path];
-            checker.reset();
-            try {
-                checkBaseSymbols(statements, checker);
-            } catch(error) {
-                if(error.sections === undefined) { throw error; }
-                errors.push(error);
-            }
+        // check symbols fully
+        checker.reset();
+        try {
+            checkBaseSymbols(checker);
+        } catch(error) {
+            if(error.sections === undefined) { throw error; }
+            errors.push(error);
         }
         if(hasError(errors)) { return makeError(errors); }
         // code generation
