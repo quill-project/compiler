@@ -1,4 +1,0 @@
-
-mod std
-
-pub fun Fun::as_string[T](self: T) -> String = "<function>"

@@ -3,7 +3,7 @@ mod std
 
 pub fun List::as_string[T](self: List[T]) -> String {
     val contents = self
-        |> iter()
+        |> as_seq()
         |> map(T::as_string)
         |> join(", ")
     return "List(" |> concat(contents) |> concat(")")
@@ -64,7 +64,7 @@ pub fun List::as_seq[T](self: List[T]) -> Sequence[T]
 
 pub fun List::collect[T](from: Sequence[T]) -> List[T] {
     val r = List::of[T]()
-    from |> Sequence::for_each(|v| {
+    from |> for_each(|v| {
         r |> push(v)
     })
     return r

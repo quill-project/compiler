@@ -11,5 +11,9 @@ pub ext fun String::concat(low: String, high: String) -> String = "
     return low + high;
 "
 
-pub fun String::join(from: Sequence[String], delim: String) -> String
-    = from |> reduce(String::concat) |> unwrap_or("")
+pub fun String::join(from: Sequence[String], delim: String) -> String = from 
+    |> reduce(|acc, curr| acc 
+        |> concat(delim) 
+        |> concat(curr)
+    ) 
+    |> unwrap_or("")

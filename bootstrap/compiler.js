@@ -238,6 +238,7 @@ const quill = (function() {
         "Minus",
         "Asterisk",
         "Slash",
+        "Percent",
         "Colon",
         "Comma",
         "ExclamationMark",
@@ -289,6 +290,7 @@ const quill = (function() {
         { content: "-", type: TokenType.Minus },
         { content: "*", type: TokenType.Asterisk },
         { content: "/", type: TokenType.Slash },
+        { content: "%", type: TokenType.Percent },
         { content: ":", type: TokenType.Colon },
         { content: ",", type: TokenType.Comma },
         { content: "!", type: TokenType.ExclamationMark },
@@ -352,6 +354,7 @@ const quill = (function() {
             case TokenType.Minus: return "'-'";
             case TokenType.Asterisk: return "'*'";
             case TokenType.Slash: return "'/'";
+            case TokenType.Percent: return "'%'";
             case TokenType.Colon: return "':'";
             case TokenType.Comma: return "','";
             case TokenType.ExclamationMark: return "'!'";
@@ -565,7 +568,7 @@ const quill = (function() {
 
     const binaryOpPrec = Object.freeze({
         "(": 2, ".": 2,
-        "*": 3, "/": 3,
+        "*": 3, "/": 3, "%": 3,
         "+": 4, "-": 4, 
         "<": 5, ">": 5, "<=": 5, ">=": 5,
         "==": 6, "!=": 6,
@@ -616,6 +619,7 @@ const quill = (function() {
     const binaryOpType = Object.freeze({
         "*": NodeType.Multiplicative, 
         "/": NodeType.Multiplicative,
+        "%": NodeType.Multiplicative,
         "+": NodeType.Additive,
         "-": NodeType.Additive,
         "<": NodeType.Comparative,
@@ -1426,13 +1430,17 @@ const quill = (function() {
                 let r = createCheckerState(this.messages);
                 r.module = this.module;
                 r.usages = JSON.parse(JSON.stringify(this.usages));
+                r.scopes = JSON.parse(JSON.stringify(this.scopes));
                 r.symbols = this.symbols;
-                r.scopes = this.scopes;
                 r.messages = this.messages;
                 return r;
             }
         };
     }
+
+    function nodeAsSource(node) {
+        return { path: node.path, start: node.start, end: node.end };
+    };
 
     const Type = makeEnum(
         "Unit",
@@ -1487,7 +1495,7 @@ const quill = (function() {
                             message.code(node)
                         );
                     }
-                    return { type: builtin.type, node, typeArgs }; 
+                    return { type: builtin.type, node: nodeAsSource(node), typeArgs }; 
                 }
                 const s = instantiateSymbol(
                     node, path, typeArgs, 
@@ -1500,7 +1508,7 @@ const quill = (function() {
                         message.code(node)
                     );
                 }
-                let r = { type: null, name: path, typeArgs, node };
+                let r = { type: null, name: path, typeArgs, node: nodeAsSource(node) };
                 switch(s.s.node.type) {
                     case NodeType.Structure: r.type = Type.Struct; break;
                     case NodeType.Enumeration: r.type = Type.Enum; break;
@@ -1515,7 +1523,7 @@ const quill = (function() {
                     .map(n => typeFromNode(n, state));
                 const returned = typeFromNode(node.returnType, state);
                 return {
-                    type: Type.Function, arguments, returned, node
+                    type: Type.Function, arguments, returned, node: nodeAsSource(node)
                 };
             }
         }
@@ -1631,7 +1639,7 @@ const quill = (function() {
                                 const gArgC = givenArgTypes.length;
                                 const gArgT = givenArgTypes[argI];
                                 const gListT = {
-                                    type: Type.List, node: gArgT.node,
+                                    type: Type.List, node: nodeAsSource(gArgT.node),
                                     typeArgs: [gArgT]
                                 };
                                 for(let i = argI; i < gArgC; i += 1) {
@@ -1737,7 +1745,7 @@ const quill = (function() {
                         const argTypes = node.args.map(arg => {
                             const argType = typeFromNode(arg.type, state);
                             scope.variables[arg.name] = {
-                                type: argType, isMutable: false, node
+                                type: argType, isMutable: false, node: nodeAsSource(node)
                             };
                             return { name: arg.name, type: argType, isVarC: arg.isVarC };
                         });
@@ -1972,7 +1980,7 @@ const quill = (function() {
         // just check that the type is correct
         const dummyTypeArgs = {};
         for(const name of typeArgNames) {
-            dummyTypeArgs[name] = { type: Type.Struct, name, node: exp };
+            dummyTypeArgs[name] = { type: Type.Struct, name, node: nodeAsSource(exp) };
         }
         state.enterScope(dummyTypeArgs);
         typeFromNode(exp, state);
@@ -1988,6 +1996,7 @@ const quill = (function() {
                         return;
                     }
                     if(exp.typeArgs === undefined) { return; }
+                    if(got.typeArgs === undefined) { return; }
                     if(exp.typeArgs.length === 0) { return; }
                     if(exp.typeArgs.length !== got.typeArgs.length) { return; }
                     for(let i = 0; i < got.typeArgs.length; i += 1) {
@@ -2085,10 +2094,8 @@ const quill = (function() {
 
     function getPassedArgTypes(nodes, state) {
         return nodes.map(n => {
-            if(n.valueType !== undefined) { return n.valueType; }
-            const cn = JSON.parse(JSON.stringify(n));
             try {
-                return checkTypes(cn, state);
+                return checkTypes(JSON.parse(JSON.stringify(n)), state.clone());
             } catch(e) {
                 return null;
             }
@@ -2123,7 +2130,7 @@ const quill = (function() {
                             found = true;
                             break;
                         }
-                        if(!found) { break; }
+                        if(found) { break; }
                     }
                     const asLocal = state.findLocalVariable(node.value);
                     if(asLocal !== null) { break; }
@@ -2151,7 +2158,7 @@ const quill = (function() {
                         assertTypesEqual(
                             expected, 
                             { 
-                                type: Type.Struct, name: calledPath, node, 
+                                type: Type.Struct, name: calledPath, node: nodeAsSource(node), 
                                 typeArgs: asStruct.typeArgs
                             }, 
                             node
@@ -2203,7 +2210,7 @@ const quill = (function() {
                         assertTypesEqual(
                             expected, 
                             { 
-                                type: Type.Enum, name: enumPath, node, 
+                                type: Type.Enum, name: enumPath, node: nodeAsSource(node), 
                                 typeArgs: asEnum.typeArgs
                             }, 
                             node
@@ -2499,7 +2506,7 @@ const quill = (function() {
                                 node, enumPath, enumeration.s, state
                             );
                             node.fullPath = enumPath;
-                            const value = { type: Type.Unit, node };
+                            const value = { type: Type.Unit, node: nodeAsSource(node) };
                             for(const memberI in enumeration.members) {
                                 const member = enumeration.members[memberI];
                                 if(member.name !== variant) { continue; }
@@ -2510,7 +2517,7 @@ const quill = (function() {
                                     NodeType.UnitLiteral, "unit", node
                                 ) ];
                                 return {
-                                    type: Type.Enum, name: enumPath, node, 
+                                    type: Type.Enum, name: enumPath, node: nodeAsSource(node), 
                                     typeArgs: enumeration.typeArgs
                                 };
                             }
@@ -2535,7 +2542,7 @@ const quill = (function() {
                         const returned = func.returnType;
                         return {
                             type: Type.Function, arguments, returned,
-                            node
+                            node: nodeAsSource(node)
                         };
                     }
                     throw message.from(
@@ -2545,23 +2552,23 @@ const quill = (function() {
                 }
                 case NodeType.IntLiteral: {
                     assertReadOnly();
-                    return { type: Type.Integer, node };
+                    return { type: Type.Integer, node: nodeAsSource(node) };
                 }
                 case NodeType.FloatLiteral: {
                     assertReadOnly();
-                    return { type: Type.Float, node };
+                    return { type: Type.Float, node: nodeAsSource(node) };
                 }
                 case NodeType.BoolLiteral: {
                     assertReadOnly();
-                    return { type: Type.Boolean, node };
+                    return { type: Type.Boolean, node: nodeAsSource(node) };
                 }
                 case NodeType.UnitLiteral: {
                     assertReadOnly();
-                    return { type: Type.Unit, node };
+                    return { type: Type.Unit, node: nodeAsSource(node) };
                 }
                 case NodeType.StringLiteral: {
                     assertReadOnly();
-                    return { type: Type.String, node };
+                    return { type: Type.String, node: nodeAsSource(node) };
                 }
                 case NodeType.FunctionLiteral: {
                     if(expected === null) {
@@ -2596,7 +2603,7 @@ const quill = (function() {
                         const arg = node.args[argI];
                         arg.type = exp;
                         scope.variables[arg.name] = {
-                            type: exp, isMutable: false, node
+                            type: exp, isMutable: false, node: nodeAsSource(node)
                         };
                     }
                     for(const statement of node.body) {
@@ -2629,7 +2636,7 @@ const quill = (function() {
                         assertNumberType(lhs, node);
                     }
                     return node.type === NodeType.Comparative
-                        ? { type: Type.Boolean, node } : lhs;
+                        ? { type: Type.Boolean, node: nodeAsSource(node) } : lhs;
                 }
                 case NodeType.Negation: {
                     assertReadOnly();
@@ -2638,7 +2645,7 @@ const quill = (function() {
                         value = checkTypes(node.value, state);
                         assertNumberType(value, node, node);
                     } else {
-                        const bool = { type: Type.Boolean, node };
+                        const bool = { type: Type.Boolean, node: nodeAsSource(node) };
                         value = checkTypes(node.value, state, bool);
                         assertTypesEqual(value, bool, node);
                     }
@@ -2712,7 +2719,7 @@ const quill = (function() {
                             assertMatchingArgTypes(asStruct.members, node.args, state);
                             node.type = NodeType.StructureInit;
                             return {
-                                type: Type.Struct, name: path, node, 
+                                type: Type.Struct, name: path, node: nodeAsSource(node), 
                                 typeArgs: asStruct.typeArgs
                             };
                         }
@@ -2751,7 +2758,7 @@ const quill = (function() {
                                     node.variant = memberI;
                                     return {
                                         type: Type.Enum, name: enumPath, 
-                                        node, typeArgs: asEnum.typeArgs
+                                        node: nodeAsSource(node), typeArgs: asEnum.typeArgs
                                     };
                                 }
                                 throw message.from(
@@ -2796,7 +2803,10 @@ const quill = (function() {
                     if(hasSymbol(path, state) || node.called.value.includes("::")) {
                         return check(); 
                     }
-                    const selfT = checkTypes(node.args[0], state);
+                    const selfT = checkTypes(JSON.parse(JSON.stringify(node.args[0])), state.clone());
+                    const explTypeArgs = getPassedTypeArguments(
+                        node.called, state
+                    );
                     let resolved = null;
                     for(const usageAlias in state.usages) {
                         const usedPath = state.usages[usageAlias];
@@ -2804,27 +2814,25 @@ const quill = (function() {
                         const s = state.symbols[attPath];
                         if(s === undefined) { continue; }
                         if(s.node.args.length < 1) { continue; }
-                        try {
-                            let typeArgs = getPassedTypeArguments(
-                                node.called, state
+                        const checker = s.checker.clone();
+                        let typeArgs = explTypeArgs;
+                        if(typeArgs === undefined) {
+                            typeArgs = new Array(s.typeArgs.length).fill(null);
+                            inferTypeArguments(
+                                s.node.args[0].type, selfT,
+                                s.typeArgs, typeArgs, checker
                             );
-                            if(typeArgs === undefined) {
-                                typeArgs = new Array(s.typeArgs.length).fill(null);
-                                inferTypeArguments(
-                                    s.node.args[0].type, selfT,
-                                    s.typeArgs, typeArgs, s.checker
-                                );
-                            }
-                            const namedTypeArgs = {};
-                            for(const i in typeArgs) {
-                                namedTypeArgs[s.typeArgs[i]] = typeArgs[i];
-                            }
-                            s.checker.enterScope(namedTypeArgs);
-                            const expSelfT = typeFromNode(s.node.args[0].type, s.checker);
-                            s.checker.exitScope();
+                        }
+                        const namedTypeArgs = {};
+                        for(const i in typeArgs) {
+                            namedTypeArgs[s.typeArgs[i]] = typeArgs[i];
+                        }
+                        try {
+                            checker.enterScope(namedTypeArgs);
+                            const expSelfT = typeFromNode(s.node.args[0].type, checker);
+                            checker.exitScope();
                             if(!typesEqual(expSelfT, selfT)) { continue; }
-                        } catch(error) {
-                            if(error.sections === undefined) { throw error; }
+                        } catch(e) {
                             continue;
                         }
                         if(resolved !== null) {
@@ -2834,13 +2842,14 @@ const quill = (function() {
                             );
                         }
                         node.called.value = attPath;
+                        node.called.fullPath = attPath;
                         resolved = attPath;
                     }
                     return check();
                 }
                 case NodeType.IfExpr: {
                     assertReadOnly();
-                    const bool = { type: Type.Boolean, node };
+                    const bool = { type: Type.Boolean, node: nodeAsSource(node) };
                     const cond = checkTypes(node.cond, state, bool);
                     assertTypesEqual(bool, cond, node);
                     const ifType = checkTypes(node.ifValue, state);
@@ -2885,7 +2894,7 @@ const quill = (function() {
                     return null;
                 }
                 case NodeType.If: {
-                    const bool = { type: Type.Boolean, node };
+                    const bool = { type: Type.Boolean, node: nodeAsSource(node) };
                     const cond = checkTypes(node.cond, state, bool);
                     assertTypesEqual(cond, bool, node);
                     const ifReturns = checkBlock(node.ifBody, state);
@@ -2936,7 +2945,7 @@ const quill = (function() {
                                     );
                                 }
                                 vars[variable.name] = {
-                                    type: variable.type, isMutable: false, node
+                                    type: variable.type, isMutable: false, node: nodeAsSource(node)
                                 };
                             }
                         }
@@ -2982,7 +2991,7 @@ const quill = (function() {
         };
         let valueType = check();
         if(valueType === null) { 
-            valueType = { type: Type.Unit, node };
+            valueType = { type: Type.Unit, node: nodeAsSource(node) };
         }
         node.valueType = valueType;
         return valueType;
@@ -3287,8 +3296,8 @@ function quill$$eq(a, b) {
                                 }
                             }
                         };
+                        out += `if(`;
                         if(pattern.conditions.length >= 1) {
-                            out += `if(`;
                             for(const condI in pattern.conditions) {
                                 if(condI > 0) { out += " && "; }
                                 const condition = pattern.conditions[condI];
@@ -3310,9 +3319,11 @@ function quill$$eq(a, b) {
                                     }
                                 }
                             }
-                            out += `) `;
+                            
+                        } else {
+                            out += "true";
                         }
-                        out += `{ returned = body${branchI}(`;
+                        out += `) { returned = body${branchI}(`;
                         const vars = Object.keys(pattern.variables);
                         for(const varI in vars) {
                             if(varI > 0) { out += ", "; }

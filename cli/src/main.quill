@@ -2,10 +2,21 @@
 mod quill::cli
 
 fun main() {
-    val nums = List::of(1, 2, 3, 4, 5) 
-        |> as_seq() 
-        |> map[Int, Int](|n| n * 2) 
-        |> List::collect()
-    println(nums |> as_string())
-    //println(nums)
+    fibonacci() 
+        |> filter(is_even) 
+        |> take(20) 
+        |> for_each(println)
+}
+
+fun is_even(n: Int) -> Bool = n % 2 == 0
+
+fun fibonacci() -> Sequence[Int] {
+    mut a = 0
+    mut b = 1
+    return Sequence::new(|| {
+        val c = a + b
+        a = b
+        b = c
+        return Option::Some(c)
+    })
 }
