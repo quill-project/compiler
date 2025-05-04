@@ -1,0 +1,29 @@
+{
+	"name": "vscode-quill",
+	"version": "0.1.0",
+	"engines": {
+		"vscode": ">=0.9.0-pre.1"
+	},
+	"publisher": "schwalbe_t",
+	"contributes": {
+		"languages": [
+			{
+				"id": "quill",
+				"aliases": [
+					"Quill Source File"
+				],
+				"extensions": [
+					".quill"
+				],
+				"configuration": "./quill-config.json"
+			}
+		],
+		"grammars": [
+			{
+				"language": "quill",
+				"scopeName": "source.quill",
+				"path": "./syntaxes/quill.tmlanguage"
+			}
+		]
+	}
+}
