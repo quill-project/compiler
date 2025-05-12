@@ -39,6 +39,13 @@ pub fun Stream::take_until[T](self: Stream[T], cond: Fun(T) -> Bool) -> Sequence
     })
 }
 
+// For every requested item, the stream returned by this function repeatedly
+// requests items from the stream provided as `self` until it finds one for
+// which the function provided as `cond` returns `true`.
+// This means that situations in which `cond` returns `false` for all items 
+// returned by `self` result in `filter` never terminating.
+// Note that `take`, `take_while` and `take_until` can be used to return
+// a finite sequence instead.
 pub fun Stream::filter[T](self: Stream[T], cond: Fun(T) -> Bool) -> Stream[T] 
     = Stream::new(|| {
         mut current = self |> next()
