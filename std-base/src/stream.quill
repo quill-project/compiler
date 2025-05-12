@@ -1,0 +1,51 @@
+
+mod std
+
+struct Stream[T](next: Fun() -> T)
+
+pub fun Stream::new[T](next: Fun() -> T) -> Stream[T] = Stream(next)
+
+pub fun Stream::next[T](self: Stream[T]) -> T = self.next()
+
+pub fun Stream::map[I, O](self: Stream[I], f: Fun(I) -> O) -> Stream[O]
+    = Stream::new(|| f(self |> next()))
+
+pub fun Stream::take[T](self: Stream[T], n: Int) -> Sequence[T] {
+    mut i = 0
+    return Sequence::new(|| {
+        if i >= n { return Option::None }
+        i = i + 1
+        return Option::Some(self |> next())
+    })
+}
+
+pub fun Stream::take_while[T](self: Stream[T], cond: Fun(T) -> Bool) -> Sequence[T] {
+    mut ended = false
+    return Sequence::new(|| {
+        if ended { return Option::None }
+        val n = self |> next()
+        ended = !cond(n)
+        return if ended { Option::None } else { Option::Some(n) }
+    })
+}
+
+pub fun Stream::take_until[T](self: Stream[T], cond: Fun(T) -> Bool) -> Sequence[T] {
+    mut ended = false
+    return Sequence::new(|| {
+        if ended { return Option::None }
+        val n = self |> next()
+        ended = cond(n)
+        return if ended { Option::None } else { Option::Some(n) }
+    })
+}
+
+pub fun Stream::filter[T](self: Stream[T], cond: Fun(T) -> Bool) -> Stream[T] 
+    = Stream::new(|| {
+        mut current = self |> next()
+        Sequence::new[Unit](|| {
+            if cond(current) { return Option::None }
+            current = self |> next()
+            return Option::Some
+        }) |> for_each(|n| {})
+        return current
+    })

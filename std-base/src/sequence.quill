@@ -20,6 +20,34 @@ pub fun Sequence::take[T](self: Sequence[T], n: Int) -> Sequence[T] {
     })
 }
 
+pub fun Sequence::take_while[T](self: Sequence[T], cond: Fun(T) -> Bool) -> Sequence[T] {
+    mut ended = false
+    return Sequence::new(|| {
+        if ended { return Option::None }
+        match self |> next() {
+            None { return Option::None }
+            Some(n) {
+                ended = !cond(n)
+                return if ended { Option::None } else { Option::Some(n) }
+            }
+        }
+    })
+}
+
+pub fun Sequence::take_until[T](self: Sequence[T], cond: Fun(T) -> Bool) -> Sequence[T] {
+    mut ended = false
+    return Sequence::new(|| {
+        if ended { return Option::None }
+        match self |> next() {
+            None { return Option::None }
+            Some(n) {
+                ended = cond(n)
+                return if ended { Option::None } else { Option::Some(n) }
+            }
+        }
+    })
+}
+
 pub fun Sequence::fold[I, O](
     self: Sequence[I], start: O, f: Fun(O, I) -> O
 ) -> O {
@@ -33,14 +61,14 @@ pub fun Sequence::fold[I, O](
 pub fun Sequence::reduce[T](self: Sequence[T], f: Fun(T, T) -> T) -> Option[T]
     = self |> next() |> map(|start| self |> fold(start, f))
 
-pub fun Sequence::filter[T](self: Sequence[T], f: Fun(T) -> Bool) -> Sequence[T] 
+pub fun Sequence::filter[T](self: Sequence[T], cond: Fun(T) -> Bool) -> Sequence[T] 
     = Sequence::new(|| {
         mut found = self |> next()
         Sequence::new[Unit](|| {
             match found {
                 None { return Option::None }
                 Some(value) {
-                    if f(value) { return Option::None }
+                    if cond(value) { return Option::None }
                     found = self |> next()
                     return Option::Some
                 }
@@ -51,3 +79,6 @@ pub fun Sequence::filter[T](self: Sequence[T], f: Fun(T) -> Bool) -> Sequence[T]
 
 pub fun Sequence::for_each[T](self: Sequence[T], f: Fun(T))
     = self |> for_each_until(f, Option::None)
+
+pub fun Sequence::find[T](self: Sequence[T], cond: Fun(T) -> Bool) -> Option[T]
+    = self |> filter(cond) |> next()
