@@ -2,20 +2,8 @@
 mod quill::cli
 
 fun main() {
-    fibonacci() 
-        |> take(20) 
+    List::of(1, 2, 3)
+        |> repeat()
+        |> take(9)
         |> for_each(println)
-}
-
-fun is_even(n: Int) -> Bool = n % 2 == 0
-
-fun fibonacci() -> Sequence[Int] {
-    mut a = 0
-    mut b = 1
-    return Sequence::new(|| {
-        val c = a + b
-        a = b
-        b = c
-        return Option::Some(c)
-    })
 }

@@ -3226,17 +3226,17 @@ function quill$$eq(a, b) {
                     const value = generateCode(node.value, state);
                     state.scope().output += `let ${manglePath(node.fullPath)} = ${value};\n`;
                 } else {
+                    const to = state.alloc();
                     const value = generateCode(node.value, state);
-                    state.scope().aliases[node.name] = value;
+                    state.scope().output += `${to} = ${value};\n`;
+                    state.scope().aliases[node.name] = to;
                 }
                 return null;
             }
             case NodeType.Assignment: {
                 const to = generateCode(node.to, state);
-                const value = generateCode(node.value, state, to);
-                if(value !== to) {
-                    state.scope().output += `${to} = ${value};\n`;
-                }
+                const value = generateCode(node.value, state);
+                state.scope().output += `${to} = ${value};\n`;
                 return null;
             }
             case NodeType.Return: {

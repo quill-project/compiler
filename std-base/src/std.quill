@@ -9,7 +9,27 @@ pub fun range(start: Int, end: Int) -> Sequence[Int] {
     mut n = start
     return Sequence::new(|| {
         if n >= end { return Option::None }
+        val c = n
         n = n + 1
-        return Option::Some(n - 1)
+        return Option::Some(c)
+    })
+}
+
+pub fun range_incl(start: Int, end: Int) -> Sequence[Int] {
+    mut n = start
+    return Sequence::new(|| {
+        if n > end { return Option::None }
+        val c = n
+        n = n + 1
+        return Option::Some(c)
+    })
+}
+
+pub fun count_from(start: Int) -> Stream[Int] {
+    mut n = start
+    return Stream::new(|| {
+        val c = n
+        n = n + 1
+        return c
     })
 }
