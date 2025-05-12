@@ -1,0 +1,27 @@
+
+mod std::test
+
+pub fun assert_eq[T](lhs: T, rhs: T) {
+    if lhs == rhs { return unit }
+    "Assertion "
+        |> concat(T::as_string(lhs))
+        |> concat(" == ")
+        |> concat(T::as_string(rhs))
+        |> concat(" failed")
+        |> panic[Unit]()
+}
+
+pub fun assert_neq[T](lhs: T, rhs: T) {
+    if lhs != rhs { return unit }
+    "Assertion "
+        |> concat(T::as_string(lhs))
+        |> concat(" != ")
+        |> concat(T::as_string(rhs))
+        |> concat(" failed")
+        |> panic[Unit]()
+}
+
+pub fun assert[T](cond: Bool) {
+    if cond { return unit }
+    panic("Assertion failed")
+}

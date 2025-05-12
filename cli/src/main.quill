@@ -10,4 +10,31 @@ fun main() {
         |> take(5)
         |> List::collect()
         |> println()
+    fibonacci()
+        |> take(20)
+        |> for_each(println)
+    primes()
+        |> take(20)
+        |> for_each(println)
 }
+
+fun fibonacci() -> Stream[Int] {
+    mut a = 0
+    mut b = 1
+    return Stream::new(|| {
+        val i = a
+        val c = a + b
+        a = b
+        b = c
+        return i
+    })
+}
+
+fun is_prime(n: Int) -> Bool 
+    = range_incl(2, n / 2)
+    |> find(|d| n % d == 0)
+    |> is_none()
+
+fun primes() -> Stream[Int]
+    = count_from(2)
+    |> filter(is_prime)

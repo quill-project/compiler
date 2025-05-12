@@ -38,3 +38,17 @@ pub fun Option::map[I, O](self: Option[I], f: Fun(I) -> O) -> Option[O] {
         None { return Option::None }
     }
 }
+
+pub fun Option::is_some[T](self: Option[T]) -> Bool {
+    match self {
+        Some(_) { return true }
+        None { return false }
+    }
+}
+
+pub fun Option::is_none[T](self: Option[T]) -> Bool {
+    match self {
+        Some(_) { return false }
+        None { return true }
+    }
+}
