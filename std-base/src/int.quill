@@ -1,6 +1,4 @@
 
 mod std
 
-pub ext fun Int::as_string(self: Int) -> String = "
-    return '' + self;
-"
+pub fun Int::as_hash(self: Int) -> Int = self

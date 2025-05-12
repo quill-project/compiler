@@ -1,17 +1,9 @@
 
 mod std
 
-ext fun println_impl(line: String) = "
-    console.log(line)
-"
-
 pub fun println[T](value: T) = value 
     |> T::as_string()
-    |> println_impl()
-
-pub ext fun panic[T](reason: String) -> T = "
-    throw reason;
-"
+    |> raw_println()
 
 pub fun range(start: Int, end: Int) -> Sequence[Int] {
     mut n = start

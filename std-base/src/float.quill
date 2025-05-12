@@ -1,6 +1,6 @@
 
 mod std
 
-pub ext fun Float::as_string(self: Float) -> String = "
-    return '' + self
-"
+pub val INF = 1.0 / 0.0
+pub val NEG_INF = -INF
+pub val NAN = 0.0 / 0.0

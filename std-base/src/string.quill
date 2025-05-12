@@ -3,13 +3,10 @@ mod std
 
 pub fun String::as_string(self: String) -> String = self
 
-pub ext fun String::slice(self: String, start: Int, end: Int) -> String = "
-    return self.slice(Number(start), Number(end));
-"
-
-pub ext fun String::concat(low: String, high: String) -> String = "
-    return low + high;
-"
+pub fun String::as_hash(self: String) -> Int = self
+    |> codes()
+    |> reduce(hash::combine)
+    |> unwrap_or(0)
 
 pub fun String::join(from: Sequence[String], delim: String) -> String = from 
     |> reduce(|acc, curr| acc 
@@ -17,3 +14,7 @@ pub fun String::join(from: Sequence[String], delim: String) -> String = from
         |> concat(curr)
     ) 
     |> unwrap_or("")
+
+pub fun String::codes(self: String) -> Sequence[Int] = self
+    |> chars()
+    |> map(String::as_code)

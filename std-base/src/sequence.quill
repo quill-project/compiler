@@ -1,9 +1,7 @@
 
 mod std
 
-struct Sequence[T](next: Fun(Int, Int) -> Option[T])
-
-pub fun x[T](a: Int, b: Int) {}
+struct Sequence[T](next: Fun() -> Option[T])
 
 pub fun Sequence::new[T](next: Fun() -> Option[T]) -> Sequence[T] 
     = Sequence(next)
@@ -51,13 +49,5 @@ pub fun Sequence::filter[T](self: Sequence[T], f: Fun(T) -> Bool) -> Sequence[T]
         return found
     })
 
-ext fun Sequence::for_each_impl[T](self: Sequence[T], f: Fun(T), end: Option[T]) = "
-    while(true) {
-        const elem = self.next();
-        if(elem.tag === end.tag) { return; }
-        f(elem.value);
-    }
-"
-
 pub fun Sequence::for_each[T](self: Sequence[T], f: Fun(T))
-    = self |> for_each_impl(f, Option::None)
+    = self |> for_each_until(f, Option::None)

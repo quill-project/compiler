@@ -3,7 +3,6 @@ mod quill::cli
 
 fun main() {
     fibonacci() 
-        |> filter(is_even) 
         |> take(20) 
         |> for_each(println)
 }

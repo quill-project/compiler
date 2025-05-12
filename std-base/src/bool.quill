@@ -3,3 +3,6 @@ mod std
 
 pub fun Bool::as_string(self: Bool) -> String 
     = if self == true { "true" } else { "false" }
+
+pub fun Bool::as_hash(self: Bool) -> Int
+    = if self == true { 314 } else { 628 }

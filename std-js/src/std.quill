@@ -1,0 +1,90 @@
+
+mod std
+
+
+ext fun raw_println(line: String) = "
+    console.log(line);
+"
+
+pub ext fun panic[T](reason: String) -> T = "
+    throw reason;
+"
+
+
+pub ext fun Float::as_string(self: Float) -> String = "
+    return '' + self;
+"
+
+
+pub ext fun Int::as_string(self: Int) -> String = "
+    return '' + self;
+"
+
+
+pub ext fun List::slice[T](self: List[T], start: Int, end: Int) -> List[T] = "
+    return self.slice(Number(start), Number(end));
+"
+
+pub ext fun List::concat[T](low: List[T], high: List[T]) -> List[T] = "
+    return [...low, ...high];
+"
+
+pub ext fun List::length[T](self: List[T]) -> Int = "
+    return BigInt(self.length);
+"
+
+pub ext fun List::push[T](self: List[T], value: T) -> List[T] = "
+    self.push(value);
+    return self;
+"
+
+pub ext fun List::pop[T](self: List[T]) -> T = "
+    return self.pop();
+"
+
+ext fun List::get_unchecked[T](self: List[T], position: Int) -> T = "
+    return self[Number(position)]
+"
+
+
+ext fun Sequence::for_each_until[T](self: Sequence[T], f: Fun(T), end: Option[T]) = "
+    while(true) {
+        const elem = self.next();
+        if(elem.tag === end.tag) { return; }
+        f(elem.value);
+    }
+"
+
+
+pub ext fun String::slice(self: String, start: Int, end: Int) -> String = "
+    return self.slice(Number(start), Number(end));
+"
+
+pub ext fun String::concat(low: String, high: String) -> String = "
+    return low + high;
+"
+
+pub ext fun String::length(self: String) -> Int = "
+    return self.length;
+"
+
+pub ext fun String::as_code(self: String) -> Int = "
+    if(self.length === 0) { return 0n; }
+    return BigInt(self.codePointAt(0));
+"
+
+pub fun String::from_code(code: Int) -> String "
+    return String.fromCodePoint(code);
+"
+
+pub fun String::chars(self: String) -> Sequence[String] {
+    mut r = self
+    return Sequence::new(|| {
+        val prev_l = r |> length()
+        if prev_l == 0 { return Option::None }
+        val char_l = if (r |> as_code()) > 65535 { 2 } else { 1 }
+        val char = r |> slice(0, char_l)
+        r = r |> slice(char_l, prev_l)
+        return Option::Some(char)
+    })
+}

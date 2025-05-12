@@ -7,6 +7,10 @@ pub fun Option::as_string[T](self: Option[T]) -> String = self
     |> map[T, String](|v| "Some(" |> concat(T::as_string(v)) |> concat(")"))
     |> unwrap_or("None")
 
+pub fun Option::as_hash[T](self: Option[T]) -> Int = self
+    |> map(T::as_hash)
+    |> unwrap_or(0)
+
 pub fun Option::expect[T](self: Option[T], reason: String) -> T {
     match self {
         Some(value) { return value }

@@ -1,0 +1,4 @@
+
+mod std::hash
+
+pub fun combine(a: Int, b: Int) -> Int = 31 * a + b
