@@ -6,4 +6,8 @@ fun main() {
         |> repeat()
         |> take(9)
         |> for_each(println)
+    count_from(50)
+        |> take(5)
+        |> List::collect()
+        |> println()
 }

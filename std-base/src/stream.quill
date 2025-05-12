@@ -5,6 +5,8 @@ struct Stream[T](next: Fun() -> T)
 
 pub fun Stream::new[T](next: Fun() -> T) -> Stream[T] = Stream(next)
 
+pub fun Stream::of[T](value: T) -> Stream[T] = Stream(|| value) 
+
 pub fun Stream::next[T](self: Stream[T]) -> T = self.next()
 
 pub fun Stream::map[I, O](self: Stream[I], f: Fun(I) -> O) -> Stream[O]
