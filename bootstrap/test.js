@@ -1,4 +1,14 @@
 
+const tests = [
+    "std::tests::option::as_string",
+    "std::tests::option::as_hash",
+    "std::tests::option::unwrap_or",
+    "std::tests::option::unwrap_or_else",
+    "std::tests::option::map",
+    "std::tests::option::is_some",
+    "std::tests::option::is_none"
+];
+
 const fs = require("fs");
 const path = require('path');
 const quill = require("./compiler.js");
@@ -18,10 +28,9 @@ function collectFiles(dir, ext) {
 
 const files = [
     ...collectFiles("./std-js", ".quill"),
-    ...collectFiles("./std-base/src", ".quill"),
-    ...collectFiles("./compiler", ".quill"),
-    ...collectFiles("./cli", ".quill")
+    ...collectFiles("./std-base", ".quill")
 ];
+
 const sources = {};
 for(const file of files) {
 	sources[file] = fs.readFileSync(file, 'utf8');
@@ -33,9 +42,21 @@ console.error(result.messages
     .join("\n\n")
 );
 if(result.success) {
-    result.code += "quill$cli$main$$0();";
-    fs.writeFileSync("bootstrap/build.js", result.code);
-	console.log(`Wrote output to 'bootstrap/build.js'`);
+    eval(result.code);
+    let failed = 0;
+    for(const test of tests) {
+        console.log(`Running test '${test}'`);
+        const mangled = test.split("::").join("$");
+        try {
+            eval(`${mangled}$$0();`);
+        } catch(e) {
+            console.log(`'${test}' failed:`);
+            console.error(e);
+            console.log();
+            failed += 1;
+        }
+    }
+    console.log(`Result: ${tests.length - failed}/${tests.length} tests passed`);
 } else {
     console.log("Compilation failed.");
     process.exit(1);

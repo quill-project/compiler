@@ -1,0 +1,54 @@
+
+mod std::tests::option
+
+use std::test::*
+
+pub fun as_string() {
+    assert_eq(Option::as_string(Option::Some(5)), "Some(5)")
+    assert_eq(Option::as_string(Option::Some(10)), "Some(10)")
+    assert_eq(Option::as_string(Option::None[Int]), "None")
+}
+
+pub fun as_hash() {
+    assert_eq(Option::as_hash(Option::Some(42)), Int::as_hash(42))
+    assert_eq(Option::as_hash(Option::Some("Hello")), String::as_hash("Hello"))
+    assert_eq(
+        Option::as_hash[String](Option::None[String]), 
+        Option::as_hash[Int](Option::None[Int])
+    )
+}
+
+pub fun unwrap_or() {
+    assert_eq(Option::unwrap_or(Option::None[Int], 5), 5)
+    assert_eq(Option::unwrap_or(Option::Some(25), 3), 25)
+    assert_eq(Option::unwrap_or(Option::Some("hello"), "world"), "hello")
+}
+
+pub fun unwrap_or_else() {
+    assert_eq(Option::unwrap_or_else(Option::None[Int], || 10), 10)
+    assert_eq(
+        Option::unwrap_or_else(Option::Some(12), || assert_unreachable()),
+        12
+    )
+}
+
+pub fun map() {
+    assert_eq(
+        Option::map[Int, Int](Option::Some(25), |x| x * 2),
+        Option::Some(50)
+    )
+    assert_eq(
+        Option::map[Int, Int](Option::None, |x| assert_unreachable()),
+        Option::None[Int]
+    )
+}
+
+pub fun is_some() {
+    assert_eq(Option::is_some(Option::Some(3)), true)
+    assert_neq(Option::is_some(Option::None[String]), true)
+}
+
+pub fun is_none() {
+    assert_neq(Option::is_none(Option::Some(2)), true)
+    assert_eq(Option::is_none(Option::None[Float]), true)
+}

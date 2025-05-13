@@ -65,7 +65,7 @@ pub ext fun String::concat(low: String, high: String) -> String = "
 "
 
 pub ext fun String::length(self: String) -> Int = "
-    return self.length;
+    return BigInt(self.length);
 "
 
 pub ext fun String::as_code(self: String) -> Int = "
