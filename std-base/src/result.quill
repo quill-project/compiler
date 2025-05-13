@@ -104,13 +104,13 @@ pub fun Result::err_as_seq[O, E](self: Result[O, E]) -> Sequence[E] {
 pub fun Result::map[I, O, E](self: Result[I, E], f: Fun(I) -> O) -> Result[O, E] {
     match self {
         Ok(value) { return Result::Ok(f(value)) }
-        Err(_) { return self }
+        Err(error) { return Result::Err(error) }
     }
 }
 
 pub fun Result::map_err[O, I, E](self: Result[O, I], f: Fun(I) -> E) -> Result[O, E] {
     match self {
-        Ok(_) { return self }
+        Ok(value) { return Result::Ok(value) }
         Err(error) { return Result::Err(f(error)) }
     }
 }

@@ -35,7 +35,26 @@ const tests = [
     "std::tests::list::is_empty",
     "std::tests::list::remove",
     "std::tests::list::pop",
-    "std::tests::list::clear"
+    "std::tests::list::clear",
+
+    "std::tests::result::as_string",
+    "std::tests::result::as_hash",
+    "std::tests::result::and",
+    "std::tests::result::and_then",
+    "std::tests::result::or",
+    "std::tests::result::or_else",
+    "std::tests::result::get_ok",
+    "std::tests::result::get_err",
+    "std::tests::result::is_ok",
+    "std::tests::result::is_err",
+    "std::tests::result::as_seq",
+    "std::tests::result::err_as_seq",
+    "std::tests::result::map",
+    "std::tests::result::map_err",
+    "std::tests::result::unwrap_or",
+    "std::tests::result::unwrap_or_else",
+    "std::tests::result::unwrap_err_or",
+    "std::tests::result::unwrap_err_or_else"
 ];
 
 const fs = require("fs");
