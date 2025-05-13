@@ -1,0 +1,130 @@
+
+mod std
+
+pub enum Result[O, E](Ok: O, Err: E)
+
+pub fun Result::and[O, E](self: Result[O, E], other: Result[O, E]) -> Result[O, E] {
+    match self {
+        Ok(_) { return other }
+        Err(_) { return self }
+    }
+}
+
+pub fun Result::and_then[O, E](self: Result[O, E], f: Fun(O) -> Result[O, E]) -> Result[O, E] {
+    match self {
+        Ok(value) { return f(value) }
+        Err(_) { return self }
+    }
+}
+
+pub fun Result::or[O, E](self: Result[O, E], other: Result[O, E]) -> Result[O, E] {
+    match self {
+        Ok(_) { return self }
+        Err(_) { return other }
+    }
+}
+
+pub fun Result::or_else[O, E](self: Result[O, E], f: Fun(E) -> Result[O, E]) -> Result[O, E] {
+    match self {
+        Ok(_) { return self }
+        Err(error) { return f(error) }
+    }
+}
+
+pub fun Result::expect[O, E](self: Result[O, E], reason: String) -> O {
+    match self {
+        Ok(value) { return value }
+        Err(_) { return panic(reason) }
+    }
+}
+
+pub fun Result::expect_err[O, E](self: Result[O, E], reason: String) -> E {
+    match self {
+        Ok(_) { return panic(reason) }
+        Err(error) { return error }
+    }
+}
+
+pub fun Result::get_ok[O, E](self: Result[O, E]) -> Option[O] {
+    match self {
+        Ok(value) { return Option::Some(value) }
+        Err(_) { return Option::None }
+    }
+}
+
+pub fun Result::get_err[O, E](self: Result[O, E]) -> Option[E] {
+    match self {
+        Ok(_) { return Option::None }
+        Err(error) { return Option::Some(error) }
+    }
+}
+
+pub fun Result::is_ok[O, E](self: Result[O, E]) -> Bool {
+    match self {
+        Ok(_) { return true }
+        Err(_) { return false }
+    }
+}
+
+pub fun Result::is_err[O, E](self: Result[O, E]) -> Bool {
+    match self {
+        Ok(_) { return false }
+        Err(_) { return true }
+    }
+}
+
+pub fun Result::as_seq[O, E](self: Result[O, E]) -> Sequence[O] {
+    match self {
+        Ok(value) { return Sequence::of(value) }
+        Err(_) { return Sequence::empty() }
+    }
+}
+
+pub fun Result::err_as_seq[O, E](self: Result[O, E]) -> Sequence[E] {
+    match self {
+        Ok(_) { return Sequence::empty() }
+        Err(error) { return Sequence::of(error) }
+    }
+}
+
+pub fun Result::map[I, O, E](self: Result[I, E], f: Fun(I) -> O) -> Result[O, E] {
+    match self {
+        Ok(value) { return Result::Ok(f(value)) }
+        Err(_) { return self }
+    }
+}
+
+pub fun Result::map_err[O, I, E](self: Result[O, I], f: Fun(I) -> E) -> Result[O, E] {
+    match self {
+        Ok(_) { return self }
+        Err(error) { return Result::Err(f(error)) }
+    }
+}
+
+pub fun Result::unwrap_or[O, E](self: Result[O, E], fallback: O) -> O {
+    match self {
+        Ok(value) { return value }
+        Err(_) { return fallback }
+    }
+}
+
+pub fun Result::unwrap_or_else[O, E](self: Result[O, E], fallback: Fun(E) -> O) -> O {
+    match self {
+        Ok(value) { return value }
+        Err(error) { return fallback(error) }
+    }
+}
+
+pub fun Result::unwrap_err_or[O, E](self: Result[O, E], fallback: E) -> E {
+    match self {
+        Ok(_) { return fallback }
+        Err(error) { return error }
+    }
+}
+
+pub fun Result::unwrap_err_or_else[O, E](self: Result[O, E], fallback: Fun(O) -> E) -> E {
+    match self {
+        Ok(value) { return fallback(value) }
+        Err(error) { return error }
+    }
+}

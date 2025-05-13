@@ -52,3 +52,17 @@ pub fun Option::is_none[T](self: Option[T]) -> Bool {
         None { return true }
     }
 }
+
+pub fun Option::flatten[T](self: Option[Option[T]]) -> Option[T] {
+    match self {
+        Some(contained) { return contained }
+        None { return Option::None }
+    }
+}
+
+pub fun Option::as_seq[T](self: Option[T]) -> Sequence[T] {
+    match self {
+        Some(value) { return Sequence::of(value) }
+        None { return Sequence::empty() }
+    }
+}

@@ -3,7 +3,7 @@ mod quill::cli
 
 fun main() {
     List::of(1, 2, 3)
-        |> repeat()
+        |> repeated()
         |> take(9)
         |> for_each(println)
     count_from(50)

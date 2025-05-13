@@ -52,3 +52,26 @@ pub fun is_none() {
     assert_neq(Option::is_none(Option::Some(2)), true)
     assert_eq(Option::is_none(Option::None[Float]), true)
 }
+
+pub fun flatten() {
+    assert_eq(
+        Option::flatten(Option::Some(Option::Some(15))), 
+        Option::Some(15)
+    )
+    assert_eq(
+        Option::flatten(Option::Some(Option::None[Int])),
+        Option::None[Int]
+    )
+    assert_eq(
+        Option::flatten(Option::None[Option[String]]), 
+        Option::None[String]
+    )
+}
+
+pub fun as_seq() {
+    val a = Option::as_seq(Option::Some(125))
+    assert_eq(Sequence::next(a), Option::Some(125))
+    assert_eq(Sequence::next(a), Option::None)
+    val b = Option::as_seq(Option::None[Bool])
+    assert_eq(Sequence::next(b), Option::None)
+}

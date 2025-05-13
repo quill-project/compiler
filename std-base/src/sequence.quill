@@ -6,6 +6,18 @@ struct Sequence[T](next: Fun() -> Option[T])
 pub fun Sequence::new[T](next: Fun() -> Option[T]) -> Sequence[T] 
     = Sequence(next)
 
+pub fun Sequence::of[T](value: T) -> Sequence[T] {
+    mut had_value = false
+    return Sequence(|| {
+        if had_value { return Option::None }
+        had_value = true
+        return Option::Some(value)
+    })
+}
+
+pub fun Sequence::empty[T]() -> Sequence[T] 
+    = Sequence::new(|| Option::None)
+
 pub fun Sequence::next[T](self: Sequence[T]) -> Option[T] = self.next()
 
 pub fun Sequence::map[I, O](self: Sequence[I], f: Fun(I) -> O) -> Sequence[O]

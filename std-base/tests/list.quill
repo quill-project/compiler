@@ -1,0 +1,227 @@
+
+mod std::tests::list
+
+use std::test::*
+
+pub fun concat() {
+    assert_eq(
+        List::concat(List::of(1, 2, 3), List::of(4, 5, 6)),
+        List::of(1, 2, 3, 4, 5, 6)
+    )
+    assert_eq(
+        List::concat[Bool](List::of(), List::of()),
+        List::of[Bool]()
+    )
+    assert_eq(
+        List::concat(List::of("Hello"), List::of()),
+        List::of("Hello")
+    )
+}
+
+pub fun push() {
+    val l = List::of[Int]()
+    List::push(l, 1)
+    assert_eq(l, List::of(1))
+    List::push(l, 2)
+    assert_eq(l, List::of(1, 2))
+    List::push(l, 3)
+    assert_eq(l, List::of(1, 2, 3))
+}
+
+pub fun insert() {
+    val l = List::of[String]("a", "b", "c")
+    List::insert(l, 0, "x")
+    assert_eq(l, List::of("x", "a", "b", "c"))
+    List::insert(l, 3, "w")
+    assert_eq(l, List::of("x", "a", "b", "w", "c"))
+}
+
+pub fun set() {
+    val l = List::of(1.0, 2.0, 3.0, 4.0)
+    List::set(l, 0, 0.5)
+    assert_eq(l, List::of(0.5, 2.0, 3.0, 4.0))
+    List::set(l, 1, 1.0)
+    assert_eq(l, List::of(0.5, 1.0, 3.0, 4.0))
+    List::set(l, 2, 1.5)
+    assert_eq(l, List::of(0.5, 1.0, 1.5, 4.0))
+    List::set(l, 3, 2.0)
+    assert_eq(l, List::of(0.5, 1.0, 1.5, 2.0))
+}
+
+pub fun of_length() {
+    assert_eq(
+        List::of_length(3, true),
+        List::of(true, true, true)
+    )
+    assert_eq(
+        List::of_length(5, "yay"),
+        List::of("yay", "yay", "yay", "yay", "yay")
+    )
+}
+
+pub fun slice() {
+    val l = List::of(2, 3, 5, 7, 11, 13)
+    assert_eq(List::slice(l, 0, 3), List::of(2, 3, 5))
+    assert_eq(List::slice(l, 2, 6), List::of(5, 7, 11, 13))
+    assert_eq(List::slice(l, 1, 4), List::of(3, 5, 7))
+}
+
+pub fun length() {
+    assert_eq(List::length(List::of(1, 2, 3)), 3)
+    assert_eq(List::length(List::of_length(5, true)), 5)
+    val l = List::of("a", "b")
+    List::push(l, "c")
+    assert_eq(List::length(l), 3)
+    List::push(l, "d")
+    List::push(l, "e")
+    assert_eq(List::length(l), 5)
+}
+
+pub fun splice() {
+    val l = List::of(0, 2, 4, 6, 8, 10, 12, 14, 16, 18)
+    assert_eq(List::splice(l, 6, 10), List::of(12, 14, 16, 18))
+    assert_eq(l, List::of(0, 2, 4, 6, 8, 10))
+    assert_eq(List::splice(l, 0, 2), List::of(0, 2))
+    assert_eq(l, List::of(4, 6, 8, 10))
+}
+
+pub fun as_string() {
+    assert_eq(List::as_string(List::of(1, 2, 3)), "List(1, 2, 3)")
+    assert_eq(List::as_string(List::of[Unit]()), "List()")
+    assert_eq(List::as_string(List::of(true, false)), "List(true, false)")
+}
+
+pub fun as_hash() {
+    assert_eq(
+        List::as_hash(List::of(1, 2, 3)),
+        Int::as_hash(1)
+            |> hash::combine(Int::as_hash(2))
+            |> hash::combine(Int::as_hash(3))    
+    )
+    assert_eq(
+        List::as_hash(List::of("one", "two", "three", "four")),
+        String::as_hash("one")
+            |> hash::combine(String::as_hash("two"))
+            |> hash::combine(String::as_hash("three"))
+            |> hash::combine(String::as_hash("four"))
+    )
+    assert_neq(
+        List::as_hash(List::of[Bool](true, false, true)), 
+        List::as_hash(List::of[Bool](false, true))
+    )
+}
+
+pub fun of() {
+    val a = List::of("a", "b", "c")
+    assert_eq(List::length(a), 3)
+    assert_eq(List::at(a, 0), "a")
+    assert_eq(List::at(a, 1), "b")
+    assert_eq(List::at(a, 2), "c")
+    val b = List::of[Unit]()
+    assert_eq(List::length(b), 0)
+}
+
+pub fun get() {
+    val l = List::of(42, 43, 44, 45)
+    assert_eq(List::get(l, 0), Option::Some(42))
+    assert_eq(List::get(l, 1), Option::Some(43))
+    assert_eq(List::get(l, 2), Option::Some(44))
+    assert_eq(List::get(l, 3), Option::Some(45))
+    assert_eq(List::get(l, 66), Option::None)
+    assert_eq(List::get(l, -1), Option::Some(45))
+    assert_eq(List::get(l, -3), Option::Some(43))
+    assert_eq(List::get(l, 128), Option::None)
+}
+
+pub fun as_seq() {
+    val a = List::as_seq(List::of("Eins", "Zwei", "Drei", "Vier"))
+    assert_eq(Sequence::next(a), Option::Some("Eins"))
+    assert_eq(Sequence::next(a), Option::Some("Zwei"))
+    assert_eq(Sequence::next(a), Option::Some("Drei"))
+    assert_eq(Sequence::next(a), Option::Some("Vier"))
+    assert_eq(Sequence::next(a), Option::None)
+    val b = List::as_seq(List::of[Unit]())
+    assert_eq(Sequence::next(b), Option::None)
+}
+
+pub fun repeated() {
+    val a = List::repeated(List::of("Cat", "Dog", "Bird"))
+    assert_eq(Stream::next(a), "Cat")
+    assert_eq(Stream::next(a), "Dog")
+    assert_eq(Stream::next(a), "Bird")
+    assert_eq(Stream::next(a), "Cat")
+    assert_eq(Stream::next(a), "Dog")
+    assert_eq(Stream::next(a), "Bird")
+    assert_eq(Stream::next(a), "Cat")
+    val b = List::repeated(List::of(25, 50))
+    assert_eq(Stream::next(b), 25)
+    assert_eq(Stream::next(b), 50)
+    assert_eq(Stream::next(b), 25)
+    assert_eq(Stream::next(b), 50)
+    assert_eq(Stream::next(b), 25)
+}
+
+pub fun reversed() {
+    val a = List::reversed(List::of("Cat", "Dog", "Bird"))
+    assert_eq(Sequence::next(a), Option::Some("Bird"))
+    assert_eq(Sequence::next(a), Option::Some("Dog"))
+    assert_eq(Sequence::next(a), Option::Some("Cat"))
+    assert_eq(Sequence::next(a), Option::None)
+    val b = List::reversed(List::of(25, 50))
+    assert_eq(Sequence::next(b), Option::Some(50))
+    assert_eq(Sequence::next(b), Option::Some(25))
+    assert_eq(Sequence::next(b), Option::None)
+}
+
+pub fun collect() {
+    assert_eq(
+        Stream::of(2) 
+            |> take(5) 
+            |> List::collect(),
+        List::of(2, 2, 2, 2, 2)
+    )
+    assert_eq(
+        List::of("Cat", "Dog", "Bird") 
+            |> List::reversed() 
+            |> List::collect(),
+        List::of("Bird", "Dog", "Cat")
+    )
+}
+
+pub fun is_empty() {
+    assert_eq(List::is_empty(List::of[Float]()), true)
+    assert_neq(List::is_empty(List::of(1, 2, 3)), true)
+    assert_neq(List::is_empty(List::of("Hello")), true)
+}
+
+pub fun remove() {
+    val l = List::of(5, 10, 15, 20, 25)
+    assert_eq(List::remove(l, 1), 10)
+    assert_eq(l, List::of(5, 15, 20, 25))
+    assert_eq(List::remove(l, 2), 20)
+    assert_eq(l, List::of(5, 15, 25))
+    assert_eq(List::remove(l, 0), 5)
+    assert_eq(l, List::of(15, 25))
+}
+
+pub fun pop() {
+    val l = List::of(5, 10, 15, 20, 25)
+    assert_eq(List::pop(l), Option::Some(25))
+    assert_eq(l, List::of(5, 10, 15, 20))
+    assert_eq(List::pop(l), Option::Some(20))
+    assert_eq(l, List::of(5, 10, 15))
+    assert_eq(List::pop(l), Option::Some(15))
+    assert_eq(l, List::of(5, 10))
+    assert_eq(List::pop(l), Option::Some(10))
+    assert_eq(l, List::of(5))
+    assert_eq(List::pop(l), Option::Some(5))
+    assert_eq(l, List::of())
+    assert_eq(List::pop(l), Option::None)
+    assert_eq(l, List::of())
+}
+
+pub fun clear() {
+    val l = List::of(5, 10, 15, 20)
+    List::clear(l)
+    assert_eq(List::length(l), 0)
+}

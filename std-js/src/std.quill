@@ -21,16 +21,8 @@ pub ext fun Int::as_string(self: Int) -> String = "
 "
 
 
-pub ext fun List::slice[T](self: List[T], start: Int, end: Int) -> List[T] = "
-    return self.slice(Number(start), Number(end));
-"
-
 pub ext fun List::concat[T](low: List[T], high: List[T]) -> List[T] = "
     return [...low, ...high];
-"
-
-pub ext fun List::length[T](self: List[T]) -> Int = "
-    return BigInt(self.length);
 "
 
 pub ext fun List::push[T](self: List[T], value: T) -> List[T] = "
@@ -38,12 +30,37 @@ pub ext fun List::push[T](self: List[T], value: T) -> List[T] = "
     return self;
 "
 
-pub ext fun List::pop[T](self: List[T]) -> T = "
-    return self.pop();
+pub ext fun List::insert[T](self: List[T], position: Int, value: T) -> List[T] = "
+    const n = Number(position);
+    self.push(value);
+    self.copyWithin(n + 1, n, self.length - 1);
+    self[n] = value;
+    return self;
+"
+
+pub ext fun List::set[T](self: List[T], position: Int, value: T) -> List[T] = "
+    self[Number(position)] = value;
+    return self;
+"
+
+pub ext fun List::of_length[T](length: Int, value: T) -> List[T] = "
+    return new Array(Number(length)).fill(value);
+"
+
+pub ext fun List::slice[T](self: List[T], start: Int, end: Int) -> List[T] = "
+    return self.slice(Number(start), Number(end));
 "
 
 ext fun List::get_unchecked[T](self: List[T], position: Int) -> T = "
     return self[Number(position)]
+"
+
+pub ext fun List::length[T](self: List[T]) -> Int = "
+    return BigInt(self.length);
+"
+
+pub ext fun List::splice[T](self: List[T], start: Int, end: Int) -> List[T] = "
+    return self.splice(Number(start), Number(end - start))
 "
 
 

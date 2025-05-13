@@ -6,7 +6,30 @@ const tests = [
     "std::tests::option::unwrap_or_else",
     "std::tests::option::map",
     "std::tests::option::is_some",
-    "std::tests::option::is_none"
+    "std::tests::option::is_none",
+    "std::tests::option::flatten",
+    "std::tests::option::as_seq",
+
+    "std::tests::list::concat",
+    "std::tests::list::push",
+    "std::tests::list::insert",
+    "std::tests::list::set",
+    "std::tests::list::of_length",
+    "std::tests::list::slice",
+    "std::tests::list::length",
+    "std::tests::list::splice",
+    "std::tests::list::as_string",
+    "std::tests::list::as_hash",
+    "std::tests::list::of",
+    "std::tests::list::get",
+    "std::tests::list::as_seq",
+    "std::tests::list::repeated",
+    "std::tests::list::reversed",
+    "std::tests::list::collect",
+    "std::tests::list::is_empty",
+    "std::tests::list::remove",
+    "std::tests::list::pop",
+    "std::tests::list::clear"
 ];
 
 const fs = require("fs");

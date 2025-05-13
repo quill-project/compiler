@@ -1,0 +1,4 @@
+
+mod std::tests::sequence
+
+use std::test::*

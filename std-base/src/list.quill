@@ -37,9 +37,13 @@ pub fun List::as_seq[T](self: List[T]) -> Sequence[T]
     = range(0, self |> length())
     |> map[Int, T](|i| self |> get_unchecked(i % (self |> length())))
 
-pub fun List::repeat[T](self: List[T]) -> Stream[T]
+pub fun List::repeated[T](self: List[T]) -> Stream[T]
     = count_from(0)
     |> map[Int, T](|i| self |> get_unchecked(i % (self |> length())))
+
+pub fun List::reversed[T](self: List[T]) -> Sequence[T]
+    = range_incl(1, self |> length())
+    |> map[Int, T](|i| self |> get_unchecked((self |> length()) - i))
 
 pub fun List::collect[T](from: Sequence[T]) -> List[T] {
     val r = List::of[T]()
@@ -47,4 +51,20 @@ pub fun List::collect[T](from: Sequence[T]) -> List[T] {
         r |> push(v)
     })
     return r
+}
+
+pub fun List::is_empty[T](self: List[T]) -> Bool = (self |> length()) == 0
+
+pub fun List::remove[T](self: List[T], position: Int) -> T = self 
+    |> splice(position, position + 1) 
+    |> get_unchecked(0)
+
+pub fun List::pop[T](self: List[T]) -> Option[T] {
+    val l = self |> length()
+    if l == 0 { return Option::None }
+    return Option::Some(self |> splice(l - 1, l) |> get_unchecked(0))
+}
+
+pub fun List::clear[T](self: List[T]) {
+    self |> splice(0, self |> length())
 }
