@@ -54,7 +54,35 @@ const tests = [
     "std::tests::result::unwrap_or",
     "std::tests::result::unwrap_or_else",
     "std::tests::result::unwrap_err_or",
-    "std::tests::result::unwrap_err_or_else"
+    "std::tests::result::unwrap_err_or_else",
+    
+    "std::tests::sequence::of",
+    "std::tests::sequence::empty",
+    "std::tests::sequence::chain",
+    "std::tests::sequence::zip",
+    "std::tests::sequence::map",
+    "std::tests::sequence::skip",
+    "std::tests::sequence::take",
+    "std::tests::sequence::take_while",
+    "std::tests::sequence::take_until",
+    "std::tests::sequence::length",
+    "std::tests::sequence::last",
+    "std::tests::sequence::find",
+    "std::tests::sequence::find_last",
+    "std::tests::sequence::any",
+    "std::tests::sequence::all",
+    "std::tests::sequence::fold",
+    "std::tests::sequence::reduce",
+    "std::tests::sequence::filter",
+
+    "std::tests::stream::of",
+    "std::tests::stream::zip",
+    "std::tests::stream::map",
+    "std::tests::stream::skip",
+    "std::tests::stream::take",
+    "std::tests::stream::take_while",
+    "std::tests::stream::take_until",
+    "std::tests::stream::filter"
 ];
 
 const fs = require("fs");

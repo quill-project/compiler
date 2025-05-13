@@ -7,10 +7,16 @@ pub fun Stream::new[T](next: Fun() -> T) -> Stream[T] = Stream(next)
 
 pub fun Stream::of[T](value: T) -> Stream[T] = Stream(|| value) 
 
-pub fun Stream::next[T](self: Stream[T]) -> T = self.next()
+pub fun Stream::zip[A, B, O](a: Stream[A], b: Stream[B], f: Fun(A, B) -> O) -> Stream[O]
+    = Stream::new(|| f(a |> next(), b |> next()))
 
 pub fun Stream::map[I, O](self: Stream[I], f: Fun(I) -> O) -> Stream[O]
     = Stream::new(|| f(self |> next()))
+
+pub fun Stream::skip[T](self: Stream[T], n: Int) -> Stream[T] {
+    self |> take(n) |> for_each(|v| {})
+    return self
+}
 
 pub fun Stream::take[T](self: Stream[T], n: Int) -> Sequence[T] {
     mut i = 0
@@ -27,7 +33,7 @@ pub fun Stream::take_while[T](self: Stream[T], cond: Fun(T) -> Bool) -> Sequence
         if ended { return Option::None }
         val n = self |> next()
         ended = !cond(n)
-        return if ended { Option::None } else { Option::Some(n) }
+        return if ended { Option::None[T] } else { Option::Some(n) }
     })
 }
 
@@ -37,9 +43,11 @@ pub fun Stream::take_until[T](self: Stream[T], cond: Fun(T) -> Bool) -> Sequence
         if ended { return Option::None }
         val n = self |> next()
         ended = cond(n)
-        return if ended { Option::None } else { Option::Some(n) }
+        return if ended { Option::None[T] } else { Option::Some(n) }
     })
 }
+
+pub fun Stream::next[T](self: Stream[T]) -> T = self.next()
 
 // For every requested item, the stream returned by this function repeatedly
 // requests items from the stream provided as `self` until it finds one for

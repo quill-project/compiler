@@ -2,3 +2,166 @@
 mod std::tests::sequence
 
 use std::test::*
+
+pub fun of() {
+    val s = Sequence::of(5)
+    assert_eq(Sequence::next(s), Option::Some(5))
+    assert_eq(Sequence::next(s), Option::None)
+}
+
+pub fun empty() {
+    val s: Sequence[Int] = Sequence::empty()
+    assert_eq(Sequence::next(s), Option::None)
+}
+
+pub fun chain() {
+    val a = List::as_seq(List::of(1, 2))
+    val b = List::as_seq(List::of(3, 4))
+    val s = Sequence::chain(a, b)
+    assert_eq(Sequence::next(s), Option::Some(1))
+    assert_eq(Sequence::next(s), Option::Some(2))
+    assert_eq(Sequence::next(s), Option::Some(3))
+    assert_eq(Sequence::next(s), Option::Some(4))
+    assert_eq(Sequence::next(s), Option::None)
+}
+
+pub fun zip() {
+    val a = List::as_seq(List::of(1, 2, 3))
+    val b = List::as_seq(List::of(4, 5, 6))
+    val s: Sequence[Int] = Sequence::zip(a, b, |x, y| x + y)
+    assert_eq(Sequence::next(s), Option::Some(5))
+    assert_eq(Sequence::next(s), Option::Some(7))
+    assert_eq(Sequence::next(s), Option::Some(9))
+    assert_eq(Sequence::next(s), Option::None)
+}
+
+pub fun map() {
+    val s = List::as_seq(List::of(1, 5, 9))
+        |> Sequence::map[Int, Int](|x| x * 2)
+    assert_eq(Sequence::next(s), Option::Some(2))
+    assert_eq(Sequence::next(s), Option::Some(10))
+    assert_eq(Sequence::next(s), Option::Some(18))
+    assert_eq(Sequence::next(s), Option::None)
+}
+
+pub fun skip() {
+    val s = List::as_seq(List::of(4, 8, 12, 16, 20))
+    Sequence::skip(s, 2)
+    assert_eq(Sequence::next(s), Option::Some(12))
+    Sequence::skip(s, 1)
+    assert_eq(Sequence::next(s), Option::Some(20))
+    assert_eq(Sequence::next(s), Option::None)
+    Sequence::skip(s, 10)
+    assert_eq(Sequence::next(s), Option::None)
+}
+
+pub fun take() {
+    val s = List::as_seq(List::of(4, 8, 12, 16, 20))
+        |> Sequence::take(3)
+    assert_eq(Sequence::next(s), Option::Some(4))
+    assert_eq(Sequence::next(s), Option::Some(8))
+    assert_eq(Sequence::next(s), Option::Some(12))
+    assert_eq(Sequence::next(s), Option::None)
+}
+
+pub fun take_while() {
+    val s = std::range(0, 1000)
+        |> Sequence::take_while(|n| n < 3)
+    assert_eq(Sequence::next(s), Option::Some(0))
+    assert_eq(Sequence::next(s), Option::Some(1))
+    assert_eq(Sequence::next(s), Option::Some(2))
+    assert_eq(Sequence::next(s), Option::None)
+}
+
+pub fun take_until() {
+    val s = std::range(0, 1000)
+        |> Sequence::take_until(|n| n > 1)
+    assert_eq(Sequence::next(s), Option::Some(0))
+    assert_eq(Sequence::next(s), Option::Some(1))
+    assert_eq(Sequence::next(s), Option::None)
+}
+
+pub fun length() {
+    assert_eq(Sequence::length(std::range(0, 3)), 3)
+    assert_eq(
+        Sequence::length(List::as_seq(List::of(4, 8, 12, 16, 20))), 
+        5
+    )
+}
+
+pub fun last() {
+    val a = List::as_seq(List::of(4, 8, 12, 16, 20))
+    assert_eq(Sequence::last(a), Option::Some(20))
+    assert_eq(Sequence::next(a), Option::None)
+    val b = Sequence::empty[Unit]()
+    assert_eq(Sequence::last(b), Option::None)
+}
+
+pub fun find() {
+    val s = List::as_seq(List::of(1, 3, 5, 7, 8, 9, 10, 11))
+    assert_eq(Sequence::find(s, |n| n % 2 == 0), Option::Some(8))
+    assert_eq(Sequence::next(s), Option::Some(9))
+    assert_eq(Sequence::next(s), Option::Some(10))
+    assert_eq(Sequence::next(s), Option::Some(11))
+    assert_eq(Sequence::next(s), Option::None)
+}
+
+pub fun find_last() {
+    val s = List::as_seq(List::of(1, 3, 5, 7, 8, 9, 10, 11))
+    assert_eq(Sequence::find_last(s, |n| n % 2 == 0), Option::Some(10))
+    assert_eq(Sequence::next(s), Option::None)
+}
+
+pub fun any() {
+    val a = List::as_seq(List::of(1, 3, 5, 7, 8, 9, 10, 11))
+    assert_eq(Sequence::any(a, |n| n % 2 == 0), true)
+    assert_eq(Sequence::next(a), Option::Some(9))
+    assert_eq(Sequence::next(a), Option::Some(10))
+    assert_eq(Sequence::next(a), Option::Some(11))
+    assert_eq(Sequence::next(a), Option::None)
+    val b = std::range(0, 5) 
+        |> Sequence::map[Int, Int](|n| n * 2)
+    assert_neq(Sequence::any(b, |n| n % 2 != 0), true)
+    assert_eq(Sequence::next(b), Option::None)
+}
+
+pub fun all() {
+    val a = List::as_seq(List::of(1, 3, 5, 7, 8, 9, 10, 11))
+    assert_neq(Sequence::all(a, |n| n % 2 != 0), true)
+    assert_eq(Sequence::next(a), Option::Some(9))
+    assert_eq(Sequence::next(a), Option::Some(10))
+    assert_eq(Sequence::next(a), Option::Some(11))
+    assert_eq(Sequence::next(a), Option::None)
+    val b = std::range(0, 5) 
+        |> Sequence::map[Int, Int](|n| n * 2)
+    assert_eq(Sequence::all(b, |n| n % 2 == 0), true)
+    assert_eq(Sequence::next(b), Option::None)
+}
+
+pub fun fold() {
+    assert_eq(
+        List::as_seq(List::of(2, 3, 5, 7, 11))
+            |> Sequence::fold(0.0, |acc, n| acc + Int::as_float(n)), 
+        2.0 + 3.0 + 5.0 + 7.0 + 11.0
+    )
+}
+
+pub fun reduce() {
+    assert_eq(
+        List::as_seq(List::of(2, 3, 5, 7, 11))
+            |> Sequence::reduce(|a, b| a + b), 
+        Option::Some(2 + 3 + 5 + 7 + 11)
+    )
+    assert_eq(
+        Sequence::empty[Int]() |> Sequence::reduce(|a, b| a + b),
+        Option::None
+    )
+}
+
+pub fun filter() {
+    val s = List::as_seq(List::of(1, 3, 5, 7, 8, 9, 10, 11))
+        |> Sequence::filter(|n| n % 2 == 0)
+    assert_eq(Sequence::next(s), Option::Some(8))
+    assert_eq(Sequence::next(s), Option::Some(10))
+    assert_eq(Sequence::next(s), Option::None)
+}

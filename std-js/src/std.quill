@@ -15,9 +15,17 @@ pub ext fun Float::as_string(self: Float) -> String = "
     return '' + self;
 "
 
+pub ext fun Float::as_int(self: Float) -> Int = "
+    return BigInt(self);
+"
+
 
 pub ext fun Int::as_string(self: Int) -> String = "
     return '' + self;
+"
+
+pub ext fun Int::as_float(self: Int) -> Float = "
+    return Number(self);
 "
 
 

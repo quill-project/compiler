@@ -567,7 +567,7 @@ const quill = (function() {
     }
 
     const binaryOpPrec = Object.freeze({
-        "(": 2, ".": 2,
+        "(": 1, ".": 1,
         "*": 3, "/": 3, "%": 3,
         "+": 4, "-": 4, 
         "<": 5, ">": 5, "<=": 5, ">=": 5,
@@ -694,7 +694,6 @@ const quill = (function() {
                     path: start.path, start: start.start, end: start.end,
                     typeArgs
                 };
-                return valueNodeFrom(NodeType.Path, path, start);
             }
             case TokenType.IntLiteral: {
                 state.next();
