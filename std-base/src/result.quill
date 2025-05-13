@@ -3,6 +3,20 @@ mod std
 
 pub enum Result[O, E](Ok: O, Err: E)
 
+pub fun Result::as_string[O, E](self: Result[O, E]) -> String {
+    match self {
+        Ok(v) { return "Ok(" |> concat(O::as_string(v)) |> concat(")") }
+        Err(e) { return "Err(" |> concat(E::as_string(e)) |> concat(")") }
+    }
+}
+
+pub fun Result::as_hash[O, E](self: Result[O, E]) -> Int {
+    match self {
+        Ok(v) { return O::as_hash(v) }
+        Err(e) { return E::as_hash(e) }
+    }
+}
+
 pub fun Result::and[O, E](self: Result[O, E], other: Result[O, E]) -> Result[O, E] {
     match self {
         Ok(_) { return other }
@@ -10,7 +24,7 @@ pub fun Result::and[O, E](self: Result[O, E], other: Result[O, E]) -> Result[O, 
     }
 }
 
-pub fun Result::and_then[O, E](self: Result[O, E], f: Fun(O) -> Result[O, E]) -> Result[O, E] {
+pub fun Result::and_then[I, O, E](self: Result[I, E], f: Fun(I) -> Result[O, E]) -> Result[O, E] {
     match self {
         Ok(value) { return f(value) }
         Err(_) { return self }
@@ -24,7 +38,7 @@ pub fun Result::or[O, E](self: Result[O, E], other: Result[O, E]) -> Result[O, E
     }
 }
 
-pub fun Result::or_else[O, E](self: Result[O, E], f: Fun(E) -> Result[O, E]) -> Result[O, E] {
+pub fun Result::or_else[O, I, E](self: Result[O, I], f: Fun(I) -> Result[O, E]) -> Result[O, E] {
     match self {
         Ok(_) { return self }
         Err(error) { return f(error) }

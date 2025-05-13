@@ -3,13 +3,47 @@ mod std
 
 pub enum Option[T](Some: T, None)
 
-pub fun Option::as_string[T](self: Option[T]) -> String = self 
-    |> map[T, String](|v| "Some(" |> concat(T::as_string(v)) |> concat(")"))
-    |> unwrap_or("None")
+pub fun Option::as_string[T](self: Option[T]) -> String {
+    match self {
+        Some(v) { return "Some(" |> concat(T::as_string(v)) |> concat(")") }
+        None { return "None" }
+    }
+}
 
-pub fun Option::as_hash[T](self: Option[T]) -> Int = self
-    |> map(T::as_hash)
-    |> unwrap_or(0)
+pub fun Option::as_hash[T](self: Option[T]) -> Int {
+    match self {
+        Some(v) { return T::as_hash(v) }
+        None { return 0 }
+    }
+}
+
+pub fun Option::and[T](self: Option[T], other: Option[T]) -> Option[T] {
+    match self {
+        Some(_) { return other }
+        None { return self }
+    }
+}
+
+pub fun Option::and_then[I, O](self: Option[I], f: Fun(I) -> Option[O]) -> Option[O] {
+    match self {
+        Some(value) { return f(value) }
+        None { return self }
+    }
+}
+
+pub fun Option::or[T](self: Option[T], other: Option[T]) -> Option[T] {
+    match self {
+        Some(_) { return self }
+        None { return other }
+    }
+}
+
+pub fun Option::or_else[T](self: Option[T], f: Fun() -> Option[T]) -> Option[T] {
+    match self {
+        Some(_) { return self }
+        None { return f() }
+    }
+}
 
 pub fun Option::expect[T](self: Option[T], reason: String) -> T {
     match self {
@@ -50,6 +84,20 @@ pub fun Option::is_none[T](self: Option[T]) -> Bool {
     match self {
         Some(_) { return false }
         None { return true }
+    }
+}
+
+pub fun Option::ok_or[O, E](self: Option[O], error: E) -> Result[O, E] {
+    match self {
+        Some(value) { return Result::Ok(value) }
+        None { return Result::Err(error) }
+    }
+}
+
+pub fun Option::ok_or_else[O, E](self: Option[O], error: Fun() -> E) -> Result[O, E] {
+    match self {
+        Some(value) { return Result::Ok(value) }
+        None { return Result::Err(error()) }
     }
 }
 

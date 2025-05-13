@@ -2,11 +2,17 @@
 const tests = [
     "std::tests::option::as_string",
     "std::tests::option::as_hash",
+    "std::tests::option::and",
+    "std::tests::option::and_then",
+    "std::tests::option::or",
+    "std::tests::option::or_else",
     "std::tests::option::unwrap_or",
     "std::tests::option::unwrap_or_else",
     "std::tests::option::map",
     "std::tests::option::is_some",
     "std::tests::option::is_none",
+    "std::tests::option::ok_or",
+    "std::tests::option::ok_or_else",
     "std::tests::option::flatten",
     "std::tests::option::as_seq",
 

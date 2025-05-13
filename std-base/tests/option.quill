@@ -18,6 +18,54 @@ pub fun as_hash() {
     )
 }
 
+pub fun and() {
+    assert_eq(Option::and(Option::Some(25), Option::Some(10)), Option::Some(10))
+    assert_eq(Option::and(Option::Some(25), Option::None), Option::None)
+    assert_eq(Option::and(Option::None, Option::Some(10)), Option::None)
+    assert_eq(Option::and[Unit](Option::None, Option::None), Option::None)
+}
+
+pub fun and_then() {
+    assert_eq(
+        Option::and_then(Option::Some(15), |x| Option::Some(x * 2)), 
+        Option::Some(30)
+    )
+    assert_eq(
+        Option::and_then[Unit, Unit](Option::None, |x| assert_unreachable()),
+        Option::None
+    )
+    assert_eq(
+        Option::and_then(Option::Some(unit), |x| Option::None),
+        Option::None[Unit]
+    )
+}
+
+pub fun or() {
+    assert_eq(Option::or(Option::Some(25), Option::Some(10)), Option::Some(25))
+    assert_eq(Option::or(Option::Some(25), Option::None), Option::Some(25))
+    assert_eq(Option::or(Option::None, Option::Some(10)), Option::Some(10))
+    assert_eq(Option::or[Unit](Option::None, Option::None), Option::None)
+}
+
+pub fun or_else() {
+    assert_eq(
+        Option::or_else(Option::Some(25), || assert_unreachable()), 
+        Option::Some(25)
+    )
+    assert_eq(
+        Option::or_else(Option::Some(25), || assert_unreachable()), 
+        Option::Some(25)
+    )
+    assert_eq(
+        Option::or_else(Option::None, || Option::Some(10)), 
+        Option::Some(10)
+    )
+    assert_eq(
+        Option::or_else[Unit](Option::None, || Option::None), 
+        Option::None
+    )
+}
+
 pub fun unwrap_or() {
     assert_eq(Option::unwrap_or(Option::None[Int], 5), 5)
     assert_eq(Option::unwrap_or(Option::Some(25), 3), 25)
@@ -51,6 +99,30 @@ pub fun is_some() {
 pub fun is_none() {
     assert_neq(Option::is_none(Option::Some(2)), true)
     assert_eq(Option::is_none(Option::None[Float]), true)
+}
+
+pub fun ok_or() {
+    assert_eq(
+        Option::ok_or(Option::Some(25), "No value!"), 
+        Result::Ok(25)
+    )
+    assert_eq(
+        Option::ok_or(Option::None[Int], "No value!"), 
+        Result::Err("No value!")
+    )
+}
+
+pub fun ok_or_else() {
+    assert_eq(
+        Option::Some(25)
+            |> Option::ok_or_else[Int, String](|| assert_unreachable()),
+        Result::Ok(25)
+    )
+    assert_eq(
+        Option::None
+            |> Option::ok_or_else[Int, String](|| "No value!"),
+        Result::Err("No value!")
+    )
 }
 
 pub fun flatten() {
