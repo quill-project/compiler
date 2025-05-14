@@ -2,3 +2,169 @@
 mod std::tests::string
 
 use std::test::*
+
+pub fun slice() {
+    val s = "Hello"
+    assert_eq(String::slice(s, 0, 4), "Hell")
+    assert_eq(String::slice(s, 0, -1), "Hell")
+    assert_eq(String::slice(s, -4, -2), "el")
+}
+
+pub fun concat() {
+    assert_eq(String::concat("ABC", "DEF"), "ABCDEF")
+    assert_eq(String::concat("", "lol"), "lol")
+    assert_eq(String::concat("", ""), "")
+    assert_eq(String::concat("abcdefgh", "!"), "abcdefgh!")
+}
+
+pub fun length() {
+    assert_eq(String::length("Hello"), 5)
+    assert_eq(String::length("yay"), 3)
+    assert_eq(String::length(""), 0)
+}
+
+pub fun as_code() {
+    assert_eq(String::as_code("A"), 65)
+    assert_eq(String::as_code("😁"), 128513)
+}
+
+pub fun from_code() {
+    assert_eq(String::from_code(87), "W")
+    assert_eq(String::from_code(128513), "😁")
+}
+
+pub fun chars() {
+    val c = String::chars("Hi! 😁")
+    assert_eq(Sequence::next(c), Option::Some("H"))
+    assert_eq(Sequence::next(c), Option::Some("i"))
+    assert_eq(Sequence::next(c), Option::Some("!"))
+    assert_eq(Sequence::next(c), Option::Some(" "))
+    assert_eq(Sequence::next(c), Option::Some("😁"))
+    assert_eq(Sequence::next(c), Option::None)
+}
+
+pub fun chars_repeated() {
+    val c = String::chars_repeated("Hi! 😁")
+    assert_eq(Stream::next(c), "H")
+    assert_eq(Stream::next(c), "i")
+    assert_eq(Stream::next(c), "!")
+    assert_eq(Stream::next(c), " ")
+    assert_eq(Stream::next(c), "😁")
+    assert_eq(Stream::next(c), "H")
+    assert_eq(Stream::next(c), "i")
+    assert_eq(Stream::next(c), "!")
+    assert_eq(Stream::next(c), " ")
+    assert_eq(Stream::next(c), "😁")
+    // ... and so on ...
+}
+
+pub fun as_string() {
+    assert_eq(String::as_string("fun!"), "fun!")
+    assert_eq(String::as_string("yay"), "yay")
+    assert_eq(String::as_string("yippie!"), "yippie!")
+}
+
+pub fun as_hash() {
+    assert_eq(
+        String::as_hash("hey"),
+        String::as_code("h")
+            |> hash::combine(String::as_code("e"))
+            |> hash::combine(String::as_code("y"))
+    )
+    assert_eq(
+        String::as_hash("nice"), String::as_hash("nice")
+    )
+    assert_eq(String::as_hash(""), String::as_hash(""))
+}
+
+pub fun join() {
+    assert_eq(
+        List::of("1", "2", "3")
+            |> List::as_seq()
+            |> String::join(", "),
+        "1, 2, 3"
+    )
+    assert_eq(
+        List::of("A", "B", "C", "D")
+            |> List::as_seq()
+            |> String::join(""),
+        "ABCD"
+    )
+}
+
+pub fun codes() {
+    val s = String::codes("Hi! 😁")
+    assert_eq(Sequence::next(s), Option::Some(72))
+    assert_eq(Sequence::next(s), Option::Some(105))
+    assert_eq(Sequence::next(s), Option::Some(33))
+    assert_eq(Sequence::next(s), Option::Some(32))
+    assert_eq(Sequence::next(s), Option::Some(128513))
+    assert_eq(Sequence::next(s), Option::None)
+}
+
+pub fun codes_repeated() {
+    val s = String::codes_repeated("😁!")
+    assert_eq(Stream::next(s), 128513)
+    assert_eq(Stream::next(s), 33)
+    assert_eq(Stream::next(s), 128513)
+    assert_eq(Stream::next(s), 33)
+    assert_eq(Stream::next(s), 128513)
+    assert_eq(Stream::next(s), 33)
+    // ... and so on ...
+}
+
+pub fun get() {
+
+}
+
+pub fun slice_from() {
+
+}
+
+pub fun slice_to() {
+
+}
+
+pub fun starts_with() {
+
+}
+
+pub fun ends_with() {
+
+}
+
+pub fun find() {
+
+}
+
+pub fun find_all() {
+
+}
+
+pub fun fmt() {
+
+}
+
+pub fun repeat() {
+
+}
+
+pub fun repeat_to() {
+
+}
+
+pub fun pad_begin() {
+
+}
+
+pub fun pad_end() {
+
+}
+
+pub fun split() {
+
+}
+
+pub fun replace() {
+
+}

@@ -98,8 +98,8 @@ pub ext fun String::as_code(self: String) -> Int = "
     return BigInt(self.codePointAt(0));
 "
 
-pub fun String::from_code(code: Int) -> String = "
-    return String.fromCodePoint(code);
+pub ext fun String::from_code(code: Int) -> String = "
+    return String.fromCodePoint(Number(code));
 "
 
 pub fun String::chars(self: String) -> Sequence[String] {

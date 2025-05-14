@@ -98,7 +98,7 @@ pub fun String::repeat(self: String, n: Int) -> String
     |> reduce(String::concat)
     |> unwrap_or("")
 
-pub fun String::repeat_to_length(self: String, n: Int) -> String {
+pub fun String::repeat_to(self: String, n: Int) -> String {
     val l = self |> length()
     return self 
         |> repeat(n / l + 1)
@@ -109,14 +109,14 @@ pub fun String::pad_begin(self: String, tgt_len: Int, padding: String) -> String
     if tgt_len <= (self |> length()) { return self }
     if 0 == (padding |> length()) { return self }
     return padding
-        |> repeat_to_length(tgt_len - (self |> length()))
+        |> repeat_to(tgt_len - (self |> length()))
         |> concat(self)
 }
 
 pub fun String::pad_end(self: String, tgt_len: Int, padding: String) -> String {
     if tgt_len <= (self |> length()) { return self }
     if 0 == (padding |> length()) { return self }
-    val p = padding |> repeat_to_length(tgt_len - (self |> length()))
+    val p = padding |> repeat_to(tgt_len - (self |> length()))
     return self |> concat(p)
 }
 
