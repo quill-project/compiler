@@ -64,6 +64,8 @@ pub fun slice() {
     assert_eq(List::slice(l, 0, 3), List::of(2, 3, 5))
     assert_eq(List::slice(l, 2, 6), List::of(5, 7, 11, 13))
     assert_eq(List::slice(l, 1, 4), List::of(3, 5, 7))
+    assert_eq(List::slice(l, 1, -1), List::of(3, 5, 7, 11))
+    assert_eq(List::slice(l, -4, -1), List::of(5, 7, 11))
 }
 
 pub fun length() {
@@ -81,8 +83,8 @@ pub fun splice() {
     val l = List::of(0, 2, 4, 6, 8, 10, 12, 14, 16, 18)
     assert_eq(List::splice(l, 6, 10), List::of(12, 14, 16, 18))
     assert_eq(l, List::of(0, 2, 4, 6, 8, 10))
-    assert_eq(List::splice(l, 0, 2), List::of(0, 2))
-    assert_eq(l, List::of(4, 6, 8, 10))
+    assert_eq(List::splice(l, -3, -1), List::of(6, 8))
+    assert_eq(l, List::of(0, 2, 4, 10))
 }
 
 pub fun as_string() {
@@ -200,8 +202,8 @@ pub fun remove() {
     assert_eq(l, List::of(5, 15, 20, 25))
     assert_eq(List::remove(l, 2), 20)
     assert_eq(l, List::of(5, 15, 25))
-    assert_eq(List::remove(l, 0), 5)
-    assert_eq(l, List::of(15, 25))
+    assert_eq(List::remove(l, -1), 25)
+    assert_eq(l, List::of(5, 15))
 }
 
 pub fun pop() {
