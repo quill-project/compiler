@@ -68,6 +68,20 @@ pub fun slice() {
     assert_eq(List::slice(l, -4, -1), List::of(5, 7, 11))
 }
 
+pub fun slice_from() {
+    val l = List::of(2, 3, 5, 7, 11, 13)
+    assert_eq(List::slice_from(l, 3), List::of(7, 11, 13))
+    assert_eq(List::slice_from(l, -2), List::of(11, 13))
+    assert_eq(List::slice_from(l, 1), List::of(3, 5, 7, 11, 13))
+}
+
+pub fun slice_to() {
+    val l = List::of(2, 3, 5, 7, 11, 13)
+    assert_eq(List::slice_to(l, 3), List::of(2, 3, 5))
+    assert_eq(List::slice_to(l, -2), List::of(2, 3, 5, 7))
+    assert_eq(List::slice_to(l, 1), List::of(2))
+}
+
 pub fun length() {
     assert_eq(List::length(List::of(1, 2, 3)), 3)
     assert_eq(List::length(List::of_length(5, true)), 5)

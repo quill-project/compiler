@@ -113,3 +113,18 @@ pub fun String::chars(self: String) -> Sequence[String] {
         return Option::Some(char)
     })
 }
+
+pub fun String::chars_repeated(self: String) -> Stream[String] {
+    if 0 == (self |> length()) {
+        return panic("Attempt to get char stream from empty string!")
+    }
+    mut r = self
+    return Stream::new(|| {
+        val prev_l = r |> length()
+        val char_l = if (r |> as_code()) > 65535 { 2 } else { 1 }
+        val char = r |> slice(0, char_l)
+        r = r |> slice(char_l, prev_l)
+        if 0 == (r |> length()) { r = self }
+        return char
+    })
+}

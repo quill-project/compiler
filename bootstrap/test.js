@@ -24,6 +24,8 @@ const tests = [
     "std::tests::list::slice",
     "std::tests::list::length",
     "std::tests::list::splice",
+    "std::tests::list::splice_from",
+    "std::tests::list::splice_to",
     "std::tests::list::as_string",
     "std::tests::list::as_hash",
     "std::tests::list::of",

@@ -33,13 +33,23 @@ pub fun List::at[T](self: List[T], position: Int) -> T = self
         |> concat(self |> length() |> as_string())
     ))
 
+pub fun List::slice_from[T](self: List[T], start: Int) -> List[T]
+    = self |> slice(start, self |> length())
+
+pub fun List::slice_to[T](self: List[T], end: Int) -> List[T]
+    = self |> slice(0, end)
+
 pub fun List::as_seq[T](self: List[T]) -> Sequence[T]
     = range(0, self |> length())
     |> map[Int, T](|i| self |> get_unchecked(i % (self |> length())))
 
-pub fun List::repeated[T](self: List[T]) -> Stream[T]
-    = count_from(0)
-    |> map[Int, T](|i| self |> get_unchecked(i % (self |> length())))
+pub fun List::repeated[T](self: List[T]) -> Stream[T] {
+    if 0 == (self |> length()) {
+        return panic("Attempt to get element stream from empty list!")
+    }
+    return count_from(0)
+        |> map[Int, T](|i| self |> get_unchecked(i % (self |> length())))
+}
 
 pub fun List::reversed[T](self: List[T]) -> Sequence[T]
     = range_incl(1, self |> length())
