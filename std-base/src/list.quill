@@ -15,6 +15,8 @@ pub fun List::as_hash[T](self: List[T]) -> Int = self
     |> reduce(hash::combine)
     |> unwrap_or(0)
 
+pub fun List::empty[T]() -> List[T] = List::of[T]()
+
 pub fun List::of[T](...values: List[T]) -> List[T] = values
 
 pub fun List::get[T](self: List[T], position: Int) -> Option[T] {
@@ -27,11 +29,12 @@ pub fun List::get[T](self: List[T], position: Int) -> Option[T] {
 
 pub fun List::at[T](self: List[T], position: Int) -> T = self
     |> get(position)
-    |> unwrap_or_else(|| panic("Index " 
+    |> unwrap_or_else(|| "Index " 
         |> concat(position |> as_string())
         |> concat(" is out of bounds for a list of range ")
         |> concat(self |> length() |> as_string())
-    ))
+        |> panic()
+    )
 
 pub fun List::slice_from[T](self: List[T], start: Int) -> List[T]
     = self |> slice(start, self |> length())
@@ -75,6 +78,7 @@ pub fun List::pop[T](self: List[T]) -> Option[T] {
     return Option::Some(self |> splice(l - 1, l) |> get_unchecked(0))
 }
 
-pub fun List::clear[T](self: List[T]) {
+pub fun List::clear[T](self: List[T]) -> List[T] {
     self |> splice(0, self |> length())
+    return self
 }

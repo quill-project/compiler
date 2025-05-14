@@ -127,6 +127,11 @@ pub fun as_hash() {
     )
 }
 
+pub fun empty() {
+    assert_eq(List::length(List::empty[Int]()), 0)
+    assert_eq(List::empty[Int](), List::of[Int]())
+}
+
 pub fun of() {
     val a = List::of("a", "b", "c")
     assert_eq(List::length(a), 3)
