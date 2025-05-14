@@ -34,28 +34,17 @@ pub fun from_code() {
 }
 
 pub fun chars() {
-    val c = String::chars("Hi! 😁")
-    assert_eq(Sequence::next(c), Option::Some("H"))
-    assert_eq(Sequence::next(c), Option::Some("i"))
-    assert_eq(Sequence::next(c), Option::Some("!"))
-    assert_eq(Sequence::next(c), Option::Some(" "))
-    assert_eq(Sequence::next(c), Option::Some("😁"))
-    assert_eq(Sequence::next(c), Option::None)
+    assert_eq(
+        String::chars("Hi! 😁") |> List::collect(),
+        List::of("H", "i", "!", " ", "😁")
+    )
 }
 
 pub fun chars_repeated() {
-    val c = String::chars_repeated("Hi! 😁")
-    assert_eq(Stream::next(c), "H")
-    assert_eq(Stream::next(c), "i")
-    assert_eq(Stream::next(c), "!")
-    assert_eq(Stream::next(c), " ")
-    assert_eq(Stream::next(c), "😁")
-    assert_eq(Stream::next(c), "H")
-    assert_eq(Stream::next(c), "i")
-    assert_eq(Stream::next(c), "!")
-    assert_eq(Stream::next(c), " ")
-    assert_eq(Stream::next(c), "😁")
-    // ... and so on ...
+    assert_eq(
+        String::chars_repeated("Hi! 😁") |> Stream::take(10) |> List::collect(),
+        List::of("H", "i", "!", " ", "😁", "H", "i", "!", " ", "😁")
+    )
 }
 
 pub fun as_string() {
@@ -93,78 +82,145 @@ pub fun join() {
 }
 
 pub fun codes() {
-    val s = String::codes("Hi! 😁")
-    assert_eq(Sequence::next(s), Option::Some(72))
-    assert_eq(Sequence::next(s), Option::Some(105))
-    assert_eq(Sequence::next(s), Option::Some(33))
-    assert_eq(Sequence::next(s), Option::Some(32))
-    assert_eq(Sequence::next(s), Option::Some(128513))
-    assert_eq(Sequence::next(s), Option::None)
+    assert_eq(
+        String::codes("Hi! 😁") |> List::collect(),
+        List::of(72, 105, 33, 32, 128513)
+    )
 }
 
 pub fun codes_repeated() {
-    val s = String::codes_repeated("😁!")
-    assert_eq(Stream::next(s), 128513)
-    assert_eq(Stream::next(s), 33)
-    assert_eq(Stream::next(s), 128513)
-    assert_eq(Stream::next(s), 33)
-    assert_eq(Stream::next(s), 128513)
-    assert_eq(Stream::next(s), 33)
-    // ... and so on ...
+    assert_eq(
+        String::codes_repeated("😁!") |> Stream::take(8) |> List::collect(),
+        List::of(128513, 33, 128513, 33, 128513, 33, 128513, 33)
+    )
 }
 
 pub fun get() {
-
+    val s = "Hello, world!"
+    assert_eq(String::get(s, 0), Option::Some("H"))
+    assert_eq(String::get(s, -1), Option::Some("!"))
+    assert_eq(String::get(s, -3), Option::Some("l"))
+    assert_eq(String::get(s, 5), Option::Some(","))
+    assert_eq(String::get(s, -20), Option::None)
+    assert_eq(String::get(s, 14), Option::None)
 }
 
 pub fun slice_from() {
-
+    val s = "Hello, world!"
+    assert_eq(String::slice_from(s, 7), "world!")
+    assert_eq(String::slice_from(s, -1), "!")
+    assert_eq(String::slice_from(s, 0), "Hello, world!")
 }
 
 pub fun slice_to() {
-
+    val s = "Hello, world!"
+    assert_eq(String::slice_to(s, 5), "Hello")
+    assert_eq(String::slice_to(s, -1), "Hello, world")
+    assert_eq(String::slice_to(s, 4), "Hell")
 }
 
 pub fun starts_with() {
-
+    assert_eq(String::starts_with("Hello, world!", "Hell"), true)
+    assert_neq(String::starts_with("Hello, world!", "world"), true)
+    assert_eq(String::starts_with("Hello, world!", ""), true)
 }
 
 pub fun ends_with() {
-
+    assert_eq(String::ends_with("Hello, world!", "!"), true)
+    assert_eq(String::ends_with("Hello, world!", "world!"), true)
+    assert_eq(String::ends_with("Hello, world!", ""), true)
+    assert_neq(String::ends_with("Hello, world!", "yay"), true)
 }
 
 pub fun find() {
-
+    assert_eq(
+        String::find("Hello, world!", "l") |> List::collect(),
+        List::of(2, 3, 10)
+    )
+    assert_eq(
+        String::find("Hi", "") |> List::collect(),
+        List::of(0, 1, 2)
+    )
+    assert_eq(
+        String::find("aaaaaa", "aa") |> List::collect(), 
+        List::of(0, 2, 4)
+    )
 }
 
 pub fun find_all() {
-
+    assert_eq(
+        String::find_all("Hello, world!", "l") |> List::collect(),
+        List::of(2, 3, 10)
+    )
+    assert_eq(
+        String::find_all("Hi", "") |> List::collect(),
+        List::of(0, 1, 2)
+    )
+    assert_eq(
+        String::find_all("aaaaaa", "aa") |> List::collect(), 
+        List::of(0, 1, 2, 3, 4)
+    )
 }
 
 pub fun fmt() {
-
+    assert_eq(
+        "Hello, _!" |> String::fmt("world"), 
+        "Hello, world!"
+    )
+    assert_eq(
+        "_ * _ = _" |> String::fmt("2", "3", "6"),
+        "2 * 3 = 6"
+    )
+    assert_eq(
+        "Your name is _...? -_-" |> String::fmt("Bob"),
+        "Your name is Bob...? -_-"
+    )
 }
 
 pub fun repeat() {
-
+    assert_eq(String::repeat("hi", 5), "hihihihihi")
+    assert_eq(String::repeat("hi", 0), "")
+    assert_eq(String::repeat("", 10), "")
+    assert_eq(String::repeat(".", 3), "...")
 }
 
 pub fun repeat_to() {
-
+    assert_eq(String::repeat_to("hi", 5), "hihih")
+    assert_eq(String::repeat_to("hi", 0), "")
+    assert_eq(String::repeat_to("hi", 1), "h")
+    assert_eq(String::repeat_to(".", 3), "...")
 }
 
 pub fun pad_begin() {
-
+    assert_eq(String::pad_begin("Hi!", 7, "."), "....Hi!")
+    assert_eq(String::pad_begin("!!", 7, "hi"), "hihih!!")
+    assert_eq(String::pad_begin(":)", 10, "lol"), "lollollo:)")
 }
 
 pub fun pad_end() {
-
+    assert_eq(String::pad_end("Hi!", 7, "."), "Hi!....")
+    assert_eq(String::pad_end("!!", 7, "hi"), "!!hihih")
+    assert_eq(String::pad_end(":)", 10, "lol"), ":)lollollo")
 }
 
 pub fun split() {
-
+    assert_eq(
+        String::split("Hello, world!", ", ") |> List::collect(),
+        List::of("Hello", "world!")
+    )
+    assert_eq(
+        String::split(".1.2.3.", ".") |> List::collect(),
+        List::of("", "1", "2", "3", "")
+    )
+    assert_eq(
+        String::split("You are   awesome! ", " ") |> List::collect(),
+        List::of("You", "are", "", "", "awesome!", "")
+    )
 }
 
 pub fun replace() {
-
+    assert_eq(String::replace("Hello, world!", "!", "?"), "Hello, world?")
+    assert_eq(String::replace("Hello, world!", "l", "L"), "HeLLo, worLd!")
+    assert_eq(String::replace("Hello, world!", "q", "."), "Hello, world!")
+    assert_eq(String::replace("Hello, world!", "H", "h"), "hello, world!")
 }

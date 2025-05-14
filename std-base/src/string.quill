@@ -63,7 +63,7 @@ pub fun String::find(self: String, sub: String) -> Sequence[Int] {
     if sl == 0 { return range_incl(0, l) }
     mut i = 0
     return Sequence::new(|| {
-        i = range(i, l - sl)
+        i = range_incl(i, l - sl)
             |> find(|j| sub == (self |> slice(j, j + sl)))
             |> unwrap_or(l)
         if i >= l { return Option::None }
@@ -83,13 +83,20 @@ pub fun String::find_all(self: String, sub: String) -> Sequence[Int] {
 
 pub fun String::fmt(self: String, ...values: List[String]) -> String {
     val v = values |> as_seq()
-    return self
+    val out = self
         |> split("_")
         |> reduce(|acc, e| acc
             |> concat(v |> next() |> unwrap_or("_"))
             |> concat(e)
         )
         |> unwrap_or("")
+    if v |> next() |> is_none() { return out }
+    return "The pattern '" 
+        |> concat(self) 
+        |> concat("' does not make use of all provided values (")
+        |> concat(values |> length() |> as_string())
+        |> concat(")!")
+        |> panic()
 }
 
 pub fun String::repeat(self: String, n: Int) -> String 
@@ -100,6 +107,9 @@ pub fun String::repeat(self: String, n: Int) -> String
 
 pub fun String::repeat_to(self: String, n: Int) -> String {
     val l = self |> length()
+    if l == 0 {
+        return panic("Attempt to repeat an empty string until a certain length")
+    }
     return self 
         |> repeat(n / l + 1)
         |> slice_to(n)
@@ -129,7 +139,7 @@ pub fun String::split(self: String, delim: String) -> Sequence[String] {
     val splits = self |> find(delim)
     mut anchor = 0
     return Sequence::new(|| {
-        if anchor >= l { return Option::None }
+        if anchor > l { return Option::None }
         val next = splits |> next() |> unwrap_or(l)
         val r = self |> slice(anchor, next)
         anchor = next + dl
