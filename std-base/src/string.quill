@@ -15,12 +15,23 @@ pub fun String::join(from: Sequence[String], delim: String) -> String = from
     ) 
     |> unwrap_or("")
 
+pub fun String::indices(self: String) -> Sequence[Int] 
+    = range(0, self |> length())
+
+pub fun String::indices_rep(self: String) -> Stream[Int] {
+    if 0 == (self |> length()) {
+        return panic("Attempt to get index stream from empty string!")
+    }
+    return count_from(0)
+        |> map(|i| i % (self |> length()))
+}
+
 pub fun String::codes(self: String) -> Sequence[Int] = self
     |> chars()
     |> map(String::as_code)
 
-pub fun String::codes_repeated(self: String) -> Stream[Int] = self
-    |> chars_repeated()
+pub fun String::codes_rep(self: String) -> Stream[Int] = self
+    |> chars_rep()
     |> map(String::as_code)
 
 pub fun String::get(self: String, position: Int) -> Option[String] {
@@ -81,8 +92,8 @@ pub fun String::find_all(self: String, sub: String) -> Sequence[Int] {
         |> filter(|i| sub == (self |> slice(i, i + sl)))
 }
 
-pub fun String::fmt(self: String, ...values: List[String]) -> String {
-    val v = values |> as_seq()
+pub fun String::fmt(self: String, ...inserted: List[String]) -> String {
+    val v = inserted |> values()
     val out = self
         |> split("_")
         |> reduce(|acc, e| acc
@@ -94,7 +105,7 @@ pub fun String::fmt(self: String, ...values: List[String]) -> String {
     return "The pattern '" 
         |> concat(self) 
         |> concat("' does not make use of all provided values (")
-        |> concat(values |> length() |> as_string())
+        |> concat(inserted |> length() |> as_string())
         |> concat(")!")
         |> panic()
 }

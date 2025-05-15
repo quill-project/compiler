@@ -154,19 +154,44 @@ pub fun get() {
     assert_eq(List::get(l, 128), Option::None)
 }
 
-pub fun as_seq() {
-    val a = List::as_seq(List::of("Eins", "Zwei", "Drei", "Vier"))
+pub fun indices() {
+    assert_eq(
+        List::of(2, 3, 5, 7, 11, 13)
+            |> List::indices()
+            |> List::collect(),
+        List::of(0, 1, 2, 3, 4, 5)
+    )
+    assert_eq(
+        List::of[Int]()
+            |> List::indices()
+            |> List::collect(),
+        List::of[Int]()
+    )
+}
+
+pub fun indices_rep() {
+    assert_eq(
+        List::of(2, 3, 5, 7, 11, 13)
+            |> List::indices_rep()
+            |> Stream::take(14)
+            |> List::collect(),
+        List::of(0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5, 0, 1)
+    )
+}
+
+pub fun values() {
+    val a = List::values(List::of("Eins", "Zwei", "Drei", "Vier"))
     assert_eq(Sequence::next(a), Option::Some("Eins"))
     assert_eq(Sequence::next(a), Option::Some("Zwei"))
     assert_eq(Sequence::next(a), Option::Some("Drei"))
     assert_eq(Sequence::next(a), Option::Some("Vier"))
     assert_eq(Sequence::next(a), Option::None)
-    val b = List::as_seq(List::of[Unit]())
+    val b = List::values(List::of[Unit]())
     assert_eq(Sequence::next(b), Option::None)
 }
 
-pub fun repeated() {
-    val a = List::repeated(List::of("Cat", "Dog", "Bird"))
+pub fun values_rep() {
+    val a = List::values_rep(List::of("Cat", "Dog", "Bird"))
     assert_eq(Stream::next(a), "Cat")
     assert_eq(Stream::next(a), "Dog")
     assert_eq(Stream::next(a), "Bird")
@@ -174,7 +199,7 @@ pub fun repeated() {
     assert_eq(Stream::next(a), "Dog")
     assert_eq(Stream::next(a), "Bird")
     assert_eq(Stream::next(a), "Cat")
-    val b = List::repeated(List::of(25, 50))
+    val b = List::values_rep(List::of(25, 50))
     assert_eq(Stream::next(b), 25)
     assert_eq(Stream::next(b), 50)
     assert_eq(Stream::next(b), 25)

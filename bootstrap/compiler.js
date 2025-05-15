@@ -2034,7 +2034,7 @@ const quill = (function() {
         if(t.type === Type.Function) { return; }
         const gotD = displayType(t);
         throw message.from(
-            message.error(`Expected function type, gut got '${gotD}'`),
+            message.error(`Expected function type, but got '${gotD}'`),
             message.code(node),
             message.note(`'${gotD}' originates from here:`),
             message.code(t.node)
@@ -2045,7 +2045,7 @@ const quill = (function() {
         if(t.type === Type.List) { return t.typeArgs[0]; }
         const gotD = displayType(t);
         throw message.from(
-            message.error(`Expected list, gut got '${gotD}'`),
+            message.error(`Expected list, but got '${gotD}'`),
             message.code(node),
             message.note(`'${gotD}' originates from here:`),
             message.code(t.node)

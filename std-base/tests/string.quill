@@ -40,9 +40,9 @@ pub fun chars() {
     )
 }
 
-pub fun chars_repeated() {
+pub fun chars_rep() {
     assert_eq(
-        String::chars_repeated("Hi! 😁") |> Stream::take(10) |> List::collect(),
+        String::chars_rep("Hi! 😁") |> Stream::take(10) |> List::collect(),
         List::of("H", "i", "!", " ", "😁", "H", "i", "!", " ", "😁")
     )
 }
@@ -69,15 +69,36 @@ pub fun as_hash() {
 pub fun join() {
     assert_eq(
         List::of("1", "2", "3")
-            |> List::as_seq()
+            |> List::values()
             |> String::join(", "),
         "1, 2, 3"
     )
     assert_eq(
         List::of("A", "B", "C", "D")
-            |> List::as_seq()
+            |> List::values()
             |> String::join(""),
         "ABCD"
+    )
+}
+
+pub fun indices() {
+    assert_eq(
+        "Hello!" |> String::indices() |> List::collect(),
+        List::of(0, 1, 2, 3, 4, 5)
+    )
+    assert_eq(
+        "" |> String::indices() |> List::collect(),
+        List::of[Int]()
+    )
+}
+
+pub fun indices_rep() {
+    assert_eq(
+        "Hello!"
+            |> String::indices_rep()
+            |> Stream::take(14)
+            |> List::collect(),
+        List::of(0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5, 0, 1)
     )
 }
 
@@ -88,9 +109,9 @@ pub fun codes() {
     )
 }
 
-pub fun codes_repeated() {
+pub fun codes_rep() {
     assert_eq(
-        String::codes_repeated("😁!") |> Stream::take(8) |> List::collect(),
+        String::codes_rep("😁!") |> Stream::take(8) |> List::collect(),
         List::of(128513, 33, 128513, 33, 128513, 33, 128513, 33)
     )
 }

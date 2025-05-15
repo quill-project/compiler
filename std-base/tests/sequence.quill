@@ -15,8 +15,8 @@ pub fun empty() {
 }
 
 pub fun chain() {
-    val a = List::as_seq(List::of(1, 2))
-    val b = List::as_seq(List::of(3, 4))
+    val a = List::values(List::of(1, 2))
+    val b = List::values(List::of(3, 4))
     val s = Sequence::chain(a, b)
     assert_eq(Sequence::next(s), Option::Some(1))
     assert_eq(Sequence::next(s), Option::Some(2))
@@ -26,8 +26,8 @@ pub fun chain() {
 }
 
 pub fun zip() {
-    val a = List::as_seq(List::of(1, 2, 3))
-    val b = List::as_seq(List::of(4, 5, 6))
+    val a = List::values(List::of(1, 2, 3))
+    val b = List::values(List::of(4, 5, 6))
     val s: Sequence[Int] = Sequence::zip(a, b, |x, y| x + y)
     assert_eq(Sequence::next(s), Option::Some(5))
     assert_eq(Sequence::next(s), Option::Some(7))
@@ -36,7 +36,7 @@ pub fun zip() {
 }
 
 pub fun map() {
-    val s = List::as_seq(List::of(1, 5, 9))
+    val s = List::values(List::of(1, 5, 9))
         |> Sequence::map[Int, Int](|x| x * 2)
     assert_eq(Sequence::next(s), Option::Some(2))
     assert_eq(Sequence::next(s), Option::Some(10))
@@ -45,7 +45,7 @@ pub fun map() {
 }
 
 pub fun skip() {
-    val s = List::as_seq(List::of(4, 8, 12, 16, 20))
+    val s = List::values(List::of(4, 8, 12, 16, 20))
     Sequence::skip(s, 2)
     assert_eq(Sequence::next(s), Option::Some(12))
     Sequence::skip(s, 1)
@@ -56,7 +56,7 @@ pub fun skip() {
 }
 
 pub fun take() {
-    val s = List::as_seq(List::of(4, 8, 12, 16, 20))
+    val s = List::values(List::of(4, 8, 12, 16, 20))
         |> Sequence::take(3)
     assert_eq(Sequence::next(s), Option::Some(4))
     assert_eq(Sequence::next(s), Option::Some(8))
@@ -83,10 +83,10 @@ pub fun take_until() {
 
 pub fun flatten() {
     val s = List::of(
-        List::of(1, 2) |> List::as_seq(),
-        List::of(3, 4) |> List::as_seq(),
-        List::of(5, 6) |> List::as_seq()
-    ) |> List::as_seq() |> Sequence::flatten()
+        List::of(1, 2) |> List::values(),
+        List::of(3, 4) |> List::values(),
+        List::of(5, 6) |> List::values()
+    ) |> List::values() |> Sequence::flatten()
     assert_eq(Sequence::next(s), Option::Some(1))
     assert_eq(Sequence::next(s), Option::Some(2))
     assert_eq(Sequence::next(s), Option::Some(3))
@@ -99,13 +99,13 @@ pub fun flatten() {
 pub fun length() {
     assert_eq(Sequence::length(std::range(0, 3)), 3)
     assert_eq(
-        Sequence::length(List::as_seq(List::of(4, 8, 12, 16, 20))), 
+        Sequence::length(List::values(List::of(4, 8, 12, 16, 20))), 
         5
     )
 }
 
 pub fun last() {
-    val a = List::as_seq(List::of(4, 8, 12, 16, 20))
+    val a = List::values(List::of(4, 8, 12, 16, 20))
     assert_eq(Sequence::last(a), Option::Some(20))
     assert_eq(Sequence::next(a), Option::None)
     val b = Sequence::empty[Unit]()
@@ -113,7 +113,7 @@ pub fun last() {
 }
 
 pub fun find() {
-    val s = List::as_seq(List::of(1, 3, 5, 7, 8, 9, 10, 11))
+    val s = List::values(List::of(1, 3, 5, 7, 8, 9, 10, 11))
     assert_eq(Sequence::find(s, |n| n % 2 == 0), Option::Some(8))
     assert_eq(Sequence::next(s), Option::Some(9))
     assert_eq(Sequence::next(s), Option::Some(10))
@@ -122,13 +122,13 @@ pub fun find() {
 }
 
 pub fun find_last() {
-    val s = List::as_seq(List::of(1, 3, 5, 7, 8, 9, 10, 11))
+    val s = List::values(List::of(1, 3, 5, 7, 8, 9, 10, 11))
     assert_eq(Sequence::find_last(s, |n| n % 2 == 0), Option::Some(10))
     assert_eq(Sequence::next(s), Option::None)
 }
 
 pub fun any() {
-    val a = List::as_seq(List::of(1, 3, 5, 7, 8, 9, 10, 11))
+    val a = List::values(List::of(1, 3, 5, 7, 8, 9, 10, 11))
     assert_eq(Sequence::any(a, |n| n % 2 == 0), true)
     assert_eq(Sequence::next(a), Option::Some(9))
     assert_eq(Sequence::next(a), Option::Some(10))
@@ -141,7 +141,7 @@ pub fun any() {
 }
 
 pub fun all() {
-    val a = List::as_seq(List::of(1, 3, 5, 7, 8, 9, 10, 11))
+    val a = List::values(List::of(1, 3, 5, 7, 8, 9, 10, 11))
     assert_neq(Sequence::all(a, |n| n % 2 != 0), true)
     assert_eq(Sequence::next(a), Option::Some(9))
     assert_eq(Sequence::next(a), Option::Some(10))
@@ -155,7 +155,7 @@ pub fun all() {
 
 pub fun fold() {
     assert_eq(
-        List::as_seq(List::of(2, 3, 5, 7, 11))
+        List::values(List::of(2, 3, 5, 7, 11))
             |> Sequence::fold(0.0, |acc, n| acc + Int::as_float(n)), 
         2.0 + 3.0 + 5.0 + 7.0 + 11.0
     )
@@ -163,7 +163,7 @@ pub fun fold() {
 
 pub fun reduce() {
     assert_eq(
-        List::as_seq(List::of(2, 3, 5, 7, 11))
+        List::values(List::of(2, 3, 5, 7, 11))
             |> Sequence::reduce(|a, b| a + b), 
         Option::Some(2 + 3 + 5 + 7 + 11)
     )
@@ -174,7 +174,7 @@ pub fun reduce() {
 }
 
 pub fun filter() {
-    val s = List::as_seq(List::of(1, 3, 5, 7, 8, 9, 10, 11))
+    val s = List::values(List::of(1, 3, 5, 7, 8, 9, 10, 11))
         |> Sequence::filter(|n| n % 2 == 0)
     assert_eq(Sequence::next(s), Option::Some(8))
     assert_eq(Sequence::next(s), Option::Some(10))

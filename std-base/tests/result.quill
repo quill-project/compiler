@@ -122,18 +122,18 @@ pub fun is_err() {
     assert_eq(Result::is_err(Result::Err[Int, Bool](false)), true)
 }
 
-pub fun as_seq() {
-    val a = Result::as_seq(Result::Ok[Int, Bool](25))
+pub fun ok_seq() {
+    val a = Result::ok_seq(Result::Ok[Int, Bool](25))
     assert_eq(Sequence::next(a), Option::Some(25))
     assert_eq(Sequence::next(a), Option::None)
-    val b = Result::as_seq(Result::Err[Int, Bool](false))
+    val b = Result::ok_seq(Result::Err[Int, Bool](false))
     assert_eq(Sequence::next(b), Option::None)
 }
 
-pub fun err_as_seq() {
-    val a = Result::err_as_seq(Result::Ok[Int, Bool](25))
+pub fun err_seq() {
+    val a = Result::err_seq(Result::Ok[Int, Bool](25))
     assert_eq(Sequence::next(a), Option::None)
-    val b = Result::err_as_seq(Result::Err[Int, Bool](false))
+    val b = Result::err_seq(Result::Err[Int, Bool](false))
     assert_eq(Sequence::next(b), Option::Some(false))
     assert_eq(Sequence::next(b), Option::None)
 }

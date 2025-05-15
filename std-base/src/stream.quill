@@ -70,8 +70,8 @@ pub fun Stream::take_until[T](self: Stream[T], cond: Fun(T) -> Bool) -> Sequence
 // since all of them are empty.
 // An example of this is having a list of sequence objects, converting
 // it to a sequence and then using this function on the result:
-// `List::repeated(List::of(List::as_seq(List::of(1, 2)), List::as_seq(List::of(3, 4))))`
-// The list stores references to the sequences it contains, and `List::repeated`
+// `List::values_rep(List::of(List::values(List::of(1, 2)), List::values(List::of(3, 4))))`
+// The list stores references to the sequences it contains, and `List::values_rep`
 // naturally won't construct new sequences, but repeatedly return those same references.
 // To avoid this, store functions that construct the sequences instead,
 // create a stream of those and use 'std::Stream::map' to actually construct

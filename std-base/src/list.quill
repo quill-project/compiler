@@ -3,14 +3,14 @@ mod std
 
 pub fun List::as_string[T](self: List[T]) -> String {
     val contents = self
-        |> as_seq()
+        |> values()
         |> map(T::as_string)
         |> join(", ")
     return "List(" |> concat(contents) |> concat(")")
 }
 
 pub fun List::as_hash[T](self: List[T]) -> Int = self
-    |> as_seq()
+    |> values()
     |> map(T::as_hash)
     |> reduce(hash::combine)
     |> unwrap_or(0)
@@ -42,11 +42,22 @@ pub fun List::slice_from[T](self: List[T], start: Int) -> List[T]
 pub fun List::slice_to[T](self: List[T], end: Int) -> List[T]
     = self |> slice(0, end)
 
-pub fun List::as_seq[T](self: List[T]) -> Sequence[T]
+pub fun List::indices[T](self: List[T]) -> Sequence[Int] 
+    = range(0, self |> length())
+
+pub fun List::indices_rep[T](self: List[T]) -> Stream[Int] {
+    if 0 == (self |> length()) {
+        return panic("Attempt to get index stream from empty list!")
+    }
+    return count_from(0)
+        |> map(|i| i % (self |> length()))
+}
+
+pub fun List::values[T](self: List[T]) -> Sequence[T]
     = range(0, self |> length())
     |> map[Int, T](|i| self |> get_unchecked(i % (self |> length())))
 
-pub fun List::repeated[T](self: List[T]) -> Stream[T] {
+pub fun List::values_rep[T](self: List[T]) -> Stream[T] {
     if 0 == (self |> length()) {
         return panic("Attempt to get element stream from empty list!")
     }

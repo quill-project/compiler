@@ -16,7 +16,7 @@ pub ext fun Float::as_string(self: Float) -> String = "
 "
 
 pub ext fun Float::as_int(self: Float) -> Int = "
-    return BigInt(self);
+    return BigInt(Math.trunc(self));
 "
 
 
@@ -114,7 +114,7 @@ pub fun String::chars(self: String) -> Sequence[String] {
     })
 }
 
-pub fun String::chars_repeated(self: String) -> Stream[String] {
+pub fun String::chars_rep(self: String) -> Stream[String] {
     if 0 == (self |> length()) {
         return panic("Attempt to get char stream from empty string!")
     }

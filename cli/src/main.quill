@@ -2,39 +2,21 @@
 mod quill::cli
 
 fun main() {
-    List::of(1, 2, 3)
-        |> repeated()
-        |> take(9)
-        |> for_each(println)
-    count_from(50)
-        |> take(5)
-        |> List::collect()
-        |> println()
-    fibonacci()
-        |> take(20)
-        |> for_each(println)
-    primes()
-        |> take(20)
-        |> for_each(println)
+    val grades: Map[String, Int] = Map::empty()
+    grades |> set("Bob", 3)
+    grades |> set("Mike", 5)
+    grades |> set("Gabriela", 6)
+    println(grades)
+    println(grades |> get("Bob"))
+    println(grades |> get("Laura"))
 }
 
-fun fibonacci() -> Stream[Int] {
-    mut a = 0
-    mut b = 1
-    return Stream::new(|| {
-        val i = a
-        val c = a + b
-        a = b
-        b = c
-        return i
-    })
-}
 
-fun is_prime(n: Int) -> Bool 
-    = range_incl(2, n / 2)
-    |> find(|d| n % d == 0)
-    |> is_none()
 
-fun primes() -> Stream[Int]
-    = count_from(2)
-    |> filter(is_prime)
+
+
+
+
+
+
+
