@@ -47,6 +47,35 @@ pub fun Stream::take_until[T](self: Stream[T], cond: Fun(T) -> Bool) -> Sequence
     })
 }
 
+// For every requested item the stream returned by this function will attempt
+// to find a sequence returned by 'self' which can provide a next value,
+// resulting in a new stream that contains all values of all the sequences
+// returned by 'self' in their respective order.
+//
+// Important!
+//
+// Note that because the returned stream will keep polling 'self' for a
+// non-empty sequence, the stream returned by this function 
+// will keep calling 'self' FOREVER if all of the sequences returned by 'self' 
+// are empty, resulting in the stream never actually returning.
+// To avoid this, you can convert the stream to a finite sequence using
+// 'std::Stream::take', 'std::Stream::take_while' or 'std::Stream::take_until'
+// and then use 'std::Sequence::flatten' instead, which can simply return after
+// reaching the end of the sequence and therefore does not have this issue.
+//
+// While using this function, also be aware that sequences are passed by reference,
+// meaning that if 'self' repeatedly returns the same sequence objects
+// this function will fully exhaust each of them once, after which they will
+// be empty, resulting in the function looping forever (as described above)
+// since all of them are empty.
+// An example of this is having a list of sequence objects, converting
+// it to a sequence and then using this function on the result:
+// `List::repeated(List::of(List::as_seq(List::of(1, 2)), List::as_seq(List::of(3, 4))))`
+// The list stores references to the sequences it contains, and `List::repeated`
+// naturally won't construct new sequences, but repeatedly return those same references.
+// To avoid this, store functions that construct the sequences instead,
+// create a stream of those and use 'std::Stream::map' to actually construct
+// them on demand.
 pub fun Stream::flatten[T](self: Stream[Sequence[T]]) -> Stream[T] {
     mut inner: Sequence[T] = self |> next()
     return Stream::new(|| {
@@ -64,13 +93,20 @@ pub fun Stream::flatten[T](self: Stream[Sequence[T]]) -> Stream[T] {
 
 pub fun Stream::next[T](self: Stream[T]) -> T = self.next()
 
-// For every requested item, the stream returned by this function repeatedly
-// requests items from the stream provided as `self` until it finds one for
-// which the function provided as `cond` returns `true`.
-// This means that situations in which `cond` returns `false` for all items 
-// returned by `self` result in `filter` never terminating.
-// Note that `take`, `take_while` and `take_until` can be used to return
-// a finite sequence instead.
+// For every requested item the stream returned by this function will attempt
+// to find and return the next value in 'self' for which the function 'cond'
+// returns true.
+//
+// Important!
+//
+// Note that because the returned stream will keep polling 'self' for a value
+// that meets the provided condition, the stream returned by this function
+// will keep calling 'self' FOREVER if none of the elements in 'self' ever
+// meet the condition.
+// To avoid this, you can convert the stream to a finite sequence using
+// 'std::Stream::take', 'std::Stream::take_while' or 'std::Stream::take_until'
+// and then use 'std::Sequence::filter' instead, which can simply return after
+// reaching the end of the sequence and therefore does not have this issue.
 pub fun Stream::filter[T](self: Stream[T], cond: Fun(T) -> Bool) -> Stream[T] 
     = Stream::new(|| {
         mut current = self |> next()

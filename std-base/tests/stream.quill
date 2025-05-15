@@ -67,18 +67,19 @@ pub fun take_until() {
 }
 
 pub fun flatten() {
-    val sequences: List[Fun() -> Sequence[Int]] = List::of(
+    val sequences = List::of[Fun() -> Sequence[Int]](
         || List::of(1, 2) |> List::as_seq(),
-        || List::of(3, 4) |> List::as_seq()
+        || Sequence::empty[Int](),
+        || List::of(3, 4, 5) |> List::as_seq()
     )
     assert_eq(
         sequences 
             |> List::repeated()
-            |> Stream::map[Fun() -> Sequence[Int], Sequence[Int]](|f| f()) 
+            |> Stream::map(|f| f()) 
             |> Stream::flatten[Int]()
-            |> Stream::take(10)
+            |> Stream::take(12)
             |> List::collect(),
-        List::of(1, 2, 3, 4, 1, 2, 3, 4, 1, 2)
+        List::of(1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2)
     )
 }
 
