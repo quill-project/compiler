@@ -23,12 +23,13 @@ struct Map[K, V](
 
 // creation
 
-pub fun Map::empty[K, V]() -> Map[K, V] = Map::of[K, V]()
+pub fun Map::empty[K, V]() -> Map[K, V] 
+    = Map[K, V](0.75, 0, List::empty())
 
 pub fun Map::of[K, V](...entries: List[Map::Entry[K, V]]) -> Map[K, V]
     = entries |> as_seq() |> Map::collect[K, V]()
 
-pub fun Map::collect[K, V](from: Sequence[Map:Entry[K, V]]) -> Map[K, V] {
+pub fun Map::collect[K, V](from: Sequence[Map::Entry[K, V]]) -> Map[K, V] {
     val r: Map[K, V] = Map::empty()
     from |> for_each(|entry| { r |> insert(entry) })
     return r
@@ -36,13 +37,31 @@ pub fun Map::collect[K, V](from: Sequence[Map:Entry[K, V]]) -> Map[K, V] {
 
 // modification
 
-pub fun Map::with_load_factor(self: Map[K, V], load_factor: Float) -> Map[K, V] {
+pub fun Map::with_load_factor[K, V](self: Map[K, V], load_factor: Float) -> Map[K, V] {
     self.load_factor = load_factor
     return self
 }
 
+pub fun Map::with_capacity[K, V](self: Map[K, V], capacity: Int) -> Map[K, V] {
+    return panic("Not yet implemented!")
+}
+
 pub fun Map::insert[K, V](self: Map[K, V], entry: Map::Entry[K, V]) -> Option[V] {
-    // TODO!
+    // TODO! RESIZE
+    val bucket_i = Int::abs(K::as_hash(entry.key)) % (self.buckets |> length())
+    val bucket = self.buckets |> at(bucket_i)
+    return bucket |> as_seq()
+        |> find(|e| e.key == entry.key)
+        |> map(|e| {
+            val replaced = e.value
+            e.value = entry.value
+            return Option::Some(replaced)
+        })
+        |> unwrap_or_else(|| {
+            bucket |> push(entry)
+            self.size = self.size + 1
+            return Option::None
+        })
 }
 
 pub fun Map::set[K, V](self: Map[K, V], key: K, value: V) -> Option[V]
@@ -71,18 +90,21 @@ pub fun Map::size[K, V](self: Map[K, V]) -> Int = self.size
 pub fun Map::is_empty[K, V](self: Map[K, V]) -> Bool = self.size == 0
 
 pub fun Map::get[K, V](self: Map[K, V], key: K) -> Option[V] {
-    // TODO!
+    val bucket_i = Int::abs(K::as_hash(key)) % (self.buckets |> length())
+    return self.buckets |> at(bucket_i) |> as_seq()
+        |> find(|e| e.key == key)
+        |> map(|e| e.value)
 }
 
 pub fun Map::has[K, V](self: Map[K, V], key: K) -> Bool
     = self |> get(key) |> is_some()
 
 pub fun Map::keys[K, V](self: Map[K, V]) -> Sequence[K] {
-    // TODO!
+    return panic("Not yet implemented!")
 }
 
 pub fun Map::keys_repeated[K, V](self: Map[K, V]) -> Stream[K] {
-    // TODO!
+    return panic("Not yet implemented!")
 }
 
 pub fun Map::values[K, V](self: Map[K, V]) -> Sequence[V] = self
@@ -111,12 +133,14 @@ pub fun Map::entries_repeated[K, V](self: Map[K, V]) -> Stream[Map::Entry[K, V]]
 // removal
 
 pub fun Map::remove[K, V](self: Map[K, V], key: K) -> Option[K] {
-    // TODO!
+    return panic("Not yet implemented!")
 }
 
 pub fun Map::clear[K, V](self: Map[K, V]) -> Map[K, V] {
     self.size = 0
-    self.buckets = List::of()
+    self.buckets = Stream::new(|| List::empty[Map::Entry[K, V]]()) 
+        |> take(self.buckets |> length()) 
+        |> List::collect()
     return self
 }
 

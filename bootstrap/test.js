@@ -68,6 +68,7 @@ const tests = [
     "std::tests::sequence::take",
     "std::tests::sequence::take_while",
     "std::tests::sequence::take_until",
+    "std::tests::sequence::flatten",
     "std::tests::sequence::length",
     "std::tests::sequence::last",
     "std::tests::sequence::find",
@@ -85,6 +86,7 @@ const tests = [
     "std::tests::stream::take",
     "std::tests::stream::take_while",
     "std::tests::stream::take_until",
+    "std::tests::stream::flatten",
     "std::tests::stream::filter",
     
     "std::tests::string::slice",

@@ -75,6 +75,24 @@ pub fun Sequence::take_until[T](self: Sequence[T], cond: Fun(T) -> Bool) -> Sequ
     })
 }
 
+pub fun Sequence::flatten[T](self: Sequence[Sequence[T]]) -> Sequence[T] {
+    mut inner: Option[Sequence[T]] = Option::None
+    return Sequence::new(|| {
+        mut value: Option[T] = Option::None
+        Sequence::new[Unit](|| {
+            if value |> is_some() { return Option::None }
+            inner |> map[Sequence[T], Unit](|i| {
+                value = i |> next()
+                return unit
+            })
+            if value |> is_some() { return Option::None }
+            inner = self |> Sequence::next()
+            return inner |> map[Sequence[T], Unit](|_| unit)
+        }) |> for_each(|_| {})
+        return value
+    })
+}
+
 pub fun Sequence::length[T](self: Sequence[T]) -> Int {
     mut c = 0
     self |> for_each(|_| {

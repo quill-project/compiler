@@ -47,6 +47,21 @@ pub fun Stream::take_until[T](self: Stream[T], cond: Fun(T) -> Bool) -> Sequence
     })
 }
 
+pub fun Stream::flatten[T](self: Stream[Sequence[T]]) -> Stream[T] {
+    mut inner: Sequence[T] = self |> next()
+    return Stream::new(|| {
+        mut value: Option[T] = Option::None
+        Sequence::new[Unit](|| {
+            if value |> is_some() { return Option::None }
+            value = inner |> next()
+            if value |> is_some() { return Option::None }
+            inner = self |> next()
+            return Option::Some(unit)
+        }) |> for_each(|_| {})
+        return value |> expect("loop only exits if is some")
+    })
+}
+
 pub fun Stream::next[T](self: Stream[T]) -> T = self.next()
 
 // For every requested item, the stream returned by this function repeatedly

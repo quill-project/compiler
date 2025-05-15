@@ -2,3 +2,6 @@
 mod std
 
 pub fun Int::as_hash(self: Int) -> Int = self
+
+pub fun Int::abs(self: Int) -> Int 
+    = if self < 0 { -self } else { self } 

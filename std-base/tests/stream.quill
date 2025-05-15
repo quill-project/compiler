@@ -66,6 +66,22 @@ pub fun take_until() {
     assert_eq(Sequence::last(s), Option::Some(42))
 }
 
+pub fun flatten() {
+    val sequences: List[Fun() -> Sequence[Int]] = List::of(
+        || List::of(1, 2) |> List::as_seq(),
+        || List::of(3, 4) |> List::as_seq()
+    )
+    assert_eq(
+        sequences 
+            |> List::repeated()
+            |> Stream::map[Fun() -> Sequence[Int], Sequence[Int]](|f| f()) 
+            |> Stream::flatten[Int]()
+            |> Stream::take(10)
+            |> List::collect(),
+        List::of(1, 2, 3, 4, 1, 2, 3, 4, 1, 2)
+    )
+}
+
 pub fun filter() {
     val s = std::count_from(1)
         |> Stream::filter(|n| n % 2 == 0)

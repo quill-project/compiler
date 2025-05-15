@@ -81,6 +81,21 @@ pub fun take_until() {
     assert_eq(Sequence::next(s), Option::None)
 }
 
+pub fun flatten() {
+    val s = List::of(
+        List::of(1, 2) |> List::as_seq(),
+        List::of(3, 4) |> List::as_seq(),
+        List::of(5, 6) |> List::as_seq()
+    ) |> List::as_seq() |> Sequence::flatten()
+    assert_eq(Sequence::next(s), Option::Some(1))
+    assert_eq(Sequence::next(s), Option::Some(2))
+    assert_eq(Sequence::next(s), Option::Some(3))
+    assert_eq(Sequence::next(s), Option::Some(4))
+    assert_eq(Sequence::next(s), Option::Some(5))
+    assert_eq(Sequence::next(s), Option::Some(6))
+    assert_eq(Sequence::next(s), Option::None)
+}
+
 pub fun length() {
     assert_eq(Sequence::length(std::range(0, 3)), 3)
     assert_eq(
