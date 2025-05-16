@@ -1,5 +1,9 @@
 
 const tests = [
+    "std::tests::range",
+    "std::tests::range_incl",
+    "std::tests::count_from",
+
     "std::tests::option::as_string",
     "std::tests::option::as_hash",
     "std::tests::option::and",
@@ -142,7 +146,24 @@ const tests = [
     "std::tests::map::entries",
     "std::tests::map::entries_rep",
     "std::tests::map::remove",
-    "std::tests::map::clear"
+    "std::tests::map::clear",
+
+    "std::tests::float::as_string",
+    "std::tests::float::as_int",
+    "std::tests::float::abs",
+    "std::tests::float::max",
+    "std::tests::float::min",
+    "std::tests::float::clamp",
+    "std::tests::float::sign",
+
+    "std::tests::int::as_string",
+    "std::tests::int::as_float",
+    "std::tests::int::as_hash",
+    "std::tests::int::abs",
+    "std::tests::int::max",
+    "std::tests::int::min",
+    "std::tests::int::clamp",
+    "std::tests::int::sign"
 ];
 
 const fs = require("fs");

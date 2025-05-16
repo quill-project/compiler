@@ -3467,9 +3467,9 @@ function quill$$eq(a, b) {
         }
         if(hasError(errors)) { return makeError(errors); }
         // code generation
+        const generator = createGeneratorState(checker);
         for(const path in nodes) {
             const statements = nodes[path];
-            const generator = createGeneratorState(checker);
             try {
                 code += generateVariables(statements, generator);
             } catch(error) {
@@ -3479,7 +3479,6 @@ function quill$$eq(a, b) {
         }
         for(const path in nodes) {
             const statements = nodes[path];
-            const generator = createGeneratorState(checker);
             try {
                 code += generateSymbols(statements, generator);
             } catch(error) {

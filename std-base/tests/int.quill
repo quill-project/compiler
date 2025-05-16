@@ -1,0 +1,36 @@
+
+mod std::tests::int
+
+use std::test::*
+
+pub fun as_string() {
+    panic[Unit]("not yet implemented")
+}
+
+pub fun as_float() {
+    panic[Unit]("not yet implemented")
+}
+
+pub fun as_hash() {
+    panic[Unit]("not yet implemented")
+}
+
+pub fun abs() {
+    panic[Unit]("not yet implemented")
+}
+
+pub fun max() {
+    panic[Unit]("not yet implemented")
+}
+
+pub fun min() {
+    panic[Unit]("not yet implemented")
+}
+
+pub fun clamp() {
+    panic[Unit]("not yet implemented")
+}
+
+pub fun sign() {
+    panic[Unit]("not yet implemented")
+}

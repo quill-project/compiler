@@ -1,0 +1,16 @@
+
+mod std::tests
+
+use std::test::*
+
+pub fun range() {
+    panic[Unit]("not yet implemented")
+}
+
+pub fun range_incl() {
+    panic[Unit]("not yet implemented")
+}
+
+pub fun count_from() {
+    panic[Unit]("not yet implemented")
+}

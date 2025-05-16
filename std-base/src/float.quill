@@ -1,6 +1,39 @@
 
-mod std
+mod std::Float
 
+pub val FEPSILON = 0.00000000000000022204460492503131
 pub val INF = 1.0 / 0.0
 pub val NEG_INF = -INF
 pub val NAN = 0.0 / 0.0
+
+pub val E = 2.71828182845904523536028747135266250
+pub val LN_10 = 2.30258509299404568401799145468436421
+pub val LN_2 = 0.693147180559945309417232121458176568
+pub val LOG10_E = 0.434294481903251827651128918916605082
+pub val LOG2_E = 1.44269504088896340735992468100189214
+pub val PI = 3.14159265358979323846264338327950288
+pub val TAU = PI * 2.0
+pub val SQRT_2 = 1.41421356237309504880168872420969808
+
+
+mod std
+
+pub fun Float::abs(self: Float) -> Float
+    = if self < 0.0 { -self } else { self }
+
+pub fun Float::max(a: Float, b: Float) -> Float
+    = if a >= b { a } else { b }
+
+pub fun Float::min(a: Float, b: Float) -> Float
+    = if a <= b { a } else { b }
+
+pub fun Float::clamp(self: Float, min: Float, max: Float) -> Float
+    = if self < min { min }
+    else if self > max { max }
+    else { self }
+
+pub fun Float::sign(self: Float) -> Float
+    = if self < 0.0 { -1.0 }
+    else if self > 0.0 { 1.0 }
+    else if self == 0.0 { 0.0 }
+    else { Float::NAN }
