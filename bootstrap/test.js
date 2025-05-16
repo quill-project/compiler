@@ -118,7 +118,31 @@ const tests = [
     "std::tests::string::pad_begin",
     "std::tests::string::pad_end",
     "std::tests::string::split",
-    "std::tests::string::replace"
+    "std::tests::string::replace",
+
+    "std::tests::map::empty",
+    "std::tests::map::of",
+    "std::tests::map::collect",
+    "std::tests::map::set_load_factor",
+    "std::tests::map::set_capacity",
+    "std::tests::map::insert",
+    "std::tests::map::set",
+    "std::tests::map::as_string",
+    "std::tests::map::as_hash",
+    "std::tests::map::load_factor",
+    "std::tests::map::capacity",
+    "std::tests::map::size",
+    "std::tests::map::is_empty",
+    "std::tests::map::get",
+    "std::tests::map::has",
+    "std::tests::map::keys",
+    "std::tests::map::keys_rep",
+    "std::tests::map::values",
+    "std::tests::map::values_rep",
+    "std::tests::map::entries",
+    "std::tests::map::entries_rep",
+    "std::tests::map::remove",
+    "std::tests::map::clear"
 ];
 
 const fs = require("fs");

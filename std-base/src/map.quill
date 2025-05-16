@@ -50,6 +50,7 @@ pub fun Map::set_capacity[K, V](self: Map[K, V], capacity: Int) -> Map[K, V] {
         |> values()
         |> map[List[Entry[K, V]], Sequence[Entry[K, V]]](List::values)
         |> flatten()
+    self.size = 0
     self.buckets = Stream::new[List[Entry[K, V]]](|| List::empty()) 
         |> take(capacity)
         |> List::collect()
@@ -75,7 +76,7 @@ pub fun Map::insert[K, V](self: Map[K, V], entry: Entry[K, V]) -> Option[V] {
             return Option::None
         })
     val threshold = Float::as_int(Int::as_float(capacity) * self.load_factor)
-    if self.size >= threshold { self |> set_capacity(capacity * 2) }
+    if self.size > threshold { self |> set_capacity(capacity * 2) }
     return replaced
 }
 
@@ -98,11 +99,17 @@ pub fun Map::as_hash[K, V](self: Map[K, V]) -> Int = self
     |> reduce(hash::combine) 
     |> unwrap_or(0)
 
-pub fun Map::load_factor[K, V](self: Map[K, V]) -> Float = self.load_factor
+pub fun Map::load_factor[K, V](self: Map[K, V]) -> Float 
+    = self.load_factor
 
-pub fun Map::size[K, V](self: Map[K, V]) -> Int = self.size
+pub fun Map::capacity[K, V](self: Map[K, V]) -> Int 
+    = self.buckets |> length()
 
-pub fun Map::is_empty[K, V](self: Map[K, V]) -> Bool = self.size == 0
+pub fun Map::size[K, V](self: Map[K, V]) -> Int
+    = self.size
+
+pub fun Map::is_empty[K, V](self: Map[K, V]) -> Bool 
+    = self.size == 0
 
 pub fun Map::get[K, V](self: Map[K, V], key: K) -> Option[V] {
     val bucket_i = Int::abs(K::as_hash(key)) % (self.buckets |> length())
@@ -117,7 +124,10 @@ pub fun Map::has[K, V](self: Map[K, V], key: K) -> Bool
 pub fun Map::keys[K, V](self: Map[K, V]) -> Sequence[K]
     = self.buckets 
     |> values()
-    |> map[List[Entry[K, V]], Sequence[K]](|b| b |> values() |> map(|e| e.key))
+    |> map[List[Entry[K, V]], Sequence[K]](|b| b 
+        |> values() 
+        |> map(|e| e.key)
+    )
     |> flatten()
 
 pub fun Map::keys_rep[K, V](self: Map[K, V]) -> Stream[K] {
@@ -126,17 +136,26 @@ pub fun Map::keys_rep[K, V](self: Map[K, V]) -> Stream[K] {
     }
     return self.buckets
         |> values_rep()
-        |> map(|b| b |> values() |> map(|e| e.key))
+        |> map[List[Entry[K, V]], Sequence[K]](|b| b 
+            |> values() 
+            |> map(|e| e.key)
+        )
         |> flatten()
 }
 
 pub fun Map::values[K, V](self: Map[K, V]) -> Sequence[V] = self
     |> keys()
-    |> map(|k| self |> get(k) |> expect("Map modified during iteration!"))
+    |> map(|k| self 
+        |> get(k) 
+        |> expect("Map modified during iteration!")
+    )
 
 pub fun Map::values_rep[K, V](self: Map[K, V]) -> Stream[V] = self
     |> keys_rep()
-    |> map(|k| self |> get(k) |> expect("Map modified during iteration!"))
+    |> map(|k| self 
+        |> get(k) 
+        |> expect("Map modified during iteration!")
+    )
 
 pub fun Map::entries[K, V](self: Map[K, V]) -> Sequence[Entry[K, V]] = self 
     |> keys() 
@@ -168,7 +187,7 @@ pub fun Map::remove[K, V](self: Map[K, V], key: K) -> Option[V] {
 
 pub fun Map::clear[K, V](self: Map[K, V]) -> Map[K, V] {
     self.size = 0
-    self.buckets = Stream::new(|| List::empty[Entry[K, V]]()) 
+    self.buckets = Stream::new[List[Entry[K, V]]](|| List::empty()) 
         |> take(self.buckets |> length()) 
         |> List::collect()
     return self
