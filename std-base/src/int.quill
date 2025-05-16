@@ -7,6 +7,13 @@ pub val MIN = -9223372036854775807 - 1
 
 mod std
 
+pub fun Int::add(lhs: Int, rhs: Int) -> Int = lhs + rhs
+pub fun Int::subtract(lhs: Int, rhs: Int) -> Int = lhs - rhs
+pub fun Int::multiply(lhs: Int, rhs: Int) -> Int = lhs * rhs
+pub fun Int::divide(lhs: Int, rhs: Int) -> Int = lhs / rhs
+pub fun Int::modulo(lhs: Int, rhs: Int) -> Int = lhs % rhs
+pub fun Int::negate(x: Int) -> Int = -x
+
 pub fun Int::as_hash(self: Int) -> Int = self
 
 pub fun Int::abs(self: Int) -> Int 
@@ -19,7 +26,8 @@ pub fun Int::min(a: Int, b: Int) -> Int
     = if a <= b { a } else { b }
 
 pub fun Int::clamp(self: Int, min: Int, max: Int) -> Int
-    = if self < min { min }
+    = if min > max { panic[Int]("Attempt to clamp to an invalid range") }
+    else if self < min { min }
     else if self > max { max }
     else { self }
 

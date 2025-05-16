@@ -150,6 +150,8 @@ const tests = [
 
     "std::tests::float::as_string",
     "std::tests::float::as_int",
+    "std::tests::float::as_radians",
+    "std::tests::float::as_degrees",
     "std::tests::float::abs",
     "std::tests::float::max",
     "std::tests::float::min",
@@ -199,6 +201,7 @@ console.error(result.messages
     .join("\n\n")
 );
 if(result.success) {
+    fs.writeFileSync("bootstrap/build.js", result.code);
     eval(result.code);
     let failed = 0;
     for(const test of tests) {

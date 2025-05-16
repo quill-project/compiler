@@ -12,13 +12,20 @@ pub ext fun panic[T](reason: String) -> T = "
 
 
 pub ext fun Float::as_string(self: Float) -> String = "
-    return '' + self;
+    if(Number.isFinite(self)) { return '' + self; }
+    if(Number.isNaN(self)) { return 'nan'; }
+    if(self === Infinity) { return 'inf'; }
+    if(self === -Infinity) { return '-inf'; }
+    return '<unable to display>';
 "
 
 pub ext fun Float::as_int(self: Float) -> Int = "
     return BigInt(Math.trunc(self));
 "
 
+pub ext fun Float::is_nan(self: Float) -> Bool = "return Number.isNaN(self);"
+pub ext fun Float::is_infinite(self: Float) -> Bool = "return Number.isInfinite(self);"
+pub ext fun Float::is_finite(self: Float) -> Bool = "return Number.isFinite(self);"
 pub ext fun Float::acos(self: Float) -> Float = "return Math.acos(self);"
 pub ext fun Float::acosh(self: Float) -> Float = "return Math.acosh(self);"
 pub ext fun Float::asin(self: Float) -> Float = "return Math.asin(self);"

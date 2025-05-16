@@ -3,14 +3,32 @@ mod std::tests
 
 use std::test::*
 
+pub fun equal[T](a: T, b: T) -> Bool = a == b
+pub fun not_equal[T](a: T, b: T) -> Bool = a != b
+
 pub fun range() {
-    panic[Unit]("not yet implemented")
+    assert_eq(
+        std::range(0, 10) |> List::collect(),
+        List::of(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+    )
+    assert_eq(std::range(5, 0) |> Sequence::length(), 0)
 }
 
 pub fun range_incl() {
-    panic[Unit]("not yet implemented")
+    assert_eq(
+        std::range_incl(0, 10) |> List::collect(),
+        List::of(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+    )
+    assert_eq(std::range_incl(5, 0) |> Sequence::length(), 0)
 }
 
 pub fun count_from() {
-    panic[Unit]("not yet implemented")
+    assert_eq(
+        std::count_from(5) |> Stream::take(10) |> List::collect(),
+        List::of(5, 6, 7, 8, 9, 10, 11, 12, 13, 14)
+    )
+    assert_eq(
+        std::count_from(-2) |> Stream::take(10) |> List::collect(),
+        List::of(-2, -1, 0, 1, 2, 3, 4, 5, 6, 7)
+    )
 }

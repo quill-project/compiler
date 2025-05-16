@@ -3203,7 +3203,7 @@ function quill$$eq(a, b) {
             }
             case NodeType.IfExpr: {
                 const cond = generateCode(node.cond, state);
-                const out = state.alloc();
+                const out = intoOrAlloc();
                 state.enterScope();
                 generateCode(node.ifValue, state, out);
                 const ifBody = state.scope().output;

@@ -18,6 +18,19 @@ pub val SQRT_2 = 1.41421356237309504880168872420969808
 
 mod std
 
+pub fun Float::add(lhs: Float, rhs: Float) -> Float = lhs + rhs
+pub fun Float::subtract(lhs: Float, rhs: Float) -> Float = lhs - rhs
+pub fun Float::multiply(lhs: Float, rhs: Float) -> Float = lhs * rhs
+pub fun Float::divide(lhs: Float, rhs: Float) -> Float = lhs / rhs
+pub fun Float::modulo(lhs: Float, rhs: Float) -> Float = lhs % rhs
+pub fun Float::negate(x: Float) -> Float = -x
+
+pub fun Float::as_radians(self: Float) -> Float
+    = self * Float::TAU / 360.0
+
+pub fun Float::as_degrees(self: Float) -> Float
+    = self * 360.0 / Float::TAU
+
 pub fun Float::abs(self: Float) -> Float
     = if self < 0.0 { -self } else { self }
 
@@ -28,7 +41,8 @@ pub fun Float::min(a: Float, b: Float) -> Float
     = if a <= b { a } else { b }
 
 pub fun Float::clamp(self: Float, min: Float, max: Float) -> Float
-    = if self < min { min }
+    = if min > max { panic[Float]("Attempt to clamp to an invalid range") }
+    else if self < min { min }
     else if self > max { max }
     else { self }
 
