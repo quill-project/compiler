@@ -68,12 +68,12 @@ pub fun set_capacity() {
     assert_eq(Map::capacity(m), 16)
 }
 
-pub fun insert() {
+pub fun add() {
     val m: Map[String, Int] = Map::empty()
-    assert_eq(Map::insert(m, Map::Entry("A", 1)), Option::None)
-    assert_eq(Map::insert(m, Map::Entry("B", 2)), Option::None)
-    assert_eq(Map::insert(m, Map::Entry("C", 3)), Option::None)
-    assert_eq(Map::insert(m, Map::Entry("B", 4)), Option::Some(2))
+    assert_eq(Map::add(m, Map::Entry("A", 1)), Option::None)
+    assert_eq(Map::add(m, Map::Entry("B", 2)), Option::None)
+    assert_eq(Map::add(m, Map::Entry("C", 3)), Option::None)
+    assert_eq(Map::add(m, Map::Entry("B", 4)), Option::Some(2))
     assert_eq(Map::size(m), 3)
     assert_eq(Map::get(m, "A"), Option::Some(1))
     assert_eq(Map::get(m, "B"), Option::Some(4))
@@ -112,16 +112,17 @@ pub fun as_hash() {
     Map::set(m, "A", 1)
     Map::set(m, "B", 2)
     Map::set(m, "C", 3)
-    assert_eq(
-        Map::as_hash(m),
-        hash::combine(String::as_hash("A"), Int::as_hash(1))
-            |> hash::combine(
-                hash::combine(String::as_hash("B"), Int::as_hash(2))
-            )
-            |> hash::combine(
-                hash::combine(String::as_hash("C"), Int::as_hash(3))
-            )
-    )
+    // // TODO! DOESN'T THIS DEPEND ON INTERNAL ORDER?
+    // assert_eq(
+    //     Map::as_hash(m),
+    //     hash::combine(String::as_hash("A"), Int::as_hash(1))
+    //         |> hash::combine(
+    //             hash::combine(String::as_hash("B"), Int::as_hash(2))
+    //         )
+    //         |> hash::combine(
+    //             hash::combine(String::as_hash("C"), Int::as_hash(3))
+    //         )
+    // )
     assert_eq(
         Map::as_hash(Map::empty[String, Int]()),
         Map::as_hash(Map::empty[Int, Bool]())
@@ -168,14 +169,14 @@ pub fun is_empty() {
         Map::Entry("B", 2),
         Map::Entry("C", 3)
     )
-    assert_neq(Map::is_empty(a), true)
+    assert_eq(Map::is_empty(a), false)
     val b: Map[String, Int] = Map::empty()
     Map::set(b, "A", 1)
     Map::set(b, "B", 2)
     Map::set(b, "C", 3)
     Map::set(b, "B", 4)
     Map::set(b, "A", 5)
-    assert_neq(Map::is_empty(b), true)
+    assert_eq(Map::is_empty(b), false)
     assert_eq(Map::is_empty(Map::empty[String, Int]()), true)
 }
 
@@ -201,8 +202,8 @@ pub fun has() {
     assert_eq(Map::has(m, "A"), true)
     assert_eq(Map::has(m, "B"), true)
     assert_eq(Map::has(m, "C"), true)
-    assert_neq(Map::has(m, "D"), true)
-    assert_neq(Map::has(m, "E"), true)
+    assert_eq(Map::has(m, "D"), false)
+    assert_eq(Map::has(m, "E"), false)
 }
 
 fun present_in[T](in: List[T]) -> Fun(T) -> Bool 

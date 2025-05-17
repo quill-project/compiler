@@ -21,11 +21,6 @@ pub fun assert_neq[T](lhs: T, rhs: T) {
         |> panic[Unit]()
 }
 
-pub fun assert(cond: Bool) {
-    if cond { return unit }
-    panic[Unit]("Assertion failed")
-}
-
 pub fun assert_unreachable[T]() -> T {
     return panic[T]("Assertion of unreachability failed")
 }

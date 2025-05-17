@@ -34,7 +34,7 @@ pub fun Map::of[K, V](...entries: List[Entry[K, V]]) -> Map[K, V]
 
 pub fun Map::collect[K, V](from: Sequence[Entry[K, V]]) -> Map[K, V] {
     val r: Map[K, V] = Map::empty()
-    from |> for_each(|entry| { r |> insert(entry) })
+    from |> for_each(|entry| { r |> add(entry) })
     return r
 }
 
@@ -54,11 +54,11 @@ pub fun Map::set_capacity[K, V](self: Map[K, V], capacity: Int) -> Map[K, V] {
     self.buckets = Stream::new[List[Entry[K, V]]](|| List::empty()) 
         |> take(capacity)
         |> List::collect()
-    entries |> for_each(|entry| { self |> insert(entry) })
+    entries |> for_each(|entry| { self |> add(entry) })
     return self
 }
 
-pub fun Map::insert[K, V](self: Map[K, V], entry: Entry[K, V]) -> Option[V] {
+pub fun Map::add[K, V](self: Map[K, V], entry: Entry[K, V]) -> Option[V] {
     if 0 == (self.buckets |> length()) { self |> set_capacity(16) }
     val capacity = self.buckets |> length()
     val bucket_i = Int::abs(K::as_hash(entry.key)) % capacity
@@ -81,7 +81,7 @@ pub fun Map::insert[K, V](self: Map[K, V], entry: Entry[K, V]) -> Option[V] {
 }
 
 pub fun Map::set[K, V](self: Map[K, V], key: K, value: V) -> Option[V]
-    = self |> insert(Entry(key, value))
+    = self |> add(Entry(key, value))
 
 // access
 

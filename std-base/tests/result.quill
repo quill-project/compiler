@@ -114,11 +114,11 @@ pub fun get_err() {
 
 pub fun is_ok() {
     assert_eq(Result::is_ok(Result::Ok[Int, Bool](25)), true)
-    assert_neq(Result::is_ok(Result::Err[Int, Bool](false)), true)
+    assert_eq(Result::is_ok(Result::Err[Int, Bool](false)), false)
 }
 
 pub fun is_err() {
-    assert_neq(Result::is_err(Result::Ok[Int, Bool](25)), true)
+    assert_eq(Result::is_err(Result::Ok[Int, Bool](25)), false)
     assert_eq(Result::is_err(Result::Err[Int, Bool](false)), true)
 }
 

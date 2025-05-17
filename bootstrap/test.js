@@ -129,7 +129,7 @@ const tests = [
     "std::tests::map::collect",
     "std::tests::map::set_load_factor",
     "std::tests::map::set_capacity",
-    "std::tests::map::insert",
+    "std::tests::map::add",
     "std::tests::map::set",
     "std::tests::map::as_string",
     "std::tests::map::as_hash",

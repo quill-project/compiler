@@ -236,8 +236,8 @@ pub fun collect() {
 
 pub fun is_empty() {
     assert_eq(List::is_empty(List::of[Float]()), true)
-    assert_neq(List::is_empty(List::of(1, 2, 3)), true)
-    assert_neq(List::is_empty(List::of("Hello")), true)
+    assert_eq(List::is_empty(List::of(1, 2, 3)), false)
+    assert_eq(List::is_empty(List::of("Hello")), false)
 }
 
 pub fun remove() {

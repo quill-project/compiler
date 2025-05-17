@@ -142,7 +142,7 @@ pub fun slice_to() {
 
 pub fun starts_with() {
     assert_eq(String::starts_with("Hello, world!", "Hell"), true)
-    assert_neq(String::starts_with("Hello, world!", "world"), true)
+    assert_eq(String::starts_with("Hello, world!", "world"), false)
     assert_eq(String::starts_with("Hello, world!", ""), true)
 }
 
@@ -150,7 +150,7 @@ pub fun ends_with() {
     assert_eq(String::ends_with("Hello, world!", "!"), true)
     assert_eq(String::ends_with("Hello, world!", "world!"), true)
     assert_eq(String::ends_with("Hello, world!", ""), true)
-    assert_neq(String::ends_with("Hello, world!", "yay"), true)
+    assert_eq(String::ends_with("Hello, world!", "yay"), false)
 }
 
 pub fun find() {

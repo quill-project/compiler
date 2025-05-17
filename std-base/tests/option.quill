@@ -93,11 +93,11 @@ pub fun map() {
 
 pub fun is_some() {
     assert_eq(Option::is_some(Option::Some(3)), true)
-    assert_neq(Option::is_some(Option::None[String]), true)
+    assert_eq(Option::is_some(Option::None[String]), false)
 }
 
 pub fun is_none() {
-    assert_neq(Option::is_none(Option::Some(2)), true)
+    assert_eq(Option::is_none(Option::Some(2)), false)
     assert_eq(Option::is_none(Option::None[Float]), true)
 }
 
