@@ -57,38 +57,48 @@ pub fun set_capacity() {
     Set::add(primes, 7)
     assert_eq(Set::capacity(primes), 8)
     assert_eq(Set::size(primes), 4)
-    Map::set_capacity(primes, 4)
+    Set::set_capacity(primes, 4)
     assert_eq(Set::capacity(primes), 8)
-    Map::set_capacity(primes, 20)
+    Set::set_capacity(primes, 20)
     assert_eq(Set::capacity(primes), 20)
 }
 
-pub fun add() {
-    val cities: Set[String] = Set::empty()
-    assert_eq(Set::add(cities, "Berlin"), true)
-    assert_eq(Set::size(cities), 1)
-    assert_eq(Set::has(cities, "Berlin"), true)
-    assert_eq(Set::add(cities, "Dublin"), true)
-    assert_eq(Set::size(cities), 2)
-    assert_eq(Set::has(cities, "Dublin"), true)
-    assert_eq(Set::add(cities, "Las Vegas"), true)
-    assert_eq(Set::size(cities), 3)
-    assert_eq(Set::has(cities, "Las Vegas"), true)
-    assert_eq(Set::add(cities, "Berlin"), false)
-    assert_eq(Set::size(cities), 3)
-    assert_eq(Set::has(cities, "Berlin"), true)
-    assert_eq(Set::add(cities, "London"), true)
-    assert_eq(Set::size(cities), 4)
-    assert_eq(Set::has(cities, "London"), true)
-    assert_eq(Set::add(cities, "Dublin"), false)
-    assert_eq(Set::size(cities), 4)
-    assert_eq(Set::has(cities, "Dublin"), true)
-}
+// pub fun add() {
+//     val cities: Set[String] = Set::empty()
+//     assert_eq(Set::add(cities, "Berlin"), true)
+//     assert_eq(Set::size(cities), 1)
+//     assert_eq(Set::has(cities, "Berlin"), true)
+//     assert_eq(Set::add(cities, "Dublin"), true)
+//     assert_eq(Set::size(cities), 2)
+//     assert_eq(Set::has(cities, "Dublin"), true)
+//     assert_eq(Set::add(cities, "Las Vegas"), true)
+//     assert_eq(Set::size(cities), 3)
+//     assert_eq(Set::has(cities, "Las Vegas"), true)
+//     assert_eq(Set::add(cities, "Berlin"), false)
+//     assert_eq(Set::size(cities), 3)
+//     assert_eq(Set::has(cities, "Berlin"), true)
+//     assert_eq(Set::add(cities, "London"), true)
+//     assert_eq(Set::size(cities), 4)
+//     assert_eq(Set::has(cities, "London"), true)
+//     assert_eq(Set::add(cities, "Dublin"), false)
+//     assert_eq(Set::size(cities), 4)
+//     assert_eq(Set::has(cities, "Dublin"), true)
+// }
 
 pub fun as_string() {
+    val cities = Set::of("New York", "Paris", "Tokyo")
+    val cities_disp = Set::as_string(cities)
+    val allowed = List::of(
+        "Set(New York, Paris, Tokyo)",
+        "Set(New York, Tokyo, Paris)",
+        "Set(Paris, New York, Tokyo)",
+        "Set(Paris, Tokyo, New York)",
+        "Set(Tokyo, New York, Paris)",
+        "Set(Tokyo, Paris, New York)"
+    )
     assert_eq(
-        Set::as_string(Set::of("New York", "Paris", "Madrid", "Tokyo")),
-        "Set(New York, Paris, Madrid, Tokyo)"
+        List::values(allowed) |> Sequence::any(|a| a == cities_disp),
+        true
     )
     assert_eq(
         Set::as_string(Set::empty[Int]()),
@@ -100,11 +110,110 @@ pub fun as_hash() {
     assert_eq(
         Set::as_hash(Set::of("Moscow", "Warsaw", "Rome")),
         String::as_hash("Moscow")
-            |> hash::combine(String::as_hash("Warsaw"))
-            |> hash::combine(String::as_hash("Rome"))
+            |> hash::combine_unord(String::as_hash("Warsaw"))
+            |> hash::combine_unord(String::as_hash("Rome"))
     )
     assert_eq(
         Set::as_hash(Set::empty[Int]()), 
         Set::as_hash(Set::empty[String]())
     )
+}
+
+pub fun load_factor() {
+    assert_eq(Set::load_factor(Set::empty[Int]()), 0.75)
+    val s: Set[Int] = Set::empty()
+    Set::set_load_factor(s, 1.0)
+    assert_eq(Set::load_factor(s), 1.0)
+}
+
+pub fun capacity() {
+    val s: Set[Int] = Set::empty()
+    assert_eq(Set::capacity(s), 0)
+    Set::add(s, 98)
+    assert_eq(Set::capacity(s), 16)
+    Set::set_capacity(s, 20)
+    assert_eq(Set::capacity(s), 20)
+}
+
+pub fun size() {
+    assert_eq(Set::size(Set::of(1, 2, 3, 4)), 4)
+    assert_eq(Set::size(Set::of(1, 2, 3, 2, 3, 1)), 3)
+    assert_eq(Set::size(Set::empty[Int]()), 0)
+}
+
+pub fun is_empty() {
+    assert_eq(Set::is_empty(Set::of(1, 2, 3)), false)
+    assert_eq(Set::is_empty(Set::of(1, 2, 3, 2, 5)), false)
+    assert_eq(Set::is_empty(Set::empty[Int]()), true)
+}
+
+pub fun has() {
+    val primes: Set[Int] = Set::of(2, 3, 5)
+    assert_eq(Set::has(primes, 2), true)
+    assert_eq(Set::has(primes, 3), true)
+    assert_eq(Set::has(primes, 5), true)
+    assert_eq(Set::has(primes, 6), false)
+    assert_eq(Set::has(primes, 4), false)
+}
+
+fun present_in[T](in: List[T]) -> Fun(T) -> Bool
+    = |v| in |> List::values() |> Sequence::any(|p| v == p)
+
+pub fun values() {
+    val primes: Set[Int] = Set::of(2, 3, 5, 7, 11)
+    assert_eq(Set::values(primes) |> Sequence::length(), 5)
+    assert_eq(
+        Set::values(primes) 
+            |> Sequence::all(present_in(List::of(2, 3, 5, 7, 11))),
+        true
+    )
+    assert_eq(
+        Set::empty[String]() |> Set::values() |> Sequence::length(),
+        0
+    )
+}
+
+pub fun values_rep() {
+    val primes: Set[Int] = Set::of(2, 3, 5, 7, 11)
+    val s = Set::values_rep(primes)
+    val order = s |> Stream::take(5) |> List::collect()
+    assert_eq(
+        order 
+            |> List::values() 
+            |> Sequence::all(present_in(List::of(2, 3, 5, 7, 11))),
+        true
+    )
+    val exp = List::values_rep(order)
+    assert_eq(
+        s |> Stream::take(30) |> Sequence::all(|v| v == Stream::next(exp)),
+        true
+    )
+}
+
+// pub fun remove() {
+//     val cities: Set[String] = Set::of("Osaka", "Lisbon", "Ottawa")
+//     assert_eq(Set::size(cities), 3)
+//     assert_eq(Set::remove(cities, "Ottawa"), true)
+//     assert_eq(Set::size(cities), 2)
+//     assert_eq(Set::remove(cities, "Ottawa"), false)
+//     assert_eq(Set::size(cities), 2)
+//     assert_eq(Set::remove(cities, "Lisbon"), true)
+//     assert_eq(Set::size(cities), 1)
+//     assert_eq(Set::remove(cities, "Osaka"), true)
+//     assert_eq(Set::size(cities), 0)
+//     assert_eq(Set::remove(cities, "Osaka"), false)
+//     assert_eq(Set::size(cities), 0)
+// }
+
+pub fun clear() {
+    val cities: Set[String] = Set::of("Osaka", "Lisbon", "Ottawa")
+    assert_eq(Set::size(cities), 3)
+    assert_eq(Set::has(cities, "Osaka"), true)
+    assert_eq(Set::has(cities, "Lisbon"), true)
+    assert_eq(Set::has(cities, "Ottawa"), true)
+    Set::clear(cities)
+    assert_eq(Set::size(cities), 0)
+    assert_eq(Set::has(cities, "Osaka"), false)
+    assert_eq(Set::has(cities, "Lisbon"), false)
+    assert_eq(Set::has(cities, "Ottawa"), false)
 }

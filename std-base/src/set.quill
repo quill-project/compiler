@@ -1,0 +1,141 @@
+
+mod std
+
+struct Set[T](
+    load_factor: Float,
+    size: Int,
+    buckets: List[List[T]]
+)
+
+// creation
+
+pub fun Set::empty[T]() -> Set[T] = Set[T](0.75, 0, List::empty())
+
+pub fun Set::of[T](...vals: List[T]) -> Set[T] {
+    val r: Set[T] = Set::empty()
+    r |> set_capacity(vals |> length())
+    vals |> values() |> for_each(|v| { r |> add(v) })
+    return r
+}
+
+pub fun Set::collect[T](from: Sequence[T]) -> Set[T] {
+    val r: Set[T] = Set::empty()
+    from |> for_each(|v| { r |> add(v) })
+    return r
+}
+
+// modification
+
+pub fun Set::set_load_factor[T](self: Set[T], load_factor: Float) -> Set[T] {
+    self.load_factor = load_factor
+    return self
+}
+
+pub fun Set::set_capacity[T](self: Set[T], capacity: Int) -> Set[T] {
+    val vals = self.buckets
+        |> values()
+        |> map(List::values[T])
+        |> flatten()
+    self.size = 0
+    self.buckets = Stream::new[List[T]](|| List::empty())
+        |> take(capacity)
+        |> List::collect()
+    vals |> for_each(|v| { self |> add(v) })
+    return self
+}
+
+pub fun Set::add[T](self: Set[T], value: T) -> Bool {
+    if self.buckets |> length() |> equal(0) { self |> set_capacity(16) }
+    val capacity = self.buckets |> length()
+    val bucket_i = value |> T::as_hash() |> Int::abs() |> modulo(capacity)
+    val bucket = self.buckets |> at(bucket_i)
+    val added = bucket |> indices()
+        |> find(|i| bucket |> at(i) |> equal(value))
+        |> map[Int, Bool](|i| {
+            bucket |> set(i, value)
+            return false
+        })
+        |> unwrap_or_else(|| {
+            bucket |> push(value)
+            self.size = self.size + 1
+            return true
+        })
+    val threshold = Float::as_int(Int::as_float(capacity) * self.load_factor)
+    if self.size > threshold { self |> set_capacity(capacity * 2) }
+    return added
+}
+
+// access
+
+pub fun Set::as_string[T](self: Set[T]) -> String {
+    val contents = self
+        |> values()
+        |> map(T::as_string)
+        |> join(", ")
+    return "Set(" |> concat(contents) |> concat(")")
+}
+
+pub fun Set::as_hash[T](self: Set[T]) -> Int = self
+    |> values()
+    |> map(T::as_hash)
+    |> reduce(hash::combine_unord)
+    |> unwrap_or(0)
+
+pub fun Set::load_factor[T](self: Set[T]) -> Float = self.load_factor
+
+pub fun Set::capacity[T](self: Set[T]) -> Int = self.buckets |> length()
+
+pub fun Set::size[T](self: Set[T]) -> Int = self.size
+
+pub fun Set::is_empty[T](self: Set[T]) -> Bool = self.size == 0
+
+pub fun Set::has[T](self: Set[T], value: T) -> Bool {
+    val bucket_i = T::as_hash(value) 
+        |> Int::abs() 
+        |> modulo(self.buckets |> length())
+    return self.buckets 
+        |> at(bucket_i) 
+        |> values() 
+        |> find(|e| e == value)
+        |> is_some()
+}
+
+pub fun Set::values[T](self: Set[T]) -> Sequence[T] = self.buckets
+    |> values()
+    |> map(List::values[T])
+    |> flatten()
+
+pub fun Set::values_rep[T](self: Set[T]) -> Stream[T] {
+    if self.size == 0 {
+        return panic("Attempt to get stream from empty set!")
+    }
+    return self.buckets
+        |> values_rep()
+        |> map(List::values[T])
+        |> flatten()
+}
+
+// removal
+
+pub fun Set::remove[T](self: Set[T], value: T) -> Bool {
+    val bucket_i = T::as_hash(value) 
+        |> Int::abs() 
+        |> modulo(self.buckets |> length())
+    return self.buckets 
+        |> at(bucket_i) 
+        |> indices()
+        |> find(|i| bucket |> at(i) |> equal(value))
+        |> map[Int, Unit](|i| {
+            self.size = self.size - 1
+            bucket |> remove(i)
+        })
+        |> is_some()
+}
+
+pub fun Set::clear[T](self: Set[T]) -> Set[T] {
+    self.size = 0
+    self.buckets = Stream::new[List[T]](|| List::empty())
+        |> take(self.buckets |> length())
+        |> List::collect()
+    return self
+}

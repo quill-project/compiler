@@ -14,7 +14,7 @@ pub fun Map::Entry::as_string[K, V](self: Entry[K, V]) -> String
 
 pub fun Map::Entry::as_hash[K, V](self: Entry[K, V]) -> Int
     = K::as_hash(self.key)
-    |> hash::combine(V::as_hash(self.value))
+    |> hash::combine_ord(V::as_hash(self.value))
 
 
 
@@ -29,8 +29,12 @@ struct Map[K, V](
 pub fun Map::empty[K, V]() -> Map[K, V] 
     = Map[K, V](0.75, 0, List::empty())
 
-pub fun Map::of[K, V](...entries: List[Entry[K, V]]) -> Map[K, V]
-    = entries |> values() |> Map::collect[K, V]()
+pub fun Map::of[K, V](...entries: List[Entry[K, V]]) -> Map[K, V] {
+    val r: Map[K, V] = Map::empty()
+    r |> set_capacity(entries |> length())
+    entries |> values() |> for_each(|entry| { r |> add(entry) })
+    return r
+}
 
 pub fun Map::collect[K, V](from: Sequence[Entry[K, V]]) -> Map[K, V] {
     val r: Map[K, V] = Map::empty()
@@ -96,7 +100,7 @@ pub fun Map::as_string[K, V](self: Map[K, V]) -> String {
 pub fun Map::as_hash[K, V](self: Map[K, V]) -> Int = self 
     |> entries() 
     |> map(Entry::as_hash[K, V]) 
-    |> reduce(hash::combine) 
+    |> reduce(hash::combine_unord) 
     |> unwrap_or(0)
 
 pub fun Map::load_factor[K, V](self: Map[K, V]) -> Float 

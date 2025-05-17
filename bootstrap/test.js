@@ -165,7 +165,25 @@ const tests = [
     "std::tests::int::max",
     "std::tests::int::min",
     "std::tests::int::clamp",
-    "std::tests::int::sign"
+    "std::tests::int::sign",
+
+    "std::tests::set::empty",
+    "std::tests::set::of",
+    "std::tests::set::collect",
+    "std::tests::set::set_load_factor",
+    "std::tests::set::set_capacity",
+    "std::tests::set::add",
+    "std::tests::set::as_string",
+    "std::tests::set::as_hash",
+    "std::tests::set::load_factor",
+    "std::tests::set::capacity",
+    "std::tests::set::size",
+    "std::tests::set::is_empty",
+    "std::tests::set::has",
+    "std::tests::set::values",
+    "std::tests::set::values_rep",
+    "std::tests::set::remove",
+    "std::tests::set::clear"
 ];
 
 const fs = require("fs");

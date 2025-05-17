@@ -57,8 +57,8 @@ pub fun as_hash() {
     assert_eq(
         String::as_hash("hey"),
         String::as_code("h")
-            |> hash::combine(String::as_code("e"))
-            |> hash::combine(String::as_code("y"))
+            |> hash::combine_ord(String::as_code("e"))
+            |> hash::combine_ord(String::as_code("y"))
     )
     assert_eq(
         String::as_hash("nice"), String::as_hash("nice")

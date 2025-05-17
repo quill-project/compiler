@@ -93,13 +93,23 @@ pub fun set() {
 }
 
 pub fun as_string() {
-    val m: Map[String, Int] = Map::empty()
-    Map::set(m, "A", 1)
-    Map::set(m, "B", 2)
-    Map::set(m, "C", 3)
+    val m: Map[String, Int] = Map::of(
+        Map::Entry("A", 1)
+        Map::Entry("B", 2)
+        Map::Entry("C", 3)
+    )
+    val m_disp = Map::as_string(m)
+    val allowed = List::of(
+        "Map(A -> 1, B -> 2, C -> 3)",
+        "Map(A -> 1, C -> 3, B -> 2)",
+        "Map(B -> 2, A -> 1, C -> 3)",
+        "Map(B -> 2, C -> 3, A -> 1)",
+        "Map(C -> 3, A -> 1, B -> 2)",
+        "Map(C -> 3, B -> 2, A -> 1)"
+    )
     assert_eq(
-        Map::as_string(m), 
-        "Map(A -> 1, B -> 2, C -> 3)"
+        List::values(allowed) |> Sequence::any(|a| a == m_disp),
+        true
     )
     assert_eq(
         Map::as_string(Map::empty[String, Int]()),
@@ -112,17 +122,16 @@ pub fun as_hash() {
     Map::set(m, "A", 1)
     Map::set(m, "B", 2)
     Map::set(m, "C", 3)
-    // // TODO! DOESN'T THIS DEPEND ON INTERNAL ORDER?
-    // assert_eq(
-    //     Map::as_hash(m),
-    //     hash::combine(String::as_hash("A"), Int::as_hash(1))
-    //         |> hash::combine(
-    //             hash::combine(String::as_hash("B"), Int::as_hash(2))
-    //         )
-    //         |> hash::combine(
-    //             hash::combine(String::as_hash("C"), Int::as_hash(3))
-    //         )
-    // )
+    assert_eq(
+        Map::as_hash(m),
+        hash::combine_ord(String::as_hash("A"), Int::as_hash(1))
+            |> hash::combine_unord(
+                hash::combine_ord(String::as_hash("B"), Int::as_hash(2))
+            )
+            |> hash::combine_unord(
+                hash::combine_ord(String::as_hash("C"), Int::as_hash(3))
+            )
+    )
     assert_eq(
         Map::as_hash(Map::empty[String, Int]()),
         Map::as_hash(Map::empty[Int, Bool]())

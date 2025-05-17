@@ -111,15 +111,15 @@ pub fun as_hash() {
     assert_eq(
         List::as_hash(List::of(1, 2, 3)),
         Int::as_hash(1)
-            |> hash::combine(Int::as_hash(2))
-            |> hash::combine(Int::as_hash(3))    
+            |> hash::combine_ord(Int::as_hash(2))
+            |> hash::combine_ord(Int::as_hash(3))    
     )
     assert_eq(
         List::as_hash(List::of("one", "two", "three", "four")),
         String::as_hash("one")
-            |> hash::combine(String::as_hash("two"))
-            |> hash::combine(String::as_hash("three"))
-            |> hash::combine(String::as_hash("four"))
+            |> hash::combine_ord(String::as_hash("two"))
+            |> hash::combine_ord(String::as_hash("three"))
+            |> hash::combine_ord(String::as_hash("four"))
     )
     assert_neq(
         List::as_hash(List::of[Bool](true, false, true)), 
