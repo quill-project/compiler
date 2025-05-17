@@ -50,6 +50,7 @@ pub fun abs() {
     assert_eq(Float::abs(-2.5), 2.5)
     assert_eq(Float::abs(Float::INF), Float::INF)
     assert_eq(Float::abs(-Float::INF), Float::INF)
+    assert_eq(Float::is_nan(Float::abs(Float::NAN)), true)
 }
 
 pub fun max() {

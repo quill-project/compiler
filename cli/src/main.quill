@@ -2,21 +2,5 @@
 mod quill::cli
 
 fun main() {
-    val grades: Map[String, Int] = Map::empty()
-    grades |> set("Bob", 3)
-    grades |> set("Mike", 5)
-    grades |> set("Gabriela", 6)
-    println(grades)
-    println(grades |> get("Bob"))
-    println(grades |> get("Laura"))
+    println("Hello, world!")
 }
-
-
-
-
-
-
-
-
-
-

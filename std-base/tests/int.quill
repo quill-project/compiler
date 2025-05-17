@@ -4,33 +4,65 @@ mod std::tests::int
 use std::test::*
 
 pub fun as_string() {
-    panic[Unit]("not yet implemented")
+    assert_eq(Int::as_string(3), "3")
+    assert_eq(Int::as_string(15), "15")
+    assert_eq(Int::as_string(20), "20")
+    assert_eq(Int::as_string(-25), "-25")
+    assert_eq(Int::as_string(0), "0")
 }
 
 pub fun as_float() {
-    panic[Unit]("not yet implemented")
+    assert_eq(Int::as_float(3), 3.0)
+    assert_eq(Int::as_float(15), 15.0)
+    assert_eq(Int::as_float(20), 20.0)
+    assert_eq(Int::as_float(-25), -25.0)
+    assert_eq(Int::as_float(0), 0.0)
 }
 
 pub fun as_hash() {
-    panic[Unit]("not yet implemented")
+    assert_eq(Int::as_hash(3), 3)
+    assert_eq(Int::as_hash(15), 15)
+    assert_eq(Int::as_hash(20), 20)
+    assert_eq(Int::as_hash(-25), -25)
+    assert_eq(Int::as_hash(0), 0)
 }
 
 pub fun abs() {
-    panic[Unit]("not yet implemented")
+    assert_eq(Int::abs(3), 3)
+    assert_eq(Int::abs(15), 15)
+    assert_eq(Int::abs(20), 20)
+    assert_eq(Int::abs(-25), 25)
+    assert_eq(Int::abs(0), 0)
+    assert_eq(Int::abs(-67), 67)
+    assert_eq(Int::abs(-32), 32)
 }
 
 pub fun max() {
-    panic[Unit]("not yet implemented")
+    assert_eq(Int::max(3, 1), 3)
+    assert_eq(Int::max(-2, 6), 6)
+    assert_eq(Int::max(5, 0), 5)
+    assert_eq(Int::max(-10, -8), -8)
 }
 
 pub fun min() {
-    panic[Unit]("not yet implemented")
+    assert_eq(Int::min(3, 1), 1)
+    assert_eq(Int::min(-2, 6), -2)
+    assert_eq(Int::min(5, 0), 0)
+    assert_eq(Int::min(-10, -8), -10)
 }
 
 pub fun clamp() {
-    panic[Unit]("not yet implemented")
+    assert_eq(3 |> Int::clamp(-2, 1), 1)
+    assert_eq(-5 |> Int::clamp(-2, 1), -2)
+    assert_eq(10 |> Int::clamp(-2, 5), 5)
+    assert_eq(5 |> Int::clamp(1, 1), 1)
 }
 
 pub fun sign() {
-    panic[Unit]("not yet implemented")
+    assert_eq(Int::sign(3), 1)
+    assert_eq(Int::sign(-2), -1)
+    assert_eq(Int::sign(5), 1)
+    assert_eq(Int::sign(-10), -1)
+    assert_eq(Int::sign(0), 0)
+    assert_eq(Int::sign(-44), -1)
 }

@@ -3092,7 +3092,9 @@ function quill$$eq(a, b) {
                     const inst = s.instances[node.instanceKey];
                     r += `$$${inst.instanceI}`;
                 }
-                return r;
+                if(into === null) { return r; }
+                state.scope().output += `${into} = ${r};\n`
+                return into;
             }
             case NodeType.IntLiteral:
                 const out = intoOrAlloc();
