@@ -121,8 +121,8 @@ pub fun Set::remove[T](self: Set[T], value: T) -> Bool {
     val bucket_i = T::as_hash(value) 
         |> Int::abs() 
         |> modulo(self.buckets |> length())
-    return self.buckets 
-        |> at(bucket_i) 
+    val bucket = self.buckets |> at(bucket_i) 
+    return bucket
         |> indices()
         |> find(|i| bucket |> at(i) |> equal(value))
         |> map[Int, Unit](|i| {

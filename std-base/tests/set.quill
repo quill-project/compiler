@@ -193,15 +193,15 @@ pub fun values_rep() {
 pub fun remove() {
     val cities: Set[String] = Set::of("Osaka", "Lisbon", "Ottawa")
     assert_eq(Set::size(cities), 3)
-    // assert_eq(Set::remove(cities, "Ottawa"), true)
+    assert_eq(Set::remove(cities, "Ottawa"), true)
     assert_eq(Set::size(cities), 2)
-    // assert_eq(Set::remove(cities, "Ottawa"), false)
+    assert_eq(Set::remove(cities, "Ottawa"), false)
     assert_eq(Set::size(cities), 2)
-    // assert_eq(Set::remove(cities, "Lisbon"), true)
+    assert_eq(Set::remove(cities, "Lisbon"), true)
     assert_eq(Set::size(cities), 1)
-    // assert_eq(Set::remove(cities, "Osaka"), true)
+    assert_eq(Set::remove(cities, "Osaka"), true)
     assert_eq(Set::size(cities), 0)
-    // assert_eq(Set::remove(cities, "Osaka"), false)
+    assert_eq(Set::remove(cities, "Osaka"), false)
     assert_eq(Set::size(cities), 0)
 }
 
