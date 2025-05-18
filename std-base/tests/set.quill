@@ -63,27 +63,27 @@ pub fun set_capacity() {
     assert_eq(Set::capacity(primes), 20)
 }
 
-// pub fun add() {
-//     val cities: Set[String] = Set::empty()
-//     assert_eq(Set::add(cities, "Berlin"), true)
-//     assert_eq(Set::size(cities), 1)
-//     assert_eq(Set::has(cities, "Berlin"), true)
-//     assert_eq(Set::add(cities, "Dublin"), true)
-//     assert_eq(Set::size(cities), 2)
-//     assert_eq(Set::has(cities, "Dublin"), true)
-//     assert_eq(Set::add(cities, "Las Vegas"), true)
-//     assert_eq(Set::size(cities), 3)
-//     assert_eq(Set::has(cities, "Las Vegas"), true)
-//     assert_eq(Set::add(cities, "Berlin"), false)
-//     assert_eq(Set::size(cities), 3)
-//     assert_eq(Set::has(cities, "Berlin"), true)
-//     assert_eq(Set::add(cities, "London"), true)
-//     assert_eq(Set::size(cities), 4)
-//     assert_eq(Set::has(cities, "London"), true)
-//     assert_eq(Set::add(cities, "Dublin"), false)
-//     assert_eq(Set::size(cities), 4)
-//     assert_eq(Set::has(cities, "Dublin"), true)
-// }
+pub fun add() {
+    val cities: Set[String] = Set::empty()
+    assert_eq(Set::add(cities, "Berlin"), true)
+    assert_eq(Set::size(cities), 1)
+    assert_eq(Set::has(cities, "Berlin"), true)
+    assert_eq(Set::add(cities, "Dublin"), true)
+    assert_eq(Set::size(cities), 2)
+    assert_eq(Set::has(cities, "Dublin"), true)
+    assert_eq(Set::add(cities, "Las Vegas"), true)
+    assert_eq(Set::size(cities), 3)
+    assert_eq(Set::has(cities, "Las Vegas"), true)
+    assert_eq(Set::add(cities, "Berlin"), false)
+    assert_eq(Set::size(cities), 3)
+    assert_eq(Set::has(cities, "Berlin"), true)
+    assert_eq(Set::add(cities, "London"), true)
+    assert_eq(Set::size(cities), 4)
+    assert_eq(Set::has(cities, "London"), true)
+    assert_eq(Set::add(cities, "Dublin"), false)
+    assert_eq(Set::size(cities), 4)
+    assert_eq(Set::has(cities, "Dublin"), true)
+}
 
 pub fun as_string() {
     val cities = Set::of("New York", "Paris", "Tokyo")
@@ -190,20 +190,20 @@ pub fun values_rep() {
     )
 }
 
-// pub fun remove() {
-//     val cities: Set[String] = Set::of("Osaka", "Lisbon", "Ottawa")
-//     assert_eq(Set::size(cities), 3)
-//     assert_eq(Set::remove(cities, "Ottawa"), true)
-//     assert_eq(Set::size(cities), 2)
-//     assert_eq(Set::remove(cities, "Ottawa"), false)
-//     assert_eq(Set::size(cities), 2)
-//     assert_eq(Set::remove(cities, "Lisbon"), true)
-//     assert_eq(Set::size(cities), 1)
-//     assert_eq(Set::remove(cities, "Osaka"), true)
-//     assert_eq(Set::size(cities), 0)
-//     assert_eq(Set::remove(cities, "Osaka"), false)
-//     assert_eq(Set::size(cities), 0)
-// }
+pub fun remove() {
+    val cities: Set[String] = Set::of("Osaka", "Lisbon", "Ottawa")
+    assert_eq(Set::size(cities), 3)
+    // assert_eq(Set::remove(cities, "Ottawa"), true)
+    assert_eq(Set::size(cities), 2)
+    // assert_eq(Set::remove(cities, "Ottawa"), false)
+    assert_eq(Set::size(cities), 2)
+    // assert_eq(Set::remove(cities, "Lisbon"), true)
+    assert_eq(Set::size(cities), 1)
+    // assert_eq(Set::remove(cities, "Osaka"), true)
+    assert_eq(Set::size(cities), 0)
+    // assert_eq(Set::remove(cities, "Osaka"), false)
+    assert_eq(Set::size(cities), 0)
+}
 
 pub fun clear() {
     val cities: Set[String] = Set::of("Osaka", "Lisbon", "Ottawa")

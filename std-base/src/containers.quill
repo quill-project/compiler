@@ -1,0 +1,37 @@
+
+mod std
+
+pub struct Box[T](value: T)
+
+pub fun Box::as_string[T](self: Box[T]) -> String
+    = "Box(" |> concat(T::as_string(self.value)) |> concat(")")
+
+pub fun Box::as_hash[T](self: Box[T]) -> Int = T::as_hash(self.value)
+
+
+pub struct Pair[A, B](first: A, second: B)
+
+pub fun Pair::as_string[A, B](self: Pair[A, B]) -> String
+    = "Pair(_, _)" |> fmt(
+        A::as_string(self.first), 
+        B::as_string(self.second)
+    )
+
+pub fun Pair::as_hash[A, B](self: Pair[A, B]) -> Int
+    = A::as_hash(self.first)
+    |> hash::combine_ord(B::as_hash(self.second))
+
+
+pub struct Triplet[A, B, C](first: A, second: B, third: C)
+
+pub fun Triplet::as_string[A, B, C](self: Triplet[A, B, C]) -> String
+    = "Triplet(_, _, _)" |> fmt(
+        A::as_string(self.first),
+        B::as_string(self.second),
+        C::as_string(self.third)
+    )
+
+pub fun Triplet::as_hash[A, B, C](self: Triplet[A, B, C]) -> Int
+    = A::as_hash(self.first)
+    |> hash::combine_ord(B::as_hash(self.second))
+    |> hash::combine_ord(C::as_hash(self.third))
