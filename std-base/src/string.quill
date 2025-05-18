@@ -8,17 +8,17 @@ pub fun String::as_hash(self: String) -> Int = self
     |> reduce(hash::combine_ord)
     |> unwrap_or(0)
 
-pub fun String::join(from: Sequence[String], delim: String) -> String = from 
+pub fun String::join(from: mut Sequence[String], delim: String) -> String = from 
     |> reduce(|acc, curr| acc 
         |> concat(delim) 
         |> concat(curr)
     ) 
     |> unwrap_or("")
 
-pub fun String::indices(self: String) -> Sequence[Int] 
+pub fun String::indices(self: String) -> mut Sequence[Int] 
     = range(0, self |> length())
 
-pub fun String::indices_rep(self: String) -> Stream[Int] {
+pub fun String::indices_rep(self: String) -> mut Stream[Int] {
     if 0 == (self |> length()) {
         return panic("Attempt to get index stream from empty string!")
     }
@@ -26,11 +26,11 @@ pub fun String::indices_rep(self: String) -> Stream[Int] {
         |> map(|i| i % (self |> length()))
 }
 
-pub fun String::codes(self: String) -> Sequence[Int] = self
+pub fun String::codes(self: String) -> mut Sequence[Int] = self
     |> chars()
     |> map(String::as_code)
 
-pub fun String::codes_rep(self: String) -> Stream[Int] = self
+pub fun String::codes_rep(self: String) -> mut Stream[Int] = self
     |> chars_rep()
     |> map(String::as_code)
 
@@ -68,7 +68,7 @@ pub fun String::ends_with(self: String, suffix: String) -> Bool {
     return suffix == (self |> slice(l - sl, l))
 }
 
-pub fun String::find(self: String, sub: String) -> Sequence[Int] {
+pub fun String::find(self: String, sub: String) -> mut Sequence[Int] {
     val l = self |> length()
     val sl = sub |> length()
     if sl == 0 { return range_incl(0, l) }
@@ -85,7 +85,7 @@ pub fun String::find(self: String, sub: String) -> Sequence[Int] {
 }
 
 // Version of 'String::find' that also includes overlapping results
-pub fun String::find_all(self: String, sub: String) -> Sequence[Int] {
+pub fun String::find_all(self: String, sub: String) -> mut Sequence[Int] {
     val l = self |> length()
     val sl = sub |> length()
     return range_incl(0, l - sl)
@@ -141,7 +141,7 @@ pub fun String::pad_end(self: String, tgt_len: Int, padding: String) -> String {
     return self |> concat(p)
 }
 
-pub fun String::split(self: String, delim: String) -> Sequence[String] {
+pub fun String::split(self: String, delim: String) -> mut Sequence[String] {
     val l = self |> length()
     val dl = delim |> length()
     if dl == 0 {

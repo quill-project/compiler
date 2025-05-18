@@ -16,6 +16,12 @@
 		<key>types</key> <dict>
 			<key>patterns</key> <array> 
 
+				<!-- keyword -->
+				<dict>
+					<key>match</key> <string>\b(mut)\b</string>
+          			<key>name</key> <string>storage.modifier.quill</string>
+        		</dict>
+
 				<!-- identifiers -->
 				<dict>
           			<key>match</key> <string>\b([a-zA-Z_][a-zA-Z0-9_]*)\b</string>

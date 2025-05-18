@@ -108,7 +108,7 @@ pub fun Option::flatten[T](self: Option[Option[T]]) -> Option[T] {
     }
 }
 
-pub fun Option::as_seq[T](self: Option[T]) -> Sequence[T] {
+pub fun Option::as_seq[T](self: Option[T]) -> mut Sequence[T] {
     match self {
         Some(value) { return Sequence::of(value) }
         None { return Sequence::empty() }

@@ -10,7 +10,7 @@ pub fun of() {
 }
 
 pub fun empty() {
-    val s: Sequence[Int] = Sequence::empty()
+    val s: mut Sequence[Int] = Sequence::empty()
     assert_eq(Sequence::next(s), Option::None)
 }
 
@@ -28,7 +28,7 @@ pub fun chain() {
 pub fun zip() {
     val a = List::values(List::of(1, 2, 3))
     val b = List::values(List::of(4, 5, 6))
-    val s: Sequence[Int] = Sequence::zip(a, b, |x, y| x + y)
+    val s: mut Sequence[Int] = Sequence::zip(a, b, |x, y| x + y)
     assert_eq(Sequence::next(s), Option::Some(5))
     assert_eq(Sequence::next(s), Option::Some(7))
     assert_eq(Sequence::next(s), Option::Some(9))

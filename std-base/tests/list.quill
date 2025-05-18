@@ -20,11 +20,11 @@ pub fun concat() {
 
 pub fun push() {
     val l = List::of[Int]()
-    List::push(l, 1)
+    assert_eq(List::push(l, 1), 0)
     assert_eq(l, List::of(1))
-    List::push(l, 2)
+    assert_eq(List::push(l, 2), 1)
     assert_eq(l, List::of(1, 2))
-    List::push(l, 3)
+    assert_eq(List::push(l, 3), 2)
     assert_eq(l, List::of(1, 2, 3))
 }
 

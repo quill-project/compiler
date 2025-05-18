@@ -3,9 +3,6 @@ mod std::tests
 
 use std::test::*
 
-pub fun equal[T](a: T, b: T) -> Bool = a == b
-pub fun not_equal[T](a: T, b: T) -> Bool = a != b
-
 pub fun range() {
     assert_eq(
         std::range(0, 10) |> List::collect(),

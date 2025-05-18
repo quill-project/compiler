@@ -3,10 +3,10 @@ mod std
 
 struct Sequence[T](next: Fun() -> Option[T])
 
-pub fun Sequence::new[T](next: Fun() -> Option[T]) -> Sequence[T] 
+pub fun Sequence::new[T](next: Fun() -> Option[T]) -> mut Sequence[T] 
     = Sequence(next)
 
-pub fun Sequence::of[T](value: T) -> Sequence[T] {
+pub fun Sequence::of[T](value: T) -> mut Sequence[T] {
     mut had_value = false
     return Sequence(|| {
         if had_value { return Option::None }
@@ -15,13 +15,13 @@ pub fun Sequence::of[T](value: T) -> Sequence[T] {
     })
 }
 
-pub fun Sequence::empty[T]() -> Sequence[T] 
+pub fun Sequence::empty[T]() -> mut Sequence[T] 
     = Sequence::new(|| Option::None)
 
-pub fun Sequence::chain[T](first: Sequence[T], after: Sequence[T]) -> Sequence[T]
+pub fun Sequence::chain[T](first: mut Sequence[T], after: mut Sequence[T]) -> mut Sequence[T]
     = Sequence::new(|| first |> next() |> or_else(|| after |> next()))
 
-pub fun Sequence::zip[A, B, O](a: Sequence[A], b: Sequence[B], f: Fun(A, B) -> O) -> Sequence[O] 
+pub fun Sequence::zip[A, B, O](a: mut Sequence[A], b: mut Sequence[B], f: Fun(A, B) -> O) -> mut Sequence[O] 
     = Sequence::new(|| a 
         |> next() 
         |> and_then[A, O](|x| b 
@@ -30,15 +30,15 @@ pub fun Sequence::zip[A, B, O](a: Sequence[A], b: Sequence[B], f: Fun(A, B) -> O
         ) 
     )
 
-pub fun Sequence::map[I, O](self: Sequence[I], f: Fun(I) -> O) -> Sequence[O]
+pub fun Sequence::map[I, O](self: mut Sequence[I], f: Fun(I) -> O) -> mut Sequence[O]
     = Sequence::new(|| self |> next() |> map(f))
 
-pub fun Sequence::skip[T](self: Sequence[T], n: Int) -> Sequence[T] {
+pub fun Sequence::skip[T](self: mut Sequence[T], n: Int) -> mut Sequence[T] {
     self |> take(n) |> for_each(|v| {})
     return self
 }
 
-pub fun Sequence::take[T](self: Sequence[T], n: Int) -> Sequence[T] {
+pub fun Sequence::take[T](self: mut Sequence[T], n: Int) -> mut Sequence[T] {
     mut i = 0
     return Sequence::new(|| {
         if i >= n { return Option::None }
@@ -47,7 +47,7 @@ pub fun Sequence::take[T](self: Sequence[T], n: Int) -> Sequence[T] {
     })
 }
 
-pub fun Sequence::take_while[T](self: Sequence[T], cond: Fun(T) -> Bool) -> Sequence[T] {
+pub fun Sequence::take_while[T](self: mut Sequence[T], cond: Fun(T) -> Bool) -> mut Sequence[T] {
     mut ended = false
     return Sequence::new(|| {
         if ended { return Option::None }
@@ -61,7 +61,7 @@ pub fun Sequence::take_while[T](self: Sequence[T], cond: Fun(T) -> Bool) -> Sequ
     })
 }
 
-pub fun Sequence::take_until[T](self: Sequence[T], cond: Fun(T) -> Bool) -> Sequence[T] {
+pub fun Sequence::take_until[T](self: mut Sequence[T], cond: Fun(T) -> Bool) -> mut Sequence[T] {
     mut ended = false
     return Sequence::new(|| {
         if ended { return Option::None }
@@ -75,25 +75,25 @@ pub fun Sequence::take_until[T](self: Sequence[T], cond: Fun(T) -> Bool) -> Sequ
     })
 }
 
-pub fun Sequence::flatten[T](self: Sequence[Sequence[T]]) -> Sequence[T] {
-    mut inner: Option[Sequence[T]] = Option::None
+pub fun Sequence::flatten[T](self: mut Sequence[mut Sequence[T]]) -> mut Sequence[T] {
+    mut inner: Option[mut Sequence[T]] = Option::None
     return Sequence::new(|| {
         mut value: Option[T] = Option::None
         Sequence::new[Unit](|| {
             if value |> is_some() { return Option::None }
-            inner |> map[Sequence[T], Unit](|i| {
+            inner |> map[mut Sequence[T], Unit](|i| {
                 value = i |> next()
                 return unit
             })
             if value |> is_some() { return Option::None }
             inner = self |> Sequence::next()
-            return inner |> map[Sequence[T], Unit](|_| unit)
+            return inner |> map[mut Sequence[T], Unit](|_| unit)
         }) |> for_each(|_| {})
         return value
     })
 }
 
-pub fun Sequence::length[T](self: Sequence[T]) -> Int {
+pub fun Sequence::length[T](self: mut Sequence[T]) -> Int {
     mut c = 0
     self |> for_each(|_| {
         c = c + 1
@@ -101,9 +101,9 @@ pub fun Sequence::length[T](self: Sequence[T]) -> Int {
     return c
 }
 
-pub fun Sequence::next[T](self: Sequence[T]) -> Option[T] = self.next()
+pub fun Sequence::next[T](self: mut Sequence[T]) -> Option[T] = self.next()
 
-pub fun Sequence::last[T](self: Sequence[T]) -> Option[T] {
+pub fun Sequence::last[T](self: mut Sequence[T]) -> Option[T] {
     mut v = Option::None[T]
     self |> for_each(|value| {
         v = Option::Some(value)
@@ -111,19 +111,19 @@ pub fun Sequence::last[T](self: Sequence[T]) -> Option[T] {
     return v
 }
 
-pub fun Sequence::find[T](self: Sequence[T], cond: Fun(T) -> Bool) -> Option[T]
+pub fun Sequence::find[T](self: mut Sequence[T], cond: Fun(T) -> Bool) -> Option[T]
     = self |> filter(cond) |> next()
 
-pub fun Sequence::find_last[T](self: Sequence[T], cond: Fun(T) -> Bool) -> Option[T]
+pub fun Sequence::find_last[T](self: mut Sequence[T], cond: Fun(T) -> Bool) -> Option[T]
     = self |> filter(cond) |> last()
 
-pub fun Sequence::any[T](self: Sequence[T], cond: Fun(T) -> Bool) -> Bool
+pub fun Sequence::any[T](self: mut Sequence[T], cond: Fun(T) -> Bool) -> Bool
     = self |> filter(cond) |> next() |> is_some()
 
-pub fun Sequence::all[T](self: Sequence[T], cond: Fun(T) -> Bool) -> Bool
+pub fun Sequence::all[T](self: mut Sequence[T], cond: Fun(T) -> Bool) -> Bool
     = self |> filter(|e| !cond(e)) |> next() |> is_none()
 
-pub fun Sequence::fold[I, O](self: Sequence[I], start: O, f: Fun(O, I) -> O) -> O {
+pub fun Sequence::fold[I, O](self: mut Sequence[I], start: O, f: Fun(O, I) -> O) -> O {
     mut acc = start
     self |> for_each(|c| {
         acc = f(acc, c)
@@ -131,10 +131,10 @@ pub fun Sequence::fold[I, O](self: Sequence[I], start: O, f: Fun(O, I) -> O) -> 
     return acc
 }
 
-pub fun Sequence::reduce[T](self: Sequence[T], f: Fun(T, T) -> T) -> Option[T]
+pub fun Sequence::reduce[T](self: mut Sequence[T], f: Fun(T, T) -> T) -> Option[T]
     = self |> next() |> map(|start| self |> fold(start, f))
 
-pub fun Sequence::filter[T](self: Sequence[T], cond: Fun(T) -> Bool) -> Sequence[T] 
+pub fun Sequence::filter[T](self: mut Sequence[T], cond: Fun(T) -> Bool) -> mut Sequence[T] 
     = Sequence::new(|| {
         mut found = self |> next()
         Sequence::new[Unit](|| {
@@ -150,5 +150,5 @@ pub fun Sequence::filter[T](self: Sequence[T], cond: Fun(T) -> Bool) -> Sequence
         return found
     })
 
-pub fun Sequence::for_each[T](self: Sequence[T], f: Fun(T))
+pub fun Sequence::for_each[T](self: mut Sequence[T], f: Fun(T))
     = self |> for_each_until(f, Option::None)

@@ -87,14 +87,14 @@ pub fun Result::is_err[O, E](self: Result[O, E]) -> Bool {
     }
 }
 
-pub fun Result::ok_seq[O, E](self: Result[O, E]) -> Sequence[O] {
+pub fun Result::ok_seq[O, E](self: Result[O, E]) -> mut Sequence[O] {
     match self {
         Ok(value) { return Sequence::of(value) }
         Err(_) { return Sequence::empty() }
     }
 }
 
-pub fun Result::err_seq[O, E](self: Result[O, E]) -> Sequence[E] {
+pub fun Result::err_seq[O, E](self: Result[O, E]) -> mut Sequence[E] {
     match self {
         Ok(_) { return Sequence::empty() }
         Err(error) { return Sequence::of(error) }

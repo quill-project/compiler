@@ -921,13 +921,17 @@ const quill = (function() {
                 path: start.path, start: start.start, end: returnType.end
             };
         }
+        const start = state.curr();
+        let mutable = state.curr().type === TokenType.KeywordMut;
+        if(mutable) {
+            state.next();
+        }
         switch(state.curr().type) {
             case TokenType.Identifier: {
-                const start = state.curr();
                 const path = parsePath(state);
                 const typeArgs = parseGivenTypeArgs(state);
                 return {
-                    type: NodeType.Path, value: path,
+                    type: NodeType.Path, value: path, mutable,
                     path: start.path, start: start.start, end: start.end,
                     typeArgs
                 };
@@ -1454,12 +1458,12 @@ const quill = (function() {
     );
 
     const builtinTypes = Object.freeze({
-        "Unit": { type: Type.Unit, argC: 0 },
-        "Int": { type: Type.Integer, argC: 0 },
-        "Float": { type: Type.Float, argC: 0 },
-        "Bool": { type: Type.Boolean, argC: 0 },
-        "String": { type: Type.String, argC: 0 },
-        "List": { type: Type.List, argC: 1 }
+        "Unit": { type: Type.Unit, argC: 0, mutable: false },
+        "Int": { type: Type.Integer, argC: 0, mutable: false },
+        "Float": { type: Type.Float, argC: 0, mutable: false },
+        "Bool": { type: Type.Boolean, argC: 0, mutable: false },
+        "String": { type: Type.String, argC: 0, mutable: false },
+        "List": { type: Type.List, argC: 1, mutable: true }
     });
 
     function typeFromNode(node, state) {
@@ -1470,6 +1474,14 @@ const quill = (function() {
                     ? [] : node.typeArgs.map(t => typeFromNode(t, state));
                 const typeScope = state.findTypeArgs();
                 if(typeScope[node.value] !== undefined) {
+                    if(node.mutable) {
+                        throw message.from(
+                            message.error(
+                                `Attempt to specify mutability on a type argument`
+                            ),
+                            message.code(node)
+                        );
+                    }
                     if(typeArgs.length > 0) {
                         throw message.from(
                             message.error(
@@ -1482,9 +1494,17 @@ const quill = (function() {
                 }
                 const builtin = builtinTypes[node.value];
                 if(builtin !== undefined) {
+                    if(node.mutable && !builtin.mutable) {
+                        throw message.from(
+                            message.error(`Attempt to specify the `
+                                + `immutable type '${node.value}' as mutable`
+                            ),
+                            message.code(node)
+                        );
+                    }
                     if(typeArgs.length !== builtin.argC) {
                         throw message.from(
-                            message.error(`${node.value}`
+                            message.error(`'${node.value}'`
                                 + ` expects ${builtin.argC} argument`
                                 + (builtin.argC === 1? '' : 's')
                                 + `, but ${typeArgs.length} `
@@ -1494,7 +1514,10 @@ const quill = (function() {
                             message.code(node)
                         );
                     }
-                    return { type: builtin.type, node: nodeAsSource(node), typeArgs }; 
+                    return { 
+                        type: builtin.type, node: nodeAsSource(node), typeArgs,
+                        mutable: node.mutable
+                    }; 
                 }
                 const s = instantiateSymbol(
                     node, path, typeArgs, 
@@ -1507,7 +1530,18 @@ const quill = (function() {
                         message.code(node)
                     );
                 }
-                let r = { type: null, name: path, typeArgs, node: nodeAsSource(node) };
+                let r = { 
+                    type: null, name: path, typeArgs, mutable: node.mutable,
+                    node: nodeAsSource(node) 
+                };
+                if(node.mutable && s.s.node.type === NodeType.Enumeration) {
+                    throw message.from(
+                        message.error(`Attempt to specify the`
+                            + `immutable type '${node.value}' as mutable`
+                        ),
+                        message.code(node)
+                    );
+                }
                 switch(s.s.node.type) {
                     case NodeType.Structure: r.type = Type.Struct; break;
                     case NodeType.Enumeration: r.type = Type.Enum; break;
@@ -1918,22 +1952,28 @@ const quill = (function() {
         const typeArgs = () => t.typeArgs === undefined? ""
             : t.typeArgs.length === 0? ""
             : "[" + t.typeArgs.map(displayType).join(", ") + "]";
+        let r = t.mutable === true? "mut " : "";
         switch(t.type) {
-            case Type.Unit: return "Unit";
-            case Type.Integer: return "Int";
-            case Type.Float: return "Float";
-            case Type.Boolean: return "Bool";
-            case Type.String: return "String";
+            case Type.Unit: r += "Unit"; break;
+            case Type.Integer: r += "Int"; break;
+            case Type.Float: r += "Float"; break;
+            case Type.Boolean: r += "Bool"; break;
+            case Type.String: r += "String"; break;
             case Type.Struct: 
-            case Type.Enum: return t.name + typeArgs();
+            case Type.Enum: r += t.name + typeArgs(); break;
             case Type.Function: {
                 const a = t.arguments.map(displayType).join(", ");
-                const r = displayType(t.returned);
-                return `Fun(${a}) -> ${r}`;
+                const b = displayType(t.returned);
+                r += `Fun(${a}) -> ${b}`;
+                break;
             }
-            case Type.List: return "List" + typeArgs();
+            case Type.List: r += "List" + typeArgs(); break;
+            default: {
+                console.warn(`displayType: unhandled type ${t.type}`);
+                return `<unhandled type: ${t.type}>`;
+            }
         }
-        return `<unhandled type: ${t.type}>`;
+        return r;
     }
 
     function typesEqual(exp, got) {
@@ -1941,6 +1981,7 @@ const quill = (function() {
         if(typeof got !== "object" || got === null) { return false; }
         if(exp.type !== got.type) { return false; }
         if(exp.name !== got.name) { return false; }
+        if(exp.mutable === true && got.mutable !== true) { return false; }
         const expTAC = exp.typeArgs === undefined
             ? 0 : exp.typeArgs.length;
         const gotTAC = got.typeArgs === undefined
@@ -2654,13 +2695,25 @@ const quill = (function() {
                     const accessed = checkTypes(node.accessed, state);
                     if(accessed.type !== Type.Struct) {
                         throw message.from(
-                            messsage.error(
+                            message.error(
                                 `Access of member ${node.name} of the non-struct `
                                     + `type '${displayType(accessed)}'`
                             ),
                             message.code(node),
                             message.note(`'${displayType(accessed)}' originates from here:`),
                             message.code(accessed.node)
+                        );
+                    }
+                    if(assignment && accessed.mutable !== true) {
+                        const accessedD = displayType(accessed);
+                        throw message.from(
+                            message.error(`Assignment to property of object behind `
+                                + `non-mutable reference '${accessedD}'`
+                            ),
+                            message.code(node),
+                            message.note(`'${accessedD}' originates from here:`),
+                            message.code(accessed.node),
+                            message.note(`'mut ${accessedD}' would be required for this to work`)
                         );
                     }
                     const struct = instantiateSymbol(
@@ -2673,7 +2726,7 @@ const quill = (function() {
                         return member.type;
                     }
                     throw message.from(
-                        messsage.error(
+                        message.error(
                             `Access of unknown member ${node.name} of `
                                 + `struct '${displayType(accessed)}'`
                         ),
@@ -2719,7 +2772,7 @@ const quill = (function() {
                             node.type = NodeType.StructureInit;
                             return {
                                 type: Type.Struct, name: path, node: nodeAsSource(node), 
-                                typeArgs: asStruct.typeArgs
+                                typeArgs: asStruct.typeArgs, mutable: true
                             };
                         }
                         const pathElems = node.called.value.split("::");
@@ -2865,7 +2918,7 @@ const quill = (function() {
                     if(got !== null && exp !== null) {
                         assertTypesEqual(exp, got, node);
                     }
-                    const type = got !== null? got : exp;
+                    const type = exp !== null? exp : got;
                     const scope = state.scope();
                     if(scope === undefined) { return null; }
                     scope.variables[node.name] = {

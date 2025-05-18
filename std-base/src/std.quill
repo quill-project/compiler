@@ -1,11 +1,14 @@
 
 mod std
 
+pub fun equal[T](a: T, b: T) -> Bool = a == b
+pub fun not_equal[T](a: T, b: T) -> Bool = a != b
+
 pub fun println[T](value: T) = value 
     |> T::as_string()
     |> raw_println()
 
-pub fun range(start: Int, end: Int) -> Sequence[Int] {
+pub fun range(start: Int, end: Int) -> mut Sequence[Int] {
     mut n = start
     return Sequence::new(|| {
         if n >= end { return Option::None }
@@ -15,7 +18,7 @@ pub fun range(start: Int, end: Int) -> Sequence[Int] {
     })
 }
 
-pub fun range_incl(start: Int, end: Int) -> Sequence[Int] {
+pub fun range_incl(start: Int, end: Int) -> mut Sequence[Int] {
     mut n = start
     return Sequence::new(|| {
         if n > end { return Option::None }
@@ -25,7 +28,7 @@ pub fun range_incl(start: Int, end: Int) -> Sequence[Int] {
     })
 }
 
-pub fun count_from(start: Int) -> Stream[Int] {
+pub fun count_from(start: Int) -> mut Stream[Int] {
     mut n = start
     return Stream::new(|| {
         val c = n

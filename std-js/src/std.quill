@@ -69,33 +69,32 @@ pub ext fun Int::as_float(self: Int) -> Float = "
 "
 
 
-pub ext fun List::concat[T](low: List[T], high: List[T]) -> List[T] = "
+pub ext fun List::concat[T](low: List[T], high: List[T]) -> mut List[T] = "
     return [...low, ...high];
 "
 
-pub ext fun List::push[T](self: List[T], value: T) -> List[T] = "
+pub ext fun List::push[T](self: mut List[T], value: T) -> Int = "
+    const pos = BigInt(self.length);
     self.push(value);
-    return self;
+    return pos;
 "
 
-pub ext fun List::insert[T](self: List[T], position: Int, value: T) -> List[T] = "
+pub ext fun List::insert[T](self: mut List[T], position: Int, value: T) = "
     const n = Number(position);
     self.push(value);
     self.copyWithin(n + 1, n, self.length - 1);
     self[n] = value;
-    return self;
 "
 
-pub ext fun List::set[T](self: List[T], position: Int, value: T) -> List[T] = "
+pub ext fun List::set[T](self: mut List[T], position: Int, value: T) = "
     self[Number(position)] = value;
-    return self;
 "
 
-pub ext fun List::of_length[T](length: Int, value: T) -> List[T] = "
+pub ext fun List::of_length[T](length: Int, value: T) -> mut List[T] = "
     return new Array(Number(length)).fill(value);
 "
 
-pub ext fun List::slice[T](self: List[T], start: Int, end: Int) -> List[T] = "
+pub ext fun List::slice[T](self: List[T], start: Int, end: Int) -> mut List[T] = "
     return self.slice(Number(start), Number(end));
 "
 
@@ -107,12 +106,12 @@ pub ext fun List::length[T](self: List[T]) -> Int = "
     return BigInt(self.length);
 "
 
-pub ext fun List::splice[T](self: List[T], start: Int, end: Int) -> List[T] = "
+pub ext fun List::splice[T](self: mut List[T], start: Int, end: Int) -> mut List[T] = "
     return self.splice(Number(start), Number(end - start))
 "
 
 
-ext fun Sequence::for_each_until[T](self: Sequence[T], f: Fun(T), end: Option[T]) = "
+ext fun Sequence::for_each_until[T](self: mut Sequence[T], f: Fun(T), end: Option[T]) = "
     while(true) {
         const elem = self.next();
         if(elem.tag === end.tag) { return; }
@@ -142,7 +141,7 @@ pub ext fun String::from_code(code: Int) -> String = "
     return String.fromCodePoint(Number(code));
 "
 
-pub fun String::chars(self: String) -> Sequence[String] {
+pub fun String::chars(self: String) -> mut Sequence[String] {
     mut r = self
     return Sequence::new(|| {
         val prev_l = r |> length()
@@ -154,7 +153,7 @@ pub fun String::chars(self: String) -> Sequence[String] {
     })
 }
 
-pub fun String::chars_rep(self: String) -> Stream[String] {
+pub fun String::chars_rep(self: String) -> mut Stream[String] {
     if 0 == (self |> length()) {
         return panic("Attempt to get char stream from empty string!")
     }

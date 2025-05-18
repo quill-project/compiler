@@ -3,22 +3,22 @@ mod std
 
 struct Stream[T](next: Fun() -> T)
 
-pub fun Stream::new[T](next: Fun() -> T) -> Stream[T] = Stream(next)
+pub fun Stream::new[T](next: Fun() -> T) -> mut Stream[T] = Stream(next)
 
-pub fun Stream::of[T](value: T) -> Stream[T] = Stream(|| value) 
+pub fun Stream::of[T](value: T) -> mut Stream[T] = Stream(|| value) 
 
-pub fun Stream::zip[A, B, O](a: Stream[A], b: Stream[B], f: Fun(A, B) -> O) -> Stream[O]
+pub fun Stream::zip[A, B, O](a: mut Stream[A], b: mut Stream[B], f: Fun(A, B) -> O) -> mut Stream[O]
     = Stream::new(|| f(a |> next(), b |> next()))
 
-pub fun Stream::map[I, O](self: Stream[I], f: Fun(I) -> O) -> Stream[O]
+pub fun Stream::map[I, O](self: mut Stream[I], f: Fun(I) -> O) -> mut Stream[O]
     = Stream::new(|| f(self |> next()))
 
-pub fun Stream::skip[T](self: Stream[T], n: Int) -> Stream[T] {
+pub fun Stream::skip[T](self: mut Stream[T], n: Int) -> mut Stream[T] {
     self |> take(n) |> for_each(|v| {})
     return self
 }
 
-pub fun Stream::take[T](self: Stream[T], n: Int) -> Sequence[T] {
+pub fun Stream::take[T](self: mut Stream[T], n: Int) -> mut Sequence[T] {
     mut i = 0
     return Sequence::new(|| {
         if i >= n { return Option::None }
@@ -27,7 +27,7 @@ pub fun Stream::take[T](self: Stream[T], n: Int) -> Sequence[T] {
     })
 }
 
-pub fun Stream::take_while[T](self: Stream[T], cond: Fun(T) -> Bool) -> Sequence[T] {
+pub fun Stream::take_while[T](self: mut Stream[T], cond: Fun(T) -> Bool) -> mut Sequence[T] {
     mut ended = false
     return Sequence::new(|| {
         if ended { return Option::None }
@@ -37,7 +37,7 @@ pub fun Stream::take_while[T](self: Stream[T], cond: Fun(T) -> Bool) -> Sequence
     })
 }
 
-pub fun Stream::take_until[T](self: Stream[T], cond: Fun(T) -> Bool) -> Sequence[T] {
+pub fun Stream::take_until[T](self: mut Stream[T], cond: Fun(T) -> Bool) -> mut Sequence[T] {
     mut ended = false
     return Sequence::new(|| {
         if ended { return Option::None }
@@ -76,8 +76,8 @@ pub fun Stream::take_until[T](self: Stream[T], cond: Fun(T) -> Bool) -> Sequence
 // To avoid this, store functions that construct the sequences instead,
 // create a stream of those and use 'std::Stream::map' to actually construct
 // them on demand.
-pub fun Stream::flatten[T](self: Stream[Sequence[T]]) -> Stream[T] {
-    mut inner: Sequence[T] = self |> next()
+pub fun Stream::flatten[T](self: mut Stream[mut Sequence[T]]) -> mut Stream[T] {
+    mut inner: mut Sequence[T] = self |> next()
     return Stream::new(|| {
         mut value: Option[T] = Option::None
         Sequence::new[Unit](|| {
@@ -91,7 +91,7 @@ pub fun Stream::flatten[T](self: Stream[Sequence[T]]) -> Stream[T] {
     })
 }
 
-pub fun Stream::next[T](self: Stream[T]) -> T = self.next()
+pub fun Stream::next[T](self: mut Stream[T]) -> T = self.next()
 
 // For every requested item the stream returned by this function will attempt
 // to find and return the next value in 'self' for which the function 'cond'
@@ -107,7 +107,7 @@ pub fun Stream::next[T](self: Stream[T]) -> T = self.next()
 // 'std::Stream::take', 'std::Stream::take_while' or 'std::Stream::take_until'
 // and then use 'std::Sequence::filter' instead, which can simply return after
 // reaching the end of the sequence and therefore does not have this issue.
-pub fun Stream::filter[T](self: Stream[T], cond: Fun(T) -> Bool) -> Stream[T] 
+pub fun Stream::filter[T](self: mut Stream[T], cond: Fun(T) -> Bool) -> mut Stream[T] 
     = Stream::new(|| {
         mut current = self |> next()
         Sequence::new[Unit](|| {

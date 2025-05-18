@@ -19,7 +19,7 @@ pub fun of() {
 pub fun zip() {
     val a = std::count_from(1)
     val b = Stream::of(3)
-    val s: Stream[Int] = Stream::zip(a, b, |x, y| x * y)
+    val s: mut Stream[Int] = Stream::zip(a, b, |x, y| x * y)
     assert_eq(Stream::next(s), 3)
     assert_eq(Stream::next(s), 6)
     assert_eq(Stream::next(s), 9)
@@ -27,7 +27,7 @@ pub fun zip() {
 }
 
 pub fun map() {
-    val s: Stream[Int] = std::count_from(10)
+    val s: mut Stream[Int] = std::count_from(10)
         |> Stream::map(|n| n * 3)
     assert_eq(Stream::next(s), 30)
     assert_eq(Stream::next(s), 33)
@@ -67,7 +67,7 @@ pub fun take_until() {
 }
 
 pub fun flatten() {
-    val sequences = List::of[Fun() -> Sequence[Int]](
+    val sequences = List::of[Fun() -> mut Sequence[Int]](
         || List::of(1, 2) |> List::values(),
         || Sequence::empty[Int](),
         || List::of(3, 4, 5) |> List::values()

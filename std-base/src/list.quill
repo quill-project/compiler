@@ -15,9 +15,9 @@ pub fun List::as_hash[T](self: List[T]) -> Int = self
     |> reduce(hash::combine_ord)
     |> unwrap_or(0)
 
-pub fun List::empty[T]() -> List[T] = List::of[T]()
+pub fun List::empty[T]() -> mut List[T] = List::of[T]()
 
-pub fun List::of[T](...values: List[T]) -> List[T] = values
+pub fun List::of[T](...values: mut List[T]) -> mut List[T] = values
 
 pub fun List::get[T](self: List[T], position: Int) -> Option[T] {
     mut idx = position
@@ -36,16 +36,16 @@ pub fun List::at[T](self: List[T], position: Int) -> T = self
         |> panic()
     )
 
-pub fun List::slice_from[T](self: List[T], start: Int) -> List[T]
+pub fun List::slice_from[T](self: List[T], start: Int) -> mut List[T]
     = self |> slice(start, self |> length())
 
-pub fun List::slice_to[T](self: List[T], end: Int) -> List[T]
+pub fun List::slice_to[T](self: List[T], end: Int) -> mut List[T]
     = self |> slice(0, end)
 
-pub fun List::indices[T](self: List[T]) -> Sequence[Int] 
+pub fun List::indices[T](self: List[T]) -> mut Sequence[Int] 
     = range(0, self |> length())
 
-pub fun List::indices_rep[T](self: List[T]) -> Stream[Int] {
+pub fun List::indices_rep[T](self: List[T]) -> mut Stream[Int] {
     if 0 == (self |> length()) {
         return panic("Attempt to get index stream from empty list!")
     }
@@ -53,11 +53,11 @@ pub fun List::indices_rep[T](self: List[T]) -> Stream[Int] {
         |> map(|i| i % (self |> length()))
 }
 
-pub fun List::values[T](self: List[T]) -> Sequence[T]
+pub fun List::values[T](self: List[T]) -> mut Sequence[T]
     = range(0, self |> length())
     |> map[Int, T](|i| self |> get_unchecked(i % (self |> length())))
 
-pub fun List::values_rep[T](self: List[T]) -> Stream[T] {
+pub fun List::values_rep[T](self: List[T]) -> mut Stream[T] {
     if 0 == (self |> length()) {
         return panic("Attempt to get element stream from empty list!")
     }
@@ -65,11 +65,11 @@ pub fun List::values_rep[T](self: List[T]) -> Stream[T] {
         |> map[Int, T](|i| self |> get_unchecked(i % (self |> length())))
 }
 
-pub fun List::reversed[T](self: List[T]) -> Sequence[T]
+pub fun List::reversed[T](self: List[T]) -> mut Sequence[T]
     = range_incl(1, self |> length())
     |> map[Int, T](|i| self |> get_unchecked((self |> length()) - i))
 
-pub fun List::collect[T](from: Sequence[T]) -> List[T] {
+pub fun List::collect[T](from: mut Sequence[T]) -> mut List[T] {
     val r = List::of[T]()
     from |> for_each(|v| {
         r |> push(v)
@@ -79,17 +79,16 @@ pub fun List::collect[T](from: Sequence[T]) -> List[T] {
 
 pub fun List::is_empty[T](self: List[T]) -> Bool = (self |> length()) == 0
 
-pub fun List::remove[T](self: List[T], position: Int) -> T = self 
+pub fun List::remove[T](self: mut List[T], position: Int) -> T = self 
     |> splice(position, position + 1) 
     |> get_unchecked(0)
 
-pub fun List::pop[T](self: List[T]) -> Option[T] {
+pub fun List::pop[T](self: mut List[T]) -> Option[T] {
     val l = self |> length()
     if l == 0 { return Option::None }
     return Option::Some(self |> splice(l - 1, l) |> get_unchecked(0))
 }
 
-pub fun List::clear[T](self: List[T]) -> List[T] {
+pub fun List::clear[T](self: mut List[T]) {
     self |> splice(0, self |> length())
-    return self
 }

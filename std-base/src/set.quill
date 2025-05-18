@@ -4,47 +4,45 @@ mod std
 struct Set[T](
     load_factor: Float,
     size: Int,
-    buckets: List[List[T]]
+    buckets: mut List[mut List[T]]
 )
 
 // creation
 
-pub fun Set::empty[T]() -> Set[T] = Set[T](0.75, 0, List::empty())
+pub fun Set::empty[T]() -> mut Set[T] = Set[T](0.75, 0, List::empty())
 
-pub fun Set::of[T](...vals: List[T]) -> Set[T] {
-    val r: Set[T] = Set::empty()
+pub fun Set::of[T](...vals: List[T]) -> mut Set[T] {
+    val r: mut Set[T] = Set::empty()
     r |> set_capacity(vals |> length())
     vals |> values() |> for_each(|v| { r |> add(v) })
     return r
 }
 
-pub fun Set::collect[T](from: Sequence[T]) -> Set[T] {
-    val r: Set[T] = Set::empty()
+pub fun Set::collect[T](from: mut Sequence[T]) -> mut Set[T] {
+    val r: mut Set[T] = Set::empty()
     from |> for_each(|v| { r |> add(v) })
     return r
 }
 
 // modification
 
-pub fun Set::set_load_factor[T](self: Set[T], load_factor: Float) -> Set[T] {
+pub fun Set::set_load_factor[T](self: mut Set[T], load_factor: Float) {
     self.load_factor = load_factor
-    return self
 }
 
-pub fun Set::set_capacity[T](self: Set[T], capacity: Int) -> Set[T] {
+pub fun Set::set_capacity[T](self: mut Set[T], capacity: Int) {
     val vals = self.buckets
         |> values()
         |> map(List::values[T])
         |> flatten()
     self.size = 0
-    self.buckets = Stream::new[List[T]](|| List::empty())
+    self.buckets = Stream::new[mut List[T]](|| List::empty())
         |> take(capacity)
         |> List::collect()
     vals |> for_each(|v| { self |> add(v) })
-    return self
 }
 
-pub fun Set::add[T](self: Set[T], value: T) -> Bool {
+pub fun Set::add[T](self: mut Set[T], value: T) -> Bool {
     if self.buckets |> length() |> equal(0) { self |> set_capacity(16) }
     val capacity = self.buckets |> length()
     val bucket_i = value |> T::as_hash() |> Int::abs() |> modulo(capacity)
@@ -100,12 +98,12 @@ pub fun Set::has[T](self: Set[T], value: T) -> Bool {
         |> is_some()
 }
 
-pub fun Set::values[T](self: Set[T]) -> Sequence[T] = self.buckets
+pub fun Set::values[T](self: Set[T]) -> mut Sequence[T] = self.buckets
     |> values()
     |> map(List::values[T])
     |> flatten()
 
-pub fun Set::values_rep[T](self: Set[T]) -> Stream[T] {
+pub fun Set::values_rep[T](self: Set[T]) -> mut Stream[T] {
     if self.size == 0 {
         return panic("Attempt to get stream from empty set!")
     }
@@ -117,7 +115,7 @@ pub fun Set::values_rep[T](self: Set[T]) -> Stream[T] {
 
 // removal
 
-pub fun Set::remove[T](self: Set[T], value: T) -> Bool {
+pub fun Set::remove[T](self: mut Set[T], value: T) -> Bool {
     val bucket_i = T::as_hash(value) 
         |> Int::abs() 
         |> modulo(self.buckets |> length())
@@ -132,10 +130,9 @@ pub fun Set::remove[T](self: Set[T], value: T) -> Bool {
         |> is_some()
 }
 
-pub fun Set::clear[T](self: Set[T]) -> Set[T] {
+pub fun Set::clear[T](self: mut Set[T]) {
     self.size = 0
-    self.buckets = Stream::new[List[T]](|| List::empty())
+    self.buckets = Stream::new[mut List[T]](|| List::empty())
         |> take(self.buckets |> length())
         |> List::collect()
-    return self
 }
