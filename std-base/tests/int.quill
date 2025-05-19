@@ -66,3 +66,13 @@ pub fun sign() {
     assert_eq(Int::sign(0), 0)
     assert_eq(Int::sign(-44), -1)
 }
+
+pub fun parse() {
+    assert_eq(Int::parse("15"), Option::Some(15))
+    assert_eq(Int::parse("-25"), Option::Some(-25))
+    assert_eq(Int::parse("0"), Option::Some(0))
+    assert_eq(Int::parse("+10523"), Option::Some(10523))
+    assert_eq(Int::parse("yay"), Option::None)
+    assert_eq(Int::parse("5b"), Option::None)
+    assert_eq(Int::parse("abc4"), Option::None)
+}

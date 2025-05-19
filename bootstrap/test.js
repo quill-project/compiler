@@ -157,6 +157,7 @@ const tests = [
     "std::tests::float::min",
     "std::tests::float::clamp",
     "std::tests::float::sign",
+    "std::tests::float::parse",
 
     "std::tests::int::as_string",
     "std::tests::int::as_float",
@@ -166,6 +167,7 @@ const tests = [
     "std::tests::int::min",
     "std::tests::int::clamp",
     "std::tests::int::sign",
+    "std::tests::int::parse",
 
     "std::tests::set::empty",
     "std::tests::set::of",

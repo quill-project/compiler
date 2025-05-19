@@ -83,3 +83,17 @@ pub fun sign() {
     assert_eq(Float::sign(-Float::INF), -1.0)
     assert_eq(Float::is_nan(Float::sign(Float::NAN)), true)
 }
+
+pub fun parse() {
+    assert_eq(Float::parse("3.14"), Option::Some(3.14))
+    assert_eq(Float::parse("inf"), Option::Some(Float::INF))
+    assert_eq(Float::parse("-inf"), Option::Some(-Float::INF))
+    assert_eq(Float::parse("215"), Option::Some(215.0))
+    assert_eq(Float::parse("-2.05"), Option::Some(-2.05))
+    assert_eq(Float::parse(".0"), Option::Some(0.0))
+    assert_eq(Float::parse("yay"), Option::None)
+    assert_eq(Float::parse("3.1avas"), Option::None)
+    assert_eq(Float::parse("basc"), Option::None)
+    assert_eq(Float::parse("64.128e3"), Option::Some(64128.0))
+    assert_eq(Float::parse("5e-2"), Option::Some(0.05))
+}
