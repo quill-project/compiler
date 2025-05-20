@@ -1,0 +1,42 @@
+
+mod quill
+
+
+pub struct Source(path: String, start: Int, end: Int)
+
+pub fun Source::as_string(self: Source) -> String 
+    = "_.._ in '_'" |> fmt(
+        Int::as_string(self.start), Int::as_string(self.end), 
+        self.path
+    )
+
+
+pub enum Message::Section(
+    Error: String,
+    Warning: String,
+    Info: String,
+    Code: Source
+)
+
+pub fun Message::Section::display(self: Message::Section, files: Map[String, String]) -> String {
+    match self {
+        Error(msg) { return "! error ! " |> concat(msg) }
+        Warning(msg) { return "warning: " |> concat(msg) }
+        Info(msg) { return "info: " |> concat(msg) }
+        Code(at) { return "at " |> concat(Source::as_string(at)) }
+    }
+}
+
+pub struct Message(sections: List[Message::Section])
+
+pub fun Message::display(self: Message, files: Map[String, String]) -> String
+    = self.sections 
+    |> map[Message::Section, String](|s| s |> display(files))
+    |> join("\n")
+
+
+pub fun Message::invalid_character(invalid: String, at: Source) 
+    = Message(List::of(
+        Message::Section::Error("Invalid character '_'" |> fmt(invalid)),
+        Message::Section::Code(at)
+    ))

@@ -1,0 +1,123 @@
+
+mod quill::lexer
+
+
+pub enum TokenType(
+    Whitespace,
+    LineComment,
+
+    Identifier,
+    IntLiteral,
+    FloatLiteral,
+    BoolLiteral,
+    UnitLiteral,
+    StringLiteral,
+
+    TripleDots,
+
+    LessThanEqual,
+    GreaterThanEqual,
+    DoubleEqual,
+    NotEqual,
+    ArrowRight,
+    DoubleAmpersand,
+    DoublePipe,
+    PathSeparator,
+    Triangle,
+
+    ParenOpen,
+    ParenClose,
+    BraceOpen,
+    BraceClose,
+    BracketOpen,
+    BracketClose,
+
+    LessThan,
+    GreaterThan,
+    Equal,
+    Plus,
+    Minus,
+    Asterisk,
+    Slash,
+    Percent,
+    Colon,
+    Comma,
+    ExclamationMark,
+    Dot,
+    Pipe,
+
+    KeywordIf,
+    KeywordElse,
+    KeywordExt,
+    KeywordFun,
+    KeywordReturn,
+    KeywordVal,
+    KeywordMut,
+    KeywordMod,
+    KeywordUse,
+    KeywordAs,
+    KeywordPub,
+    KeywordStruct,
+    KeywordEnum,
+    KeywordMatch,
+
+    EndOfFile
+)
+
+pub struct Token(
+    type: TokenType, 
+    content: String, 
+    source: Source
+)
+
+// Returns if a token is relevant to Quill syntax and should therefore 
+// be included in the token stream passed to the parser.
+pub fun Token::is_relevant(self: Token) -> Bool {
+    match self.type {
+        Whitespace | LineComment { return false }
+        _ { return true }
+    }
+}
+
+// Returns if a character is alphabetic, meaning in the range of 'a'..'z' 
+// OR 'A'..'Z'.
+pub fun is_alphabetic(char: String) -> Bool {
+    val c = char |> as_code()
+    return (65 <= c && c <= 90)
+        || (97 <= c && c <= 122)
+}
+
+// Returns if a character is numeric, meaning in the range of '0'..'9'.
+pub fun is_numeric(char: String) -> Bool {
+    val c = char |> as_code()
+    return (48 <= c && c <= 57)
+}
+
+// Returns if a character is alphabetic (according to 'is_alphabetic'),
+// numeric (according to 'is_numeric') or equal to '_'.
+pub fun is_alphanumeric(char: String) = char == "_"
+    || is_alphabetic(char) 
+    || is_numeric(char)
+
+// Returns if the character is an ASCII whitespace character, these being
+// space, new line, carriage return, horizontal tab and vertical tab.
+pub fun is_whitespace(char: String) = char == " "
+    || char == "\n" || char == "\r"
+    || char == "\x09" || char == "\x0D"
+
+// Turns a given source file into a stream of tokens, including tokens
+// for whitespaces and comments.
+// The parser expects these to be filtered out, as is the case with the output
+// returned by 'tokenize'.
+pub fun tokenize_all(path: String, content: String) -> mut Stream[Token] {
+    return Sequence::new(|| {
+        // TODO
+    })
+}
+
+// Turns a given source file into a stream of tokens, excluding tokens
+// for whitespaces and comments, as is expected by the parser.
+// Tokens are filtered according to 'Token::is_relevant'.
+// To include these tokens in the output, use 'tokenize_all' instead.
+pub fun tokenize(path: String, content: String) -> mut Stream[Token]
+    = tokenize_all(path, content) |> filter(Token::is_relevant)

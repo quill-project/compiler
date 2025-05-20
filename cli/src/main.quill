@@ -2,5 +2,5 @@
 mod quill::cli
 
 fun main() {
-    
+    println("Hello, world!")
 }
