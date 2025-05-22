@@ -464,7 +464,7 @@ const quill = (function() {
                 i += 1;
                 let content = "";
                 let isEscaped = false;
-                for(; text[i] !== '"'; i += 1) {
+                for(; text[i] !== '"' || isEscaped; i += 1) {
                     if(i >= text.length) {
                         errors.push(message.from(
                             message.warning(`Unclosed string literal`),
@@ -500,6 +500,7 @@ const quill = (function() {
                         } break;
                         default: content += c; break;
                     }
+                    isEscaped = false;
                 }
                 i += 1;
                 output.push(tokenFrom(
@@ -2199,7 +2200,7 @@ const quill = (function() {
                             expected, 
                             { 
                                 type: Type.Struct, name: calledPath, node: nodeAsSource(node), 
-                                typeArgs: asStruct.typeArgs
+                                typeArgs: asStruct.typeArgs, mutable: true
                             }, 
                             node
                         );

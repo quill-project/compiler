@@ -2,5 +2,62 @@
 mod quill::tests::lexer
 
 use std::test::*
+use quill::*
 
-// TODO :)
+fun is_alphabetic() {
+    assert_eq(lexer::is_alphabetic("A"), true)
+    assert_eq(lexer::is_alphabetic("a"), true)
+    assert_eq(lexer::is_alphabetic("c"), true)
+    assert_eq(lexer::is_alphabetic("F"), true)
+    assert_eq(lexer::is_alphabetic("Q"), true)
+    assert_eq(lexer::is_alphabetic("z"), true)
+    assert_eq(lexer::is_alphabetic("Z"), true)
+    assert_eq(lexer::is_alphabetic("@"), false)
+    assert_eq(lexer::is_alphabetic("."), false)
+    assert_eq(lexer::is_alphabetic("!"), false)
+}
+
+fun is_numeric() {
+    assert_eq(lexer::is_numeric("1"), true)
+    assert_eq(lexer::is_numeric("2"), true)
+    assert_eq(lexer::is_numeric("3"), true)
+    assert_eq(lexer::is_numeric("4"), true)
+    assert_eq(lexer::is_numeric("5"), true)
+    assert_eq(lexer::is_numeric("6"), true)
+    assert_eq(lexer::is_numeric("7"), true)
+    assert_eq(lexer::is_numeric("8"), true)
+    assert_eq(lexer::is_numeric("9"), true)
+    assert_eq(lexer::is_numeric("0"), true)
+    assert_eq(lexer::is_numeric("_"), false)
+    assert_eq(lexer::is_numeric("."), false)
+    assert_eq(lexer::is_numeric("!"), false)
+}
+
+fun is_alphanumeric() {
+    assert_eq(lexer::is_alphanumeric("1"), true)
+    assert_eq(lexer::is_alphanumeric("2"), true)
+    assert_eq(lexer::is_alphanumeric("3"), true)
+    assert_eq(lexer::is_alphanumeric("9"), true)
+    assert_eq(lexer::is_alphanumeric("0"), true)
+    assert_eq(lexer::is_alphanumeric("_"), true)
+    assert_eq(lexer::is_alphanumeric("A"), true)
+    assert_eq(lexer::is_alphanumeric("a"), true)
+    assert_eq(lexer::is_alphanumeric("z"), true)
+    assert_eq(lexer::is_alphanumeric("Z"), true)
+    assert_eq(lexer::is_alphanumeric("."), false)
+    assert_eq(lexer::is_alphanumeric("!"), false)
+    assert_eq(lexer::is_alphanumeric("@"), false)
+}
+
+fun is_whitespace() {
+    assert_eq(lexer::is_whitespace(" "), true)
+    assert_eq(lexer::is_whitespace("\n"), true)
+    assert_eq(lexer::is_whitespace("\r"), true)
+    assert_eq(lexer::is_whitespace("\x09"), true) // horizontal tab
+    assert_eq(lexer::is_whitespace("\x0B"), true) // vertical tab
+    assert_eq(lexer::is_alphanumeric("z"), false)
+    assert_eq(lexer::is_alphanumeric("Z"), false)
+    assert_eq(lexer::is_alphanumeric("."), false)
+    assert_eq(lexer::is_alphanumeric("!"), false)
+    assert_eq(lexer::is_alphanumeric("@"), false)
+}

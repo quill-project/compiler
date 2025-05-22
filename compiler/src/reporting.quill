@@ -31,12 +31,27 @@ pub struct Message(sections: List[Message::Section])
 
 pub fun Message::display(self: Message, files: Map[String, String]) -> String
     = self.sections 
-    |> map[Message::Section, String](|s| s |> display(files))
+    |> values()
+    |> map[Message::Section, String](
+        |s| s |> Message::Section::display(files)
+    )
     |> join("\n")
 
 
-pub fun Message::invalid_character(invalid: String, at: Source) 
+pub fun Message::invalid_character(invalid: String, at: Source) -> Message
     = Message(List::of(
         Message::Section::Error("Invalid character '_'" |> fmt(invalid)),
+        Message::Section::Code(at)
+    ))
+
+pub fun Message::unclosed_string_literal(at: Source) -> Message
+    = Message(List::of(
+        Message::Section::Error("Unclosed string literal"),
+        Message::Section::Code(at)
+    ))
+
+pub fun Message::invalid_hex_escape(at: Source) -> Message
+    = Message(List::of(
+        Message::Section::Error("Invalid hexadecimal in string escape sequence"),
         Message::Section::Code(at)
     ))

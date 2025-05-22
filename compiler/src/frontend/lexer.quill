@@ -1,6 +1,8 @@
 
 mod quill::lexer
 
+use quill::*
+
 
 pub enum TokenType(
     Whitespace,
@@ -61,8 +63,74 @@ pub enum TokenType(
     KeywordEnum,
     KeywordMatch,
 
-    EndOfFile
+    EndOfFile,
+    Invalid
 )
+
+// Converts a token type to a string representation of what it describes.
+// If a token type is always associated with a specific sequence of characters,
+// it is returned in single quotes, such as LessThanEqual -> '...'.
+// If a token type is associated with a number of different possible
+// characters, a description of it is returned, 
+// such as Identifier -> an identifier.
+pub fun TokenType::as_string(self: TokenType) -> String {
+    match self {
+        Whitespace { return "a whitespace" }
+        LineComment { return "a line comment" }
+        Identifier { return "an identifier" }
+        IntLiteral { return "an integer" }
+        FloatLiteral { return "a float" }
+        BoolLiteral { return "a boolean" }
+        UnitLiteral { return "the unit value" }
+        StringLiteral { return "a string" }
+        EndOfFile { return "the end of the file" }
+        Invalid { return "an invalid character" }
+
+        TripleDots { return "'...'" }
+        LessThanEqual { return "'<='" }
+        GreaterThanEqual { return "'>='" }
+        DoubleEqual { return "'=='" }
+        NotEqual { return "'!='" }
+        ArrowRight { return "'->'" }
+        DoubleAmpersand { return "'&&'" }
+        DoublePipe { return "'||'" }
+        PathSeparator { return "'::'" }
+        Triangle { return "'|>'" }
+        ParenOpen { return "'('" }
+        ParenClose { return "')'" }
+        BraceOpen { return "'{'" }
+        BraceClose { return "'}'" }
+        BracketOpen { return "'['" }
+        BracketClose { return "']'" }
+        LessThan { return "'<'" }
+        GreaterThan { return "'>'" }
+        Equal { return "'='" }
+        Plus { return "'+'" }
+        Minus { return "'-'" }
+        Asterisk { return "'*'" }
+        Slash { return "'/'" }
+        Percent { return "'%'" }
+        Colon { return "':'" }
+        Comma { return "','" }
+        ExclamationMark { return "'!'" }
+        Dot { return "'.'" }
+        Pipe { return "'|'" }
+        KeywordIf { return "'if'" }
+        KeywordElse { return "'else'" }
+        KeywordExt { return "'ext'" }
+        KeywordFun { return "'fun'" }
+        KeywordReturn { return "'return'" }
+        KeywordVal { return "'val'" }
+        KeywordMut { return "'mut'" }
+        KeywordMod { return "'mod'" }
+        KeywordUse { return "'use'" }
+        KeywordAs { return "'as'" }
+        KeywordPub { return "'pub'" }
+        KeywordStruct { return "'struct'" }
+        KeywordEnum { return "'enum'" }
+        KeywordMatch { return "'match'" }
+    }
+}
 
 pub struct Token(
     type: TokenType, 
@@ -70,11 +138,14 @@ pub struct Token(
     source: Source
 )
 
+pub fun Token::as_string(self: Token) -> String = "Token(_, \"_\", _)" 
+    |> fmt(self.type |> as_string(), self.content, self.source |> as_string())
+
 // Returns if a token is relevant to Quill syntax and should therefore 
 // be included in the token stream passed to the parser.
 pub fun Token::is_relevant(self: Token) -> Bool {
     match self.type {
-        Whitespace | LineComment { return false }
+        Whitespace | LineComment | Invalid { return false }
         _ { return true }
     }
 }
@@ -95,29 +166,243 @@ pub fun is_numeric(char: String) -> Bool {
 
 // Returns if a character is alphabetic (according to 'is_alphabetic'),
 // numeric (according to 'is_numeric') or equal to '_'.
-pub fun is_alphanumeric(char: String) = char == "_"
+pub fun is_alphanumeric(char: String) -> Bool = char == "_"
     || is_alphabetic(char) 
     || is_numeric(char)
 
 // Returns if the character is an ASCII whitespace character, these being
 // space, new line, carriage return, horizontal tab and vertical tab.
-pub fun is_whitespace(char: String) = char == " "
-    || char == "\n" || char == "\r"
-    || char == "\x09" || char == "\x0D"
+pub fun is_whitespace(char: String) -> Bool = char == " "
+    || char == "\n" // new line
+    || char == "\r" // carriage return
+    || char == "\x09" // horizontal tab
+    || char == "\x0B" // vertical tab
+
+// Attempts to parse the hexadecimal digit given by the first character 
+// of the given string into an integer.
+pub fun parse_hex_digit(char: String) -> Option[Int] {
+    val c = char |> as_code()
+    return if 48 <= c && c <= 57 { Option::Some(c - 48) } // '0' - '9'
+        else if 65 <= c && c <= 70 { Option::Some(c - 65 + 10) } // 'A' - 'F'
+        else if 97 <= c && c <= 102 { Option::Some(c - 97 + 10) } // 'a' - 'f'
+        else { Option::None[Int] }
+}
+
+// Attempts to parse an entire hexadecimal string into an integer.
+pub fun parse_hex_number(number: String) -> Option[Int] = number 
+    |> chars() 
+    |> fold(Option::Some(0), |acc, next| acc |> and_then(|prev| next
+        |> parse_hex_digit()
+        |> map(|d| prev * 16 + d)
+    ))
+
+// Maps Quill keywords to their respective keyword token types.
+pub val keywords: Map[String, TokenType] = Map::of(
+    Map::Entry("if", TokenType::KeywordIf),
+    Map::Entry("else", TokenType::KeywordElse),
+    Map::Entry("ext", TokenType::KeywordExt),
+    Map::Entry("fun", TokenType::KeywordFun),
+    Map::Entry("return", TokenType::KeywordReturn),
+    Map::Entry("val", TokenType::KeywordVal),
+    Map::Entry("mut", TokenType::KeywordMut),
+    Map::Entry("mod", TokenType::KeywordMod),
+    Map::Entry("use", TokenType::KeywordUse),
+    Map::Entry("as", TokenType::KeywordAs),
+    Map::Entry("pub", TokenType::KeywordPub),
+    Map::Entry("struct", TokenType::KeywordStruct),
+    Map::Entry("enum", TokenType::KeywordEnum),
+    Map::Entry("match", TokenType::KeywordMatch),
+
+    Map::Entry("true", TokenType::BoolLiteral),
+    Map::Entry("false", TokenType::BoolLiteral),
+    Map::Entry("unit", TokenType::UnitLiteral)
+)
 
 // Turns a given source file into a stream of tokens, including tokens
-// for whitespaces and comments.
+// for whitespaces, comments and invalid characters.
 // The parser expects these to be filtered out, as is the case with the output
 // returned by 'tokenize'.
-pub fun tokenize_all(path: String, content: String) -> mut Stream[Token] {
-    return Sequence::new(|| {
-        // TODO
+pub fun tokenize_all(
+    path: String, content: String, messages: mut List[Message]
+) -> mut Stream[Token] {
+    val content_chars = content |> chars()
+    val current = Pair("", "")
+    mut offset = -2
+    mut collected = ""
+    val advance: Fun() = || {
+        collected = collected |> concat(current.first)
+        current.first = current.second
+        current.second = content_chars |> next() |> unwrap_or("")
+        offset = offset + 1
+    }
+    advance()
+    advance()
+    val advance_while: Fun(Fun(String) -> Bool) 
+        = |cond| Stream::new[String](|| current.first) 
+        |> take_while(|c| c != "" && cond(c))
+        |> for_each(|_| advance())
+    return Stream::new(|| {
+        val start = offset
+        collected = ""
+        val build_token: Fun(TokenType) -> Token 
+            = |tt| Token(tt, collected, Source(path, start, offset))
+        val coll_token: Fun(TokenType, Int) -> Token 
+            = |tt, l| {
+                Stream::new[Unit](|| unit) |> take(l) |> for_each(|_| advance())
+                return Token(tt, collected, Source(path, start, offset))
+            } 
+        if current.first == "" { 
+            return build_token(TokenType::EndOfFile)
+        }
+        if is_whitespace(current.first) {
+            advance_while(is_whitespace)
+            return build_token(TokenType::Whitespace)
+        }
+        match current {
+            Pair("/", "/") {
+                advance_while(|c| c != "\n")
+                advance()
+                return build_token(TokenType::LineComment)
+            }
+            Pair(".", ".") {
+                advance()
+                advance()
+                if current.first != "." {
+                    return build_token(TokenType::Dot)
+                }
+                advance()
+                return build_token(TokenType::TripleDots)
+            }
+            Pair("<", "=") { return coll_token(TokenType::LessThanEqual, 2) }
+            Pair(">", "=") { return coll_token(TokenType::GreaterThanEqual, 2) }
+            Pair("=", "=") { return coll_token(TokenType::DoubleEqual, 2) }
+            Pair("!", "=") { return coll_token(TokenType::NotEqual, 2) }
+            Pair("-", ">") { return coll_token(TokenType::ArrowRight, 2) }
+            Pair("&", "&") { return coll_token(TokenType::DoubleAmpersand, 2) }
+            Pair("|", "|") { return coll_token(TokenType::DoublePipe, 2) }
+            Pair(":", ":") { return coll_token(TokenType::PathSeparator, 2) }
+            Pair("|", ">") { return coll_token(TokenType::Triangle, 2) }
+            Pair("(", _) { return coll_token(TokenType::ParenOpen, 1) }
+            Pair(")", _) { return coll_token(TokenType::ParenClose, 1) }
+            Pair("{", _) { return coll_token(TokenType::BraceOpen, 1) }
+            Pair("}", _) { return coll_token(TokenType::BraceClose, 1) }
+            Pair("[", _) { return coll_token(TokenType::BracketOpen, 1) }
+            Pair("]", _) { return coll_token(TokenType::BracketClose, 1) }
+            Pair("<", _) { return coll_token(TokenType::LessThan, 1) }
+            Pair(">", _) { return coll_token(TokenType::GreaterThan, 1) }
+            Pair("=", _) { return coll_token(TokenType::Equal, 1) }
+            Pair("+", _) { return coll_token(TokenType::Plus, 1) }
+            Pair("-", _) { return coll_token(TokenType::Minus, 1) }
+            Pair("*", _) { return coll_token(TokenType::Asterisk, 1) }
+            Pair("/", _) { return coll_token(TokenType::Slash, 1) }
+            Pair("%", _) { return coll_token(TokenType::Percent, 1) }
+            Pair(":", _) { return coll_token(TokenType::Colon, 1) }
+            Pair(",", _) { return coll_token(TokenType::Comma, 1) }
+            Pair("!", _) { return coll_token(TokenType::ExclamationMark, 1) }
+            Pair(".", _) { return coll_token(TokenType::Dot, 1) }
+            Pair("|", _) { return coll_token(TokenType::Pipe, 1) }
+            _ {}
+        }
+        if is_numeric(current.first) {
+            advance_while(is_numeric)
+            mut tt = TokenType::IntLiteral
+            if current.first == "." {
+                advance()
+                advance_while(is_numeric)
+                tt = TokenType::FloatLiteral
+            }
+            return build_token(tt)
+        }
+        if is_alphanumeric(current.first) {
+            advance_while(is_alphanumeric)
+            return keywords |> get(collected) 
+                |> unwrap_or(TokenType::Identifier) 
+                |> build_token()
+        }
+        if current.first == "\"" {
+            advance()
+            val content = Sequence::new[String](|| {
+                val expanded: Fun(String) -> Option[String] = |r| {
+                    advance()
+                    advance()
+                    return Option::Some(r)
+                }
+                match current {
+                    Pair("\\", "\"") { return expanded("\"") }
+                    Pair("\\", "\n") { return expanded("") }
+                    Pair("\\", "b") { return expanded("\x08") } // backspace
+                    Pair("\\", "f") { return expanded("\x0C") } // formfeed
+                    Pair("\\", "n") { return expanded("\n") }
+                    Pair("\\", "r") { return expanded("\r") } // carriage return
+                    Pair("\\", "t") { return expanded("\x09") } // horizontal tab
+                    Pair("\\", "x") {
+                        advance()
+                        advance()
+                        val c = current.first |> concat(current.second) 
+                            |> parse_hex_number()
+                            |> map(String::from_code)
+                            |> unwrap_or_else(|| {
+                                messages |> push(Message::invalid_hex_escape(
+                                    Source(path, offset, offset + 2)
+                                ))
+                                return ""
+                            })
+                        advance()
+                        advance()
+                        return Option::Some(c)
+                    } 
+                    Pair("\\", "u") {
+                        advance()
+                        advance()
+                        val fh = current.first |> concat(current.second)
+                        advance()
+                        advance()
+                        val c = fh 
+                            |> concat(current.first) |> concat(current.second)
+                            |> parse_hex_number()
+                            |> map(String::from_code)
+                            |> unwrap_or_else(|| {
+                                messages |> push(Message::invalid_hex_escape(
+                                    Source(path, offset, offset + 4)
+                                ))
+                                return ""
+                            })
+                        advance()
+                        advance()
+                        return Option::Some(c)
+                    } 
+                    Pair("\\", c) { return expanded(c) }
+                    Pair("\"", _) { return Option::None }
+                    Pair("", _) {
+                        messages |> push(Message::unclosed_string_literal(
+                            Source(path, start, offset + 1)
+                        ))
+                        return Option::None
+                    }
+                    Pair(c, _) {
+                        advance()
+                        return Option::Some(c)
+                    }
+                }
+            }) |> join("")
+            advance()
+            return Token(
+                TokenType::StringLiteral, content, Source(path, start, offset)
+            )
+        }
+        messages |> push(Message::invalid_character(
+            current.first, Source(path, offset, offset + 1)
+        ))
+        advance()
+        return build_token(TokenType::Invalid)
     })
 }
 
 // Turns a given source file into a stream of tokens, excluding tokens
-// for whitespaces and comments, as is expected by the parser.
+// for whitespaces, comments and invalid characters, as is expected by the parser.
 // Tokens are filtered according to 'Token::is_relevant'.
 // To include these tokens in the output, use 'tokenize_all' instead.
-pub fun tokenize(path: String, content: String) -> mut Stream[Token]
-    = tokenize_all(path, content) |> filter(Token::is_relevant)
+pub fun tokenize(
+    path: String, content: String, messages: mut List[Message]
+) -> mut Stream[Token]
+    = tokenize_all(path, content, messages) |> filter(Token::is_relevant)
