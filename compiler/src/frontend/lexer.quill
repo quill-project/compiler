@@ -3,7 +3,6 @@ mod quill::lexer
 
 use quill::*
 
-
 pub enum TokenType(
     Whitespace,
     LineComment,
@@ -69,7 +68,7 @@ pub enum TokenType(
 
 // Converts a token type to a string representation of what it describes.
 // If a token type is always associated with a specific sequence of characters,
-// it is returned in single quotes, such as LessThanEqual -> '...'.
+// it is returned in single quotes, such as LessThanEqual -> '<='.
 // If a token type is associated with a number of different possible
 // characters, a description of it is returned, 
 // such as Identifier -> an identifier.
