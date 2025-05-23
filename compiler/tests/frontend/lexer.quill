@@ -4,7 +4,7 @@ mod quill::tests::lexer
 use std::test::*
 use quill::*
 
-fun is_alphabetic() {
+pub fun is_alphabetic() {
     assert_eq(lexer::is_alphabetic("A"), true)
     assert_eq(lexer::is_alphabetic("a"), true)
     assert_eq(lexer::is_alphabetic("c"), true)
@@ -17,7 +17,7 @@ fun is_alphabetic() {
     assert_eq(lexer::is_alphabetic("!"), false)
 }
 
-fun is_numeric() {
+pub fun is_numeric() {
     assert_eq(lexer::is_numeric("1"), true)
     assert_eq(lexer::is_numeric("2"), true)
     assert_eq(lexer::is_numeric("3"), true)
@@ -33,7 +33,7 @@ fun is_numeric() {
     assert_eq(lexer::is_numeric("!"), false)
 }
 
-fun is_alphanumeric() {
+pub fun is_alphanumeric() {
     assert_eq(lexer::is_alphanumeric("1"), true)
     assert_eq(lexer::is_alphanumeric("2"), true)
     assert_eq(lexer::is_alphanumeric("3"), true)
@@ -49,15 +49,75 @@ fun is_alphanumeric() {
     assert_eq(lexer::is_alphanumeric("@"), false)
 }
 
-fun is_whitespace() {
+pub fun is_whitespace() {
     assert_eq(lexer::is_whitespace(" "), true)
     assert_eq(lexer::is_whitespace("\n"), true)
     assert_eq(lexer::is_whitespace("\r"), true)
     assert_eq(lexer::is_whitespace("\x09"), true) // horizontal tab
     assert_eq(lexer::is_whitespace("\x0B"), true) // vertical tab
-    assert_eq(lexer::is_alphanumeric("z"), false)
-    assert_eq(lexer::is_alphanumeric("Z"), false)
-    assert_eq(lexer::is_alphanumeric("."), false)
-    assert_eq(lexer::is_alphanumeric("!"), false)
-    assert_eq(lexer::is_alphanumeric("@"), false)
+    assert_eq(lexer::is_whitespace("z"), false)
+    assert_eq(lexer::is_whitespace("Z"), false)
+    assert_eq(lexer::is_whitespace("."), false)
+    assert_eq(lexer::is_whitespace("!"), false)
+    assert_eq(lexer::is_whitespace("@"), false)
+}
+
+pub fun parse_hex_digit() {
+    assert_eq(lexer::parse_hex_digit("2"), Option::Some(2))
+    assert_eq(lexer::parse_hex_digit("F"), Option::Some(15))
+    assert_eq(lexer::parse_hex_digit("8"), Option::Some(8))
+    assert_eq(lexer::parse_hex_digit("c"), Option::Some(12))
+    assert_eq(lexer::parse_hex_digit("e"), Option::Some(14))
+    assert_eq(lexer::parse_hex_digit("g"), Option::None)
+    assert_eq(lexer::parse_hex_digit("@"), Option::None)
+    assert_eq(lexer::parse_hex_digit("z"), Option::None)
+}
+
+pub fun parse_hex_number() {
+    assert_eq(lexer::parse_hex_number("12"), Option::Some(18))
+    assert_eq(lexer::parse_hex_number("2F"), Option::Some(47))
+    assert_eq(lexer::parse_hex_number("CC"), Option::Some(204))
+    assert_eq(lexer::parse_hex_number("DEADBEEF"), Option::Some(3735928559))
+    assert_eq(lexer::parse_hex_number("FFFF"), Option::Some(65535))
+    assert_eq(lexer::parse_hex_number("FFGF"), Option::None)
+    assert_eq(lexer::parse_hex_number("12VF"), Option::None)
+    assert_eq(lexer::parse_hex_number("@as2"), Option::None)
+}
+
+pub fun tokenize_all() {
+    val messages: mut List[Message] = List::empty()
+    assert_eq(
+        lexer::tokenize("test.quill", "5 + 5 = 10", messages)
+            |> map[lexer::Token, String](|t| t.content)
+            |> take(9)
+            |> List::collect(),
+        List::of("5", " ", "+", " ", "5", " ", "=", " ", "10")
+    )
+    val l = lexer::tokenize("test.quill", "5 + 5 = 10", messages)
+        |> map[lexer::Token, lexer::TokenType](|t| t.type)
+        |> take(10)
+        |> List::collect()
+    quill::lexer::TokenType::as_string(lexer::TokenType::IntLiteral)
+    assert_eq(
+        lexer::tokenize("test.quill", "5 + 5 = 10", messages)
+            |> map[lexer::Token, lexer::TokenType](|t| t.type)
+            |> take(10)
+            |> List::collect(),
+        List::of(
+            lexer::TokenType::IntLiteral,
+            lexer::TokenType::Whitespace,
+            lexer::TokenType::Plus,
+            lexer::TokenType::Whitespace,
+            lexer::TokenType::IntLiteral,
+            lexer::TokenType::Whitespace,
+            lexer::TokenType::Equal,
+            lexer::TokenType::Whitespace,
+            lexer::TokenType::IntLiteral, 
+            lexer::TokenType::EndOfFile   
+        )
+    )
+}
+
+pub fun tokenize() {
+
 }

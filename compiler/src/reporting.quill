@@ -4,6 +4,9 @@ mod quill
 
 pub struct Source(path: String, start: Int, end: Int)
 
+pub fun Source::range(start: Source, end: Source) -> Source 
+    = Source(start.path, start.start, end.end)
+
 pub fun Source::as_string(self: Source) -> String 
     = "_.._ in '_'" |> fmt(
         Int::as_string(self.start), Int::as_string(self.end), 

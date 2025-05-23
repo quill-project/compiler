@@ -185,7 +185,18 @@ const tests = [
     "std::tests::set::values",
     "std::tests::set::values_rep",
     "std::tests::set::remove",
-    "std::tests::set::clear"
+    "std::tests::set::clear",
+
+
+
+    "quill::tests::lexer::is_alphabetic",
+    "quill::tests::lexer::is_numeric",
+    "quill::tests::lexer::is_alphanumeric",
+    "quill::tests::lexer::is_whitespace",
+    "quill::tests::lexer::parse_hex_digit",
+    "quill::tests::lexer::parse_hex_number",
+    "quill::tests::lexer::tokenize_all",
+    "quill::tests::lexer::tokenize"
 ];
 
 const fs = require("fs");
@@ -207,7 +218,8 @@ function collectFiles(dir, ext) {
 
 const files = [
     ...collectFiles("./std-js", ".quill"),
-    ...collectFiles("./std-base", ".quill")
+    ...collectFiles("./std-base", ".quill"),
+    ...collectFiles("./compiler", ".quill")
 ];
 
 const sources = {};

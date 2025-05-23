@@ -1,0 +1,84 @@
+
+mod quill::ast
+
+use quill::*
+
+// pub struct UntypedNode(value: Variant[UntypedNode], source: Source)
+
+
+pub struct FunctionType[N](args: List[N], ret: Option[N])
+
+pub struct PathRef[N](path: List[String], t_args: Option[List[N]])
+pub struct Closure[N](args: List[String], body: List[N])
+
+pub struct Invocation[N](invoked: N, args: List[N])
+pub struct PathInvocation[N](path: List[String], args: List[N])
+pub struct IfExpr[N](cond: N, if_val: N, else_val: N)
+
+pub struct LocalVariable[N](name: String, mutable: Bool, type: Option[N], value: N)
+pub struct If[N](cond: N, if_body: List[N], else_body: List[N])
+pub struct While[N](cond: N, body: List[N])
+pub struct For[N](name: String, in: N, body: List[N])
+pub struct Match[N](matched: N, branches: List[MatchBranch[N]])
+pub struct MatchBranch[N](patterns: List[N], body: List[N])
+
+pub struct GlobalVariable[N](
+    path: List[String], public: Bool, mutable: Bool, type: Option[N]
+)
+pub struct Function[N](
+    path: List[String], public: Bool, external: Bool,
+    t_args: List[String], args: List[Pair[String, N]], return_type: N,
+    body: List[N]    
+)
+pub struct CustomType[N](
+    path: List[String], public: Bool,
+    t_args: List[String], members: List[Pair[String, N]]
+)
+
+pub enum Variant[N](
+    FunctionType: FunctionType[N],
+
+    PathRef: PathRef[N],
+    VariableRef: String,
+    Int: Int,
+    Float: Float,
+    Bool: Bool,
+    Unit,
+    String: String,
+    Closure: Closure[N],
+
+    Add: Pair[N, N],
+    Subtract: Pair[N, N],
+    Multiply: Pair[N, N],
+    Divide: Pair[N, N],
+    Remainder: Pair[N, N],
+    LessThan: Pair[N, N],
+    LessThanEqual: Pair[N, N],
+    Equal: Pair[N, N],
+    NotEqual: Pair[N, N],
+    Negate: N,
+    Not: N,
+    Call: Invocation[N],
+    PipedCall: Invocation[N],
+    NamedCall: PathInvocation[N],
+    StructInit: PathInvocation[N],
+    EnumInit: PathInvocation[N],
+    IfExpr: IfExpr[N],
+
+    LocalVariable: LocalVariable[N],
+    Assignment: Pair[N, N],
+    Return: N,
+    Continue,
+    Break,
+    If: If[N],
+    While: While[N],
+    For: For[N],
+    Match: Match[N],
+
+    Module: List[String],
+    Usages: List[List[String]],
+    GlobalVariable: GlobalVariable[N],
+    Function: Function[N],
+    Structure: CustomType[N],
+    Enumeration: CustomType[N]
+)
