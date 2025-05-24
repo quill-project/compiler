@@ -61,6 +61,8 @@ pub enum TokenType(
     KeywordStruct,
     KeywordEnum,
     KeywordMatch,
+    KeywordWhile,
+    KeywordFor,
 
     EndOfFile,
     Invalid
@@ -128,6 +130,8 @@ pub fun TokenType::as_string(self: TokenType) -> String {
         KeywordStruct { return "'struct'" }
         KeywordEnum { return "'enum'" }
         KeywordMatch { return "'match'" }
+        KeywordWhile { return "'while'" }
+        KeywordFor { return "'for'" }
     }
 }
 
@@ -211,6 +215,8 @@ pub val keywords: Map[String, TokenType] = Map::of(
     Map::Entry("struct", TokenType::KeywordStruct),
     Map::Entry("enum", TokenType::KeywordEnum),
     Map::Entry("match", TokenType::KeywordMatch),
+    Map::Entry("while", TokenType::KeywordWhile),
+    Map::Entry("for", TokenType::KeywordFor),
 
     Map::Entry("true", TokenType::BoolLiteral),
     Map::Entry("false", TokenType::BoolLiteral),
@@ -265,10 +271,10 @@ pub fun tokenize_all(
             }
             Pair(".", ".") {
                 advance()
-                advance()
-                if current.first != "." {
+                if current.second != "." {
                     return build_token(TokenType::Dot)
                 }
+                advance()
                 advance()
                 return build_token(TokenType::TripleDots)
             }

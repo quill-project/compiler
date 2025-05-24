@@ -195,8 +195,14 @@ const tests = [
     "quill::tests::lexer::is_whitespace",
     "quill::tests::lexer::parse_hex_digit",
     "quill::tests::lexer::parse_hex_number",
-    "quill::tests::lexer::tokenize_all",
-    "quill::tests::lexer::tokenize"
+    "quill::tests::lexer::int_literals",
+    "quill::tests::lexer::float_literals",
+    "quill::tests::lexer::keyword_literals",
+    "quill::tests::lexer::string_literals",
+    "quill::tests::lexer::symbols",
+    "quill::tests::lexer::symbol_merging",
+    "quill::tests::lexer::keywords",
+    "quill::tests::lexer::identifiers"
 ];
 
 const fs = require("fs");

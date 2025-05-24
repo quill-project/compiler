@@ -85,88 +85,228 @@ pub fun parse_hex_number() {
     assert_eq(lexer::parse_hex_number("@as2"), Option::None)
 }
 
-pub fun tokenize_all() {
+
+struct TToken(type: String, content: String, start: Int, end: Int)
+
+fun TToken::as_string(self: TToken) -> String 
+    = "Token(_, _, _.._)" |> fmt(
+        self.type, self.content, 
+        self.start |> as_string(), self.end |> as_string()
+    )
+
+fun assert_tokens(content: String, ...expected: List[TToken]) {
     val messages: mut List[Message] = List::empty()
-    assert_eq(
-        lexer::tokenize_all("test.quill", "5 + 5 = 10", messages)
-            |> map[Token, String](|t| t.content)
-            |> take(9)
-            |> List::collect(),
-        List::of("5", " ", "+", " ", "5", " ", "=", " ", "10")
-    )
-    assert_eq(
-        lexer::tokenize_all("test.quill", "5 + 5 = 10", messages)
-            |> map[Token, String](|t| TokenType::as_string(t.type))
-            |> take(10)
-            |> List::collect(),
-        List::of(
-            "an integer",
-            "a whitespace",
-            "'+'",
-            "a whitespace",
-            "an integer",
-            "a whitespace",
-            "'='",
-            "a whitespace",
-            "an integer", 
-            "the end of the file"
-        )
-    )
-    assert_eq(
-        lexer::tokenize_all("test.quill", "5 + 5 = 10", messages)
-            |> map[Token, Source](|t| t.source)
-            |> take(9)
-            |> List::collect(),
-        List::of[Source](
-            Source("test.quill", 0, 1),
-            Source("test.quill", 1, 2),
-            Source("test.quill", 2, 3),
-            Source("test.quill", 3, 4),
-            Source("test.quill", 4, 5),
-            Source("test.quill", 5, 6),
-            Source("test.quill", 6, 7),
-            Source("test.quill", 7, 8),
-            Source("test.quill", 8, 10)
-        )
-    )
+    val output: List[TToken] 
+        = lexer::tokenize_all("test.quill", content, messages)
+        |> take_until(|t| t.type == TokenType::EndOfFile)
+        |> map[Token, TToken](|t| {
+            assert_eq(t.source.path, "test.quill")
+            return TToken(
+                TokenType::as_string(t.type), t.content, 
+                t.source.start, t.source.end
+            )
+        })
+        |> List::collect()
+    assert_eq(messages |> length(), 0)
+    if output == expected { return unit }
+    return "Lexing assertion failed:\n"
+        |> concat(content)
+        |> concat("\n\nTest expected:\n")
+        |> concat(expected |> values() |> map(TToken::as_string) |> join("\n"))
+        |> concat("\n\nLexer returned:\n")
+        |> concat(output |> values() |> map(TToken::as_string) |> join("\n"))
+        |> panic()
 }
 
-pub fun tokenize() {
-    val messages: mut List[Message] = List::empty()
-    assert_eq(
-        lexer::tokenize("test.quill", "5 + 5 = 10", messages)
-            |> map[Token, String](|t| t.content)
-            |> take(8)
-            |> List::collect(),
-        List::of("5", "+", "5", "=", "10", "", "", "")
-    )
-    assert_eq(
-        lexer::tokenize("test.quill", "5 + 5 = 10", messages)
-            |> map[Token, String](|t| TokenType::as_string(t.type))
-            |> take(8)
-            |> List::collect(),
-        List::of(
-            "an integer",
-            "'+'",
-            "an integer",
-            "'='",
-            "an integer", 
-            "the end of the file", 
-            "the end of the file", 
-            "the end of the file"
-        )
-    )
-    assert_eq(
-        lexer::tokenize("test.quill", "5 + 5 = 10", messages)
-            |> map[Token, Source](|t| t.source)
-            |> take(5)
-            |> List::collect(),
-        List::of[Source](
-            Source("test.quill", 0, 1),
-            Source("test.quill", 2, 3),
-            Source("test.quill", 4, 5),
-            Source("test.quill", 6, 7),
-            Source("test.quill", 8, 10)
-        )
-    )
-}
+pub fun int_literals() = assert_tokens(
+    "5 10 251234 5942 -5",
+
+    TToken("an integer", "5", 0, 1),
+    TToken("a whitespace", " ", 1, 2),
+    TToken("an integer", "10", 2, 4),
+    TToken("a whitespace", " ", 4, 5),
+    TToken("an integer", "251234", 5, 11),
+    TToken("a whitespace", " ", 11, 12),
+    TToken("an integer", "5942", 12, 16),
+    TToken("a whitespace", " ", 16, 17),
+    TToken("'-'", "-", 17, 18),
+    TToken("an integer", "5", 18, 19)
+)
+
+pub fun float_literals() = assert_tokens(
+    "3.5 .125 0.75 3. -0.5",
+
+    TToken("a float", "3.5", 0, 3),
+    TToken("a whitespace", " ", 3, 4),
+    TToken("'.'", ".", 4, 5),
+    TToken("an integer", "125", 5, 8),
+    TToken("a whitespace", " ", 8, 9),
+    TToken("a float", "0.75", 9, 13),
+    TToken("a whitespace", " ", 13, 14),
+    TToken("a float", "3.", 14, 16),
+    TToken("a whitespace", " ", 16, 17),
+    TToken("'-'", "-", 17, 18),
+    TToken("a float", "0.5", 18, 21)
+)
+
+pub fun keyword_literals() = assert_tokens(
+    "true false unit",
+
+
+    TToken("a boolean", "true", 0, 4),
+    TToken("a whitespace", " ", 4, 5),
+    TToken("a boolean", "false", 5, 10),
+    TToken("a whitespace", " ", 10, 11),
+    TToken("the unit value", "unit", 11, 15)
+)
+
+pub fun string_literals() = assert_tokens(
+    "\"hello\"  \"hello\\nworld\" \"\\
+heya\" \"\\x4C\\x4F\\x4C\" \"\\u2122\"",
+
+    TToken("a string", "hello", 0, 7),
+    TToken("a whitespace", "  ", 7, 9),
+    TToken("a string", "hello\nworld", 9, 23),
+    TToken("a whitespace", " ", 23, 24),
+    TToken("a string", "heya", 24, 32),
+    TToken("a whitespace", " ", 32, 33),
+    TToken("a string", "LOL", 33, 47),
+    TToken("a whitespace", " ", 47, 48),
+    TToken("a string", "™", 48, 56),
+)
+
+pub fun symbols() = assert_tokens(
+    "... <= >= == != -> && || :: |> ()[]{} < > = + - * / % : , ! . |",
+
+    TToken("'...'", "...", 0, 3),
+    TToken("a whitespace", " ", 3, 4),
+    TToken("'<='", "<=", 4, 6),
+    TToken("a whitespace", " ", 6, 7),
+    TToken("'>='", ">=", 7, 9),
+    TToken("a whitespace", " ", 9, 10),
+    TToken("'=='", "==", 10, 12),
+    TToken("a whitespace", " ", 12, 13),
+    TToken("'!='", "!=", 13, 15),
+    TToken("a whitespace", " ", 15, 16),
+    TToken("'->'", "->", 16, 18),
+    TToken("a whitespace", " ", 18, 19),
+    TToken("'&&'", "&&", 19, 21),
+    TToken("a whitespace", " ", 21, 22),
+    TToken("'||'", "||", 22, 24),
+    TToken("a whitespace", " ", 24, 25),
+    TToken("'::'", "::", 25, 27),
+    TToken("a whitespace", " ", 27, 28),
+    TToken("'|>'", "|>", 28, 30),
+    TToken("a whitespace", " ", 30, 31),
+    TToken("'('", "(", 31, 32),
+    TToken("')'", ")", 32, 33),
+    TToken("'['", "[", 33, 34),
+    TToken("']'", "]", 34, 35),
+    TToken("'{'", "{", 35, 36),
+    TToken("'}'", "}", 36, 37),
+    TToken("a whitespace", " ", 37, 38),
+    TToken("'<'", "<", 38, 39),
+    TToken("a whitespace", " ", 39, 40),
+    TToken("'>'", ">", 40, 41),
+    TToken("a whitespace", " ", 41, 42),
+    TToken("'='", "=", 42, 43),
+    TToken("a whitespace", " ", 43, 44),
+    TToken("'+'", "+", 44, 45),
+    TToken("a whitespace", " ", 45, 46),
+    TToken("'-'", "-", 46, 47),
+    TToken("a whitespace", " ", 47, 48),
+    TToken("'*'", "*", 48, 49),
+    TToken("a whitespace", " ", 49, 50),
+    TToken("'/'", "/", 50, 51),
+    TToken("a whitespace", " ", 51, 52),
+    TToken("'%'", "%", 52, 53),
+    TToken("a whitespace", " ", 53, 54),
+    TToken("':'", ":", 54, 55),
+    TToken("a whitespace", " ", 55, 56),
+    TToken("','", ",", 56, 57),
+    TToken("a whitespace", " ", 57, 58),
+    TToken("'!'", "!", 58, 59),
+    TToken("a whitespace", " ", 59, 60),
+    TToken("'.'", ".", 60, 61),
+    TToken("a whitespace", " ", 61, 62),
+    TToken("'|'", "|", 62, 63)
+)
+
+pub fun symbol_merging() = assert_tokens(
+    "<====>= ||> ..... ->= :::",
+
+    TToken("'<='", "<=", 0, 2),
+    TToken("'=='", "==", 2, 4),
+    TToken("'='", "=", 4, 5),
+    TToken("'>='", ">=", 5, 7),
+    TToken("a whitespace", " ", 7, 8),
+    TToken("'||'", "||", 8, 10),
+    TToken("'>'", ">", 10, 11),
+    TToken("a whitespace", " ", 11, 12),
+    TToken("'...'", "...", 12, 15),
+    TToken("'.'", ".", 15, 16),
+    TToken("'.'", ".", 16, 17),
+    TToken("a whitespace", " ", 17, 18),
+    TToken("'->'", "->", 18, 20),
+    TToken("'='", "=", 20, 21),
+    TToken("a whitespace", " ", 21, 22),
+    TToken("'::'", "::", 22, 24),
+    TToken("':'", ":", 24, 25)
+)
+
+pub fun keywords() = assert_tokens(
+    "if else ext fun return val mut mod use as pub struct enum match while for",
+
+    TToken("'if'", "if", 0, 2),
+    TToken("a whitespace", " ", 2, 3),
+    TToken("'else'", "else", 3, 7),
+    TToken("a whitespace", " ", 7, 8),
+    TToken("'ext'", "ext", 8, 11),
+    TToken("a whitespace", " ", 11, 12),
+    TToken("'fun'", "fun", 12, 15),
+    TToken("a whitespace", " ", 15, 16),
+    TToken("'return'", "return", 16, 22),
+    TToken("a whitespace", " ", 22, 23),
+    TToken("'val'", "val", 23, 26),
+    TToken("a whitespace", " ", 26, 27),
+    TToken("'mut'", "mut", 27, 30),
+    TToken("a whitespace", " ", 30, 31),
+    TToken("'mod'", "mod", 31, 34),
+    TToken("a whitespace", " ", 34, 35),
+    TToken("'use'", "use", 35, 38),
+    TToken("a whitespace", " ", 38, 39),
+    TToken("'as'", "as", 39, 41),
+    TToken("a whitespace", " ", 41, 42),
+    TToken("'pub'", "pub", 42, 45),
+    TToken("a whitespace", " ", 45, 46),
+    TToken("'struct'", "struct", 46, 52),
+    TToken("a whitespace", " ", 52, 53),
+    TToken("'enum'", "enum", 53, 57),
+    TToken("a whitespace", " ", 57, 58),
+    TToken("'match'", "match", 58, 63),
+    TToken("a whitespace", " ", 63, 64),
+    TToken("'while'", "while", 64, 69),
+    TToken("a whitespace", " ", 69, 70),
+    TToken("'for'", "for", 70, 73)
+)
+
+pub fun identifiers() = assert_tokens(
+    "hello world111 funny foreign _test 3hi _2 ni_ce_",
+
+    TToken("an identifier", "hello", 0, 5),
+    TToken("a whitespace", " ", 5, 6),
+    TToken("an identifier", "world111", 6, 14),
+    TToken("a whitespace", " ", 14, 15),
+    TToken("an identifier", "funny", 15, 20),
+    TToken("a whitespace", " ", 20, 21),
+    TToken("an identifier", "foreign", 21, 28),
+    TToken("a whitespace", " ", 28, 29),
+    TToken("an identifier", "_test", 29, 34),
+    TToken("a whitespace", " ", 34, 35),
+    TToken("an integer", "3", 35, 36),
+    TToken("an identifier", "hi", 36, 38),
+    TToken("a whitespace", " ", 38, 39),
+    TToken("an identifier", "_2", 39, 41),
+    TToken("a whitespace", " ", 41, 42),
+    TToken("an identifier", "ni_ce_", 42, 48)
+)
