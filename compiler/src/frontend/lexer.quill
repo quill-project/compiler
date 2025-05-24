@@ -131,6 +131,15 @@ pub fun TokenType::as_string(self: TokenType) -> String {
     }
 }
 
+// Returns if a token type is relevant to Quill syntax and should therefore 
+// be included in the token stream passed to the parser.
+pub fun TokenType::is_relevant(self: TokenType) -> Bool {
+    match self {
+        Whitespace | LineComment | Invalid { return false }
+        _ { return true }
+    }
+}
+
 pub struct Token(
     type: TokenType, 
     content: String, 
@@ -139,15 +148,6 @@ pub struct Token(
 
 pub fun Token::as_string(self: Token) -> String = "Token(_, \"_\", _)" 
     |> fmt(self.type |> as_string(), self.content, self.source |> as_string())
-
-// Returns if a token is relevant to Quill syntax and should therefore 
-// be included in the token stream passed to the parser.
-pub fun Token::is_relevant(self: Token) -> Bool {
-    match self.type {
-        Whitespace | LineComment | Invalid { return false }
-        _ { return true }
-    }
-}
 
 // Returns if a character is alphabetic, meaning in the range of 'a'..'z' 
 // OR 'A'..'Z'.
@@ -399,9 +399,10 @@ pub fun tokenize_all(
 
 // Turns a given source file into a stream of tokens, excluding tokens
 // for whitespaces, comments and invalid characters, as is expected by the parser.
-// Tokens are filtered according to 'Token::is_relevant'.
+// Tokens are filtered according to 'TokenType::is_relevant'.
 // To include these tokens in the output, use 'tokenize_all' instead.
 pub fun tokenize(
     path: String, content: String, messages: mut List[Message]
 ) -> mut Stream[Token]
-    = tokenize_all(path, content, messages) |> filter(Token::is_relevant)
+    = tokenize_all(path, content, messages) 
+    |> filter(|t| t.type |> is_relevant())

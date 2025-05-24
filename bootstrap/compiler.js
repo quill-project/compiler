@@ -1759,15 +1759,15 @@ const quill = (function() {
                 switch(node.type) {
                     case NodeType.Structure: 
                     case NodeType.Enumeration: {
-                        s.instances[instanceKey] = null;
                         state.enterScope(namedTypeArgs);
-                        const members = node.members.map(m => {
+                        instance = { s, members: null, typeArgs: inferredTypeArgs };
+                        s.instances[instanceKey] = instance;
+                        instance.members = node.members.map(m => {
                             return {
                                 name: m.name,
                                 type: typeFromNode(m.type, state)
                             };
                         });
-                        instance = { s, members, typeArgs: inferredTypeArgs };
                         state.exitScope();
                         break;
                     }
@@ -1830,6 +1830,8 @@ const quill = (function() {
                     throw message.internalError(`Unhandled symbol type ${node.type}`);
                 }
                 s.instances[instanceKey] = instance;
+                instance.instanceI = s.instanceC;
+                s.instanceC += 1;
             } catch(error) {
                 const expandError = error.sections !== undefined 
                     && inferredTypeArgs.length >= 1;
@@ -1848,8 +1850,6 @@ const quill = (function() {
                 throw error;
             }
         }
-        instance.instanceI = s.instanceC;
-        s.instanceC += 1;
         return instance;
     }
 
@@ -3071,7 +3071,7 @@ function quill$$eq(a, b) {
     if(typeof a !== typeof b) { return false; }
     if(typeof a !== "object") { return a === b; }
     for(const a_prop in a) {
-        if(!Object.hasOwn(b, a_prop)) { return false; }
+        if(!Object.hasOwn(b, a_prop)) { continue; }
     }
     for(const b_prop in b) {
         if(!Object.hasOwn(a, b_prop)) { return false; }
@@ -3333,10 +3333,12 @@ function quill$$eq(a, b) {
                     out += `${body}return null;\n}\n`;
                 }
                 out += `let returned = null;\n`;
+                let hadBranch = false;
                 for(const branchI in node.branches) {
                     const branch = node.branches[branchI];
                     for(const pattern of branch.patterns) {
-                        if(branchI > 0) { out += `else `; }
+                        if(hadBranch) { out += `else `; }
+                        hadBranch = true;
                         const generatePath = path => {
                             for(const element of path) {
                                 switch(element.type) {

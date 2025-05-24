@@ -3,7 +3,7 @@ mod quill::ast
 
 use quill::*
 
-// pub struct UntypedNode(value: Variant[UntypedNode], source: Source)
+pub struct UntypedNode(value: Variant[UntypedNode], source: Source)
 
 
 pub struct FunctionType[N](args: List[N], ret: Option[N])

@@ -4,7 +4,7 @@ mod std
 pub fun List::as_string[T](self: List[T]) -> String {
     val contents = self
         |> values()
-        |> map(T::as_string)
+        |> map[T, String](T::as_string)
         |> join(", ")
     return "List(" |> concat(contents) |> concat(")")
 }
