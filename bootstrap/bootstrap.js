@@ -17,10 +17,10 @@ function collectFiles(dir, ext) {
 }
 
 const files = [
-    ...collectFiles("./std-js", ".quill"),
+    ...collectFiles("./std-js/src", ".quill"),
     ...collectFiles("./std-base/src", ".quill"),
-    ...collectFiles("./compiler", ".quill"),
-    ...collectFiles("./cli", ".quill")
+    ...collectFiles("./compiler/src", ".quill"),
+    ...collectFiles("./cli/src", ".quill")
 ];
 const sources = {};
 for(const file of files) {

@@ -80,5 +80,7 @@ pub enum Variant[N](
     GlobalVariable: GlobalVariable[N],
     Function: Function[N],
     Structure: CustomType[N],
-    Enumeration: CustomType[N]
+    Enumeration: CustomType[N],
+
+    Invalid
 )

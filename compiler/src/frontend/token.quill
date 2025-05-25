@@ -1,0 +1,221 @@
+
+mod quill::token
+
+use quill::*
+
+pub enum TokenType(
+    Whitespace,
+    LineComment,
+
+    Identifier,
+    IntLiteral,
+    FloatLiteral,
+    BoolLiteral,
+    UnitLiteral,
+    StringLiteral,
+
+    TripleDots,
+
+    LessThanEqual,
+    GreaterThanEqual,
+    DoubleEqual,
+    NotEqual,
+    ArrowRight,
+    DoubleAmpersand,
+    DoublePipe,
+    PathSeparator,
+    Triangle,
+
+    ParenOpen,
+    ParenClose,
+    BraceOpen,
+    BraceClose,
+    BracketOpen,
+    BracketClose,
+
+    LessThan,
+    GreaterThan,
+    Equal,
+    Plus,
+    Minus,
+    Asterisk,
+    Slash,
+    Percent,
+    Colon,
+    Comma,
+    ExclamationMark,
+    Dot,
+    Pipe,
+
+    KeywordIf,
+    KeywordElse,
+    KeywordExt,
+    KeywordFun,
+    KeywordReturn,
+    KeywordContinue,
+    KeywordBreak,
+    KeywordVal,
+    KeywordMut,
+    KeywordMod,
+    KeywordUse,
+    KeywordAs,
+    KeywordPub,
+    KeywordStruct,
+    KeywordEnum,
+    KeywordMatch,
+    KeywordWhile,
+    KeywordFor,
+
+    EndOfFile,
+    Invalid
+)
+
+// Converts a token type to a string representation of what it describes.
+// If a token type is always associated with a specific sequence of characters,
+// it is returned in single quotes, such as LessThanEqual -> '<='.
+// If a token type is associated with a number of different possible
+// characters, a description of it is returned, 
+// such as Identifier -> an identifier.
+pub fun TokenType::as_string(self: TokenType) -> String {
+    match self {
+        Whitespace { return "a whitespace" }
+        LineComment { return "a line comment" }
+        Identifier { return "an identifier" }
+        IntLiteral { return "an integer" }
+        FloatLiteral { return "a float" }
+        BoolLiteral { return "a boolean" }
+        UnitLiteral { return "the unit value" }
+        StringLiteral { return "a string" }
+        EndOfFile { return "the end of the file" }
+        Invalid { return "an invalid character" }
+
+        TripleDots { return "'...'" }
+        LessThanEqual { return "'<='" }
+        GreaterThanEqual { return "'>='" }
+        DoubleEqual { return "'=='" }
+        NotEqual { return "'!='" }
+        ArrowRight { return "'->'" }
+        DoubleAmpersand { return "'&&'" }
+        DoublePipe { return "'||'" }
+        PathSeparator { return "'::'" }
+        Triangle { return "'|>'" }
+        ParenOpen { return "'('" }
+        ParenClose { return "')'" }
+        BraceOpen { return "'{'" }
+        BraceClose { return "'}'" }
+        BracketOpen { return "'['" }
+        BracketClose { return "']'" }
+        LessThan { return "'<'" }
+        GreaterThan { return "'>'" }
+        Equal { return "'='" }
+        Plus { return "'+'" }
+        Minus { return "'-'" }
+        Asterisk { return "'*'" }
+        Slash { return "'/'" }
+        Percent { return "'%'" }
+        Colon { return "':'" }
+        Comma { return "','" }
+        ExclamationMark { return "'!'" }
+        Dot { return "'.'" }
+        Pipe { return "'|'" }
+        KeywordIf { return "'if'" }
+        KeywordElse { return "'else'" }
+        KeywordExt { return "'ext'" }
+        KeywordFun { return "'fun'" }
+        KeywordReturn { return "'return'" }
+        KeywordContinue { return "'continue'" }
+        KeywordBreak { return "'break'" }
+        KeywordVal { return "'val'" }
+        KeywordMut { return "'mut'" }
+        KeywordMod { return "'mod'" }
+        KeywordUse { return "'use'" }
+        KeywordAs { return "'as'" }
+        KeywordPub { return "'pub'" }
+        KeywordStruct { return "'struct'" }
+        KeywordEnum { return "'enum'" }
+        KeywordMatch { return "'match'" }
+        KeywordWhile { return "'while'" }
+        KeywordFor { return "'for'" }
+    }
+}
+
+pub fun TokenType::as_hash(self: TokenType) -> Int {
+        match self {
+        Whitespace { return 0 }
+        LineComment { return 1 }
+        Identifier { return 2 }
+        IntLiteral { return 3 }
+        FloatLiteral { return 4 }
+        BoolLiteral { return 5 }
+        UnitLiteral { return 6 }
+        StringLiteral { return 7 }
+        EndOfFile { return 8 }
+        Invalid { return 9 }
+
+        TripleDots { return 10 }
+        LessThanEqual { return 11 }
+        GreaterThanEqual { return 12 }
+        DoubleEqual { return 13 }
+        NotEqual { return 14 }
+        ArrowRight { return 15 }
+        DoubleAmpersand { return 16 }
+        DoublePipe { return 17 }
+        PathSeparator { return 18 }
+        Triangle { return 19 }
+        ParenOpen { return 20 }
+        ParenClose { return 21 }
+        BraceOpen { return 22 }
+        BraceClose { return 23 }
+        BracketOpen { return 24 }
+        BracketClose { return 25 }
+        LessThan { return 26 }
+        GreaterThan { return 27 }
+        Equal { return 28 }
+        Plus { return 29 }
+        Minus { return 30 }
+        Asterisk { return 31 }
+        Slash { return 32 }
+        Percent { return 33 }
+        Colon { return 34 }
+        Comma { return 35 }
+        ExclamationMark { return 36 }
+        Dot { return 37 }
+        Pipe { return 38 }
+        KeywordIf { return 39 }
+        KeywordElse { return 40 }
+        KeywordExt { return 41 }
+        KeywordFun { return 42 }
+        KeywordReturn { return 43 }
+        KeywordContinue { return 44 }
+        KeywordBreak { return 45 }
+        KeywordVal { return 46 }
+        KeywordMut { return 47 }
+        KeywordMod { return 48 }
+        KeywordUse { return 49 }
+        KeywordAs { return 50 }
+        KeywordPub { return 51 }
+        KeywordStruct { return 52 }
+        KeywordEnum { return 53 }
+        KeywordMatch { return 54 }
+        KeywordWhile { return 55 }
+        KeywordFor { return 56 }
+    }
+}
+
+// Returns if a token type is relevant to Quill syntax and should therefore 
+// be included in the token stream passed to the parser.
+pub fun TokenType::is_relevant(self: TokenType) -> Bool {
+    match self {
+        Whitespace | LineComment | Invalid { return false }
+        _ { return true }
+    }
+}
+
+pub struct Token(
+    type: TokenType, 
+    content: String, 
+    source: Source
+)
+
+pub fun Token::as_string(self: Token) -> String = "Token(_, \"_\", _)" 
+    |> fmt(self.type |> as_string(), self.content, self.source |> as_string())

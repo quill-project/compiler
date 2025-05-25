@@ -2,156 +2,7 @@
 mod quill::lexer
 
 use quill::*
-
-pub enum TokenType(
-    Whitespace,
-    LineComment,
-
-    Identifier,
-    IntLiteral,
-    FloatLiteral,
-    BoolLiteral,
-    UnitLiteral,
-    StringLiteral,
-
-    TripleDots,
-
-    LessThanEqual,
-    GreaterThanEqual,
-    DoubleEqual,
-    NotEqual,
-    ArrowRight,
-    DoubleAmpersand,
-    DoublePipe,
-    PathSeparator,
-    Triangle,
-
-    ParenOpen,
-    ParenClose,
-    BraceOpen,
-    BraceClose,
-    BracketOpen,
-    BracketClose,
-
-    LessThan,
-    GreaterThan,
-    Equal,
-    Plus,
-    Minus,
-    Asterisk,
-    Slash,
-    Percent,
-    Colon,
-    Comma,
-    ExclamationMark,
-    Dot,
-    Pipe,
-
-    KeywordIf,
-    KeywordElse,
-    KeywordExt,
-    KeywordFun,
-    KeywordReturn,
-    KeywordVal,
-    KeywordMut,
-    KeywordMod,
-    KeywordUse,
-    KeywordAs,
-    KeywordPub,
-    KeywordStruct,
-    KeywordEnum,
-    KeywordMatch,
-    KeywordWhile,
-    KeywordFor,
-
-    EndOfFile,
-    Invalid
-)
-
-// Converts a token type to a string representation of what it describes.
-// If a token type is always associated with a specific sequence of characters,
-// it is returned in single quotes, such as LessThanEqual -> '<='.
-// If a token type is associated with a number of different possible
-// characters, a description of it is returned, 
-// such as Identifier -> an identifier.
-pub fun TokenType::as_string(self: TokenType) -> String {
-    match self {
-        Whitespace { return "a whitespace" }
-        LineComment { return "a line comment" }
-        Identifier { return "an identifier" }
-        IntLiteral { return "an integer" }
-        FloatLiteral { return "a float" }
-        BoolLiteral { return "a boolean" }
-        UnitLiteral { return "the unit value" }
-        StringLiteral { return "a string" }
-        EndOfFile { return "the end of the file" }
-        Invalid { return "an invalid character" }
-
-        TripleDots { return "'...'" }
-        LessThanEqual { return "'<='" }
-        GreaterThanEqual { return "'>='" }
-        DoubleEqual { return "'=='" }
-        NotEqual { return "'!='" }
-        ArrowRight { return "'->'" }
-        DoubleAmpersand { return "'&&'" }
-        DoublePipe { return "'||'" }
-        PathSeparator { return "'::'" }
-        Triangle { return "'|>'" }
-        ParenOpen { return "'('" }
-        ParenClose { return "')'" }
-        BraceOpen { return "'{'" }
-        BraceClose { return "'}'" }
-        BracketOpen { return "'['" }
-        BracketClose { return "']'" }
-        LessThan { return "'<'" }
-        GreaterThan { return "'>'" }
-        Equal { return "'='" }
-        Plus { return "'+'" }
-        Minus { return "'-'" }
-        Asterisk { return "'*'" }
-        Slash { return "'/'" }
-        Percent { return "'%'" }
-        Colon { return "':'" }
-        Comma { return "','" }
-        ExclamationMark { return "'!'" }
-        Dot { return "'.'" }
-        Pipe { return "'|'" }
-        KeywordIf { return "'if'" }
-        KeywordElse { return "'else'" }
-        KeywordExt { return "'ext'" }
-        KeywordFun { return "'fun'" }
-        KeywordReturn { return "'return'" }
-        KeywordVal { return "'val'" }
-        KeywordMut { return "'mut'" }
-        KeywordMod { return "'mod'" }
-        KeywordUse { return "'use'" }
-        KeywordAs { return "'as'" }
-        KeywordPub { return "'pub'" }
-        KeywordStruct { return "'struct'" }
-        KeywordEnum { return "'enum'" }
-        KeywordMatch { return "'match'" }
-        KeywordWhile { return "'while'" }
-        KeywordFor { return "'for'" }
-    }
-}
-
-// Returns if a token type is relevant to Quill syntax and should therefore 
-// be included in the token stream passed to the parser.
-pub fun TokenType::is_relevant(self: TokenType) -> Bool {
-    match self {
-        Whitespace | LineComment | Invalid { return false }
-        _ { return true }
-    }
-}
-
-pub struct Token(
-    type: TokenType, 
-    content: String, 
-    source: Source
-)
-
-pub fun Token::as_string(self: Token) -> String = "Token(_, \"_\", _)" 
-    |> fmt(self.type |> as_string(), self.content, self.source |> as_string())
+use quill::token::(Token, TokenType)
 
 // Returns if a character is alphabetic, meaning in the range of 'a'..'z' 
 // OR 'A'..'Z'.
@@ -206,6 +57,8 @@ pub val keywords: Map[String, TokenType] = Map::of(
     Map::Entry("ext", TokenType::KeywordExt),
     Map::Entry("fun", TokenType::KeywordFun),
     Map::Entry("return", TokenType::KeywordReturn),
+    Map::Entry("continue", TokenType::KeywordContinue),
+    Map::Entry("break", TokenType::KeywordBreak),
     Map::Entry("val", TokenType::KeywordVal),
     Map::Entry("mut", TokenType::KeywordMut),
     Map::Entry("mod", TokenType::KeywordMod),
@@ -326,70 +179,9 @@ pub fun tokenize_all(
         }
         if current.first == "\"" {
             advance()
-            val content = Sequence::new[String](|| {
-                val expanded: Fun(String) -> Option[String] = |r| {
-                    advance()
-                    advance()
-                    return Option::Some(r)
-                }
-                match current {
-                    Pair("\\", "\"") { return expanded("\"") }
-                    Pair("\\", "\n") { return expanded("") }
-                    Pair("\\", "b") { return expanded("\x08") } // backspace
-                    Pair("\\", "f") { return expanded("\x0C") } // formfeed
-                    Pair("\\", "n") { return expanded("\n") }
-                    Pair("\\", "r") { return expanded("\r") } // carriage return
-                    Pair("\\", "t") { return expanded("\x09") } // horizontal tab
-                    Pair("\\", "x") {
-                        advance()
-                        advance()
-                        val c = current.first |> concat(current.second) 
-                            |> parse_hex_number()
-                            |> map(String::from_code)
-                            |> unwrap_or_else(|| {
-                                messages |> push(Message::invalid_hex_escape(
-                                    Source(path, offset, offset + 2)
-                                ))
-                                return ""
-                            })
-                        advance()
-                        advance()
-                        return Option::Some(c)
-                    } 
-                    Pair("\\", "u") {
-                        advance()
-                        advance()
-                        val fh = current.first |> concat(current.second)
-                        advance()
-                        advance()
-                        val c = fh 
-                            |> concat(current.first) |> concat(current.second)
-                            |> parse_hex_number()
-                            |> map(String::from_code)
-                            |> unwrap_or_else(|| {
-                                messages |> push(Message::invalid_hex_escape(
-                                    Source(path, offset, offset + 4)
-                                ))
-                                return ""
-                            })
-                        advance()
-                        advance()
-                        return Option::Some(c)
-                    } 
-                    Pair("\\", c) { return expanded(c) }
-                    Pair("\"", _) { return Option::None }
-                    Pair("", _) {
-                        messages |> push(Message::unclosed_string_literal(
-                            Source(path, start, offset + 1)
-                        ))
-                        return Option::None
-                    }
-                    Pair(c, _) {
-                        advance()
-                        return Option::Some(c)
-                    }
-                }
-            }) |> join("")
+            val content = expanded_string_escapes(
+                || current, advance, path, || offset, messages
+            ) |> join("")
             advance()
             return Token(
                 TokenType::StringLiteral, content, Source(path, start, offset)
@@ -400,6 +192,74 @@ pub fun tokenize_all(
         ))
         advance()
         return build_token(TokenType::Invalid)
+    })
+}
+
+fun expanded_string_escapes(
+    current: Fun() -> Pair[String, String], advance: Fun(), 
+    path: String, offset: Fun() -> Int, messages: mut List[Message]
+) -> mut Sequence[String] {
+    val start = offset()
+    val expanded: Fun(String) -> Option[String] = |r| {
+        advance()
+        advance()
+        return Option::Some(r)
+    }
+    return Sequence::new[String](|| {
+        match current() {
+            Pair("\\", "\"") { return expanded("\"") }
+            Pair("\\", "\n") { return expanded("") }
+            Pair("\\", "b") { return expanded("\x08") } // backspace
+            Pair("\\", "f") { return expanded("\x0C") } // formfeed
+            Pair("\\", "n") { return expanded("\n") }
+            Pair("\\", "r") { return expanded("\r") } // carriage return
+            Pair("\\", "t") { return expanded("\x09") } // horizontal tab
+            Pair("\\", "x") {
+                advance()
+                advance()
+                val c = current().first |> concat(current().second) 
+                    |> parse_hex_number()
+                    |> map(String::from_code)
+                    |> unwrap_or_else(|| {
+                        val s = Source(path, offset(), offset() + 2)
+                        messages |> push(Message::invalid_hex_escape(s))
+                        return ""
+                    })
+                advance()
+                advance()
+                return Option::Some(c)
+            } 
+            Pair("\\", "u") {
+                advance()
+                advance()
+                val fh = current().first |> concat(current().second)
+                advance()
+                advance()
+                val c = fh 
+                    |> concat(current().first) |> concat(current().second)
+                    |> parse_hex_number()
+                    |> map(String::from_code)
+                    |> unwrap_or_else(|| {
+                        val s = Source(path, offset(), offset() + 4)
+                        messages |> push(Message::invalid_hex_escape(s))
+                        return ""
+                    })
+                advance()
+                advance()
+                return Option::Some(c)
+            } 
+            Pair("\\", c) { return expanded(c) }
+            Pair("\"", _) { return Option::None }
+            Pair("", _) {
+                val s = Source(path, start, offset() + 1)
+                messages |> push(Message::unclosed_string_literal(s))
+                return Option::None
+            }
+            Pair(c, _) {
+                advance()
+                return Option::Some(c)
+            }
+        }
     })
 }
 

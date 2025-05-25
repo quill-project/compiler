@@ -1,9 +1,14 @@
 
 mod quill
 
+use quill::token::(Token, TokenType)
+
 
 pub struct Source(path: String, start: Int, end: Int)
 
+// Creates a new source starting at 'start' and ending at 'end'.
+// If the paths of the two sources differ, the path of the first
+// source is used.
 pub fun Source::range(start: Source, end: Source) -> Source 
     = Source(start.path, start.start, end.end)
 
@@ -40,6 +45,7 @@ pub fun Message::display(self: Message, files: Map[String, String]) -> String
     )
     |> join("\n")
 
+// Tokenization
 
 pub fun Message::invalid_character(invalid: String, at: Source) -> Message
     = Message(List::of(
@@ -57,4 +63,28 @@ pub fun Message::invalid_hex_escape(at: Source) -> Message
     = Message(List::of(
         Message::Section::Error("Invalid hexadecimal in string escape sequence"),
         Message::Section::Code(at)
+    ))
+
+// Parsing
+
+pub fun Message::unexpected_token(token: Token, exp_types: List[TokenType]) -> Message {
+    val exp = exp_types |> slice(0, -1) |> values() 
+        |> map(TokenType::as_string)
+        |> join(", ") |> concat(" or ") 
+        |> concat(exp_types |> at(-1) |> TokenType::as_string())
+    val got = token.type |> TokenType::as_string()
+    return Message(List::of(
+        Message::Section::Error("Expected _, but got _" |> fmt(exp, got)),
+        Message::Section::Code(token.source)
+    ))
+}
+
+pub fun Message::unexpected_construct(
+    token: Token, expected: String
+) -> Message
+    = Message(List::of(
+        Message::Section::Error(
+            "Expected _, but got _" |> fmt(expected, token.content)
+        ),
+        Message::Section::Code(token.source)
     ))

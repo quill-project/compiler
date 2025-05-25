@@ -2532,6 +2532,22 @@ const quill = (function() {
                         return global.type;
                     }
                     assertReadOnly();
+                    const func = instantiateSymbol(
+                        node, path, typeArgs, [NodeType.Function], state,
+                        expected === null? null : expected.arguments, 
+                        expected === null? null : expected.returned
+                    );
+                    if(func !== null) {
+                        assertSymbolExposed(node, path, func.s, state);
+                        node.fullPath = path;
+                        node.instanceKey = instanceKeyOf(func.typeArgs);
+                        const arguments = func.argTypes.map(a => a.type);
+                        const returned = func.returnType;
+                        return {
+                            type: Type.Function, arguments, returned,
+                            node: nodeAsSource(node)
+                        };
+                    }
                     const pathElems = node.value.split("::");
                     if(pathElems.length > 1) {
                         const enumPath = expandUsages(
@@ -2566,25 +2582,9 @@ const quill = (function() {
                                 message.error(`Creation of unknown enum variant '${path}' attempted`),
                                 message.code(node),
                                 message.note(`'${enumPath}' originates from here:`),
-                                message.code(called.node)
+                                message.code(enumeration.s.node)
                             );
                         }
-                    }
-                    const func = instantiateSymbol(
-                        node, path, typeArgs, [NodeType.Function], state,
-                        expected === null? null : expected.arguments, 
-                        expected === null? null : expected.returned
-                    );
-                    if(func !== null) {
-                        assertSymbolExposed(node, path, func.s, state);
-                        node.fullPath = path;
-                        node.instanceKey = instanceKeyOf(func.typeArgs);
-                        const arguments = func.argTypes.map(a => a.type);
-                        const returned = func.returnType;
-                        return {
-                            type: Type.Function, arguments, returned,
-                            node: nodeAsSource(node)
-                        };
                     }
                     throw message.from(
                         message.error(`Access of unknown variable '${node.value}'`),

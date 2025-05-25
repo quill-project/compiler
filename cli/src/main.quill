@@ -1,48 +1,34 @@
 
 mod quill::cli
 
-// use quill::*
-
-// fun main() {
-//     val name = "example.quill"
-//     val content = "
-// mod quill::cli
-
-// use quill::*
-
-// fun main() {
-//     val name = \"example.quill\"
-//     val content = \"nice\"
-//     val files: Map[String, String] = Map::of(Map::Entry(name, content))
-//     val messages: mut List[Message] = List::empty()
-//     lexer::tokenize_all(name, content, messages)
-//         |> take_until(|t| t.type == lexer::TokenType::EndOfFile)
-//         |> for_each(println)
-//     messages |> values()
-//         |> map[Message, String](|m| m |> display(files))
-//         |> for_each(println)
-// }
-//     "
-//     val files: Map[String, String] = Map::of(Map::Entry(name, content))
-//     val messages: mut List[Message] = List::empty()
-//     lexer::tokenize_all(name, content, messages)
-//         |> take_until(|t| t.type == lexer::TokenType::EndOfFile)
-//         |> for_each(println)
-//     messages |> values()
-//         |> map[Message, String](|m| m |> display(files))
-//         |> for_each(println)
-// }
-
-use testing::Int
+use quill::*
 
 fun main() {
-    // println[Int](5 |> add(10))
-    // println[String]("Hello, " |> add("world!"))
-    "Hello" |> add("world") |> println[String]()
+    val name = "example.quill"
+    val content = "
+mod quill::cli
+
+use quill::*
+
+fun main() {
+    val name = \"example.quill\"
+    val content = \"nice\"
+    val files: Map[String, String] = Map::of(Map::Entry(name, content))
+    val messages: mut List[Message] = List::empty()
+    lexer::tokenize_all(name, content, messages)
+        |> take_until(|t| t.type == lexer::TokenType::EndOfFile)
+        |> for_each(println)
+    messages |> values()
+        |> map[Message, String](|m| m |> display(files))
+        |> for_each(println)
 }
-
-mod testing
-
-use std::Int
-
-pub fun Int::add[T](lhs: T, rhs: T) -> T = lhs |> subtract(rhs)
+    "
+    val files: Map[String, String] = Map::of(Map::Entry(name, content))
+    val messages: mut List[Message] = List::empty()
+    lexer::tokenize_all(name, content, messages)
+        |> take_until(|t| t.type == lexer::TokenType::EndOfFile)
+        |> for_each(println)
+    messages |> values()
+        |> map[Message, String](|m| m |> display(files))
+        |> for_each(println)
+}

@@ -3,7 +3,7 @@ mod quill::tests::lexer
 
 use std::test::*
 use quill::*
-use quill::lexer::(Token, TokenType)
+use quill::token::(Token, TokenType)
 
 pub fun is_alphabetic() {
     assert_eq(lexer::is_alphabetic("A"), true)
@@ -86,11 +86,12 @@ pub fun parse_hex_number() {
 }
 
 
-struct TToken(type: String, content: String, start: Int, end: Int)
+struct TToken(type: TokenType, content: String, start: Int, end: Int)
 
 fun TToken::as_string(self: TToken) -> String 
     = "Token(_, _, _.._)" |> fmt(
-        self.type, self.content, 
+        self.type |> as_string(), 
+        self.content, 
         self.start |> as_string(), self.end |> as_string()
     )
 
@@ -101,10 +102,7 @@ fun assert_tokens(content: String, ...expected: List[TToken]) {
         |> take_until(|t| t.type == TokenType::EndOfFile)
         |> map[Token, TToken](|t| {
             assert_eq(t.source.path, "test.quill")
-            return TToken(
-                TokenType::as_string(t.type), t.content, 
-                t.source.start, t.source.end
-            )
+            return TToken(t.type, t.content, t.source.start, t.source.end)
         })
         |> List::collect()
     assert_eq(messages |> length(), 0)
@@ -121,192 +119,196 @@ fun assert_tokens(content: String, ...expected: List[TToken]) {
 pub fun int_literals() = assert_tokens(
     "5 10 251234 5942 -5",
 
-    TToken("an integer", "5", 0, 1),
-    TToken("a whitespace", " ", 1, 2),
-    TToken("an integer", "10", 2, 4),
-    TToken("a whitespace", " ", 4, 5),
-    TToken("an integer", "251234", 5, 11),
-    TToken("a whitespace", " ", 11, 12),
-    TToken("an integer", "5942", 12, 16),
-    TToken("a whitespace", " ", 16, 17),
-    TToken("'-'", "-", 17, 18),
-    TToken("an integer", "5", 18, 19)
+    TToken(TokenType::IntLiteral, "5",       0,  1),
+    TToken(TokenType::Whitespace, " ",       1,  2),
+    TToken(TokenType::IntLiteral, "10",      2,  4),
+    TToken(TokenType::Whitespace, " ",       4,  5),
+    TToken(TokenType::IntLiteral, "251234",  5, 11),
+    TToken(TokenType::Whitespace, " ",      11, 12),
+    TToken(TokenType::IntLiteral, "5942",   12, 16),
+    TToken(TokenType::Whitespace, " ",      16, 17),
+    TToken(TokenType::Minus,      "-",      17, 18),
+    TToken(TokenType::IntLiteral, "5",      18, 19)
 )
 
 pub fun float_literals() = assert_tokens(
     "3.5 .125 0.75 3. -0.5",
 
-    TToken("a float", "3.5", 0, 3),
-    TToken("a whitespace", " ", 3, 4),
-    TToken("'.'", ".", 4, 5),
-    TToken("an integer", "125", 5, 8),
-    TToken("a whitespace", " ", 8, 9),
-    TToken("a float", "0.75", 9, 13),
-    TToken("a whitespace", " ", 13, 14),
-    TToken("a float", "3.", 14, 16),
-    TToken("a whitespace", " ", 16, 17),
-    TToken("'-'", "-", 17, 18),
-    TToken("a float", "0.5", 18, 21)
+    TToken(TokenType::FloatLiteral, "3.5",   0,  3),
+    TToken(TokenType::Whitespace,   " ",     3,  4),
+    TToken(TokenType::Dot,          ".",     4,  5),
+    TToken(TokenType::IntLiteral,   "125",   5,  8),
+    TToken(TokenType::Whitespace,   " ",     8,  9),
+    TToken(TokenType::FloatLiteral, "0.75",  9, 13),
+    TToken(TokenType::Whitespace,   " ",    13, 14),
+    TToken(TokenType::FloatLiteral, "3.",   14, 16),
+    TToken(TokenType::Whitespace,   " ",    16, 17),
+    TToken(TokenType::Minus,        "-",    17, 18),
+    TToken(TokenType::FloatLiteral, "0.5",  18, 21)
 )
 
 pub fun keyword_literals() = assert_tokens(
     "true false unit",
 
 
-    TToken("a boolean", "true", 0, 4),
-    TToken("a whitespace", " ", 4, 5),
-    TToken("a boolean", "false", 5, 10),
-    TToken("a whitespace", " ", 10, 11),
-    TToken("the unit value", "unit", 11, 15)
+    TToken(TokenType::BoolLiteral, "true",   0,  4),
+    TToken(TokenType::Whitespace,  " ",      4,  5),
+    TToken(TokenType::BoolLiteral, "false",  5, 10),
+    TToken(TokenType::Whitespace,  " ",     10, 11),
+    TToken(TokenType::UnitLiteral, "unit",  11, 15)
 )
 
 pub fun string_literals() = assert_tokens(
     "\"hello\"  \"hello\\nworld\" \"\\
 heya\" \"\\x4C\\x4F\\x4C\" \"\\u2122\"",
 
-    TToken("a string", "hello", 0, 7),
-    TToken("a whitespace", "  ", 7, 9),
-    TToken("a string", "hello\nworld", 9, 23),
-    TToken("a whitespace", " ", 23, 24),
-    TToken("a string", "heya", 24, 32),
-    TToken("a whitespace", " ", 32, 33),
-    TToken("a string", "LOL", 33, 47),
-    TToken("a whitespace", " ", 47, 48),
-    TToken("a string", "™", 48, 56),
+    TToken(TokenType::StringLiteral, "hello",         0,  7),
+    TToken(TokenType::Whitespace,    "  ",            7,  9),
+    TToken(TokenType::StringLiteral, "hello\nworld",  9, 23),
+    TToken(TokenType::Whitespace,    " ",            23, 24),
+    TToken(TokenType::StringLiteral, "heya",         24, 32),
+    TToken(TokenType::Whitespace,    " ",            32, 33),
+    TToken(TokenType::StringLiteral, "LOL",          33, 47),
+    TToken(TokenType::Whitespace,    " ",            47, 48),
+    TToken(TokenType::StringLiteral, "™",            48, 56),
 )
 
 pub fun symbols() = assert_tokens(
     "... <= >= == != -> && || :: |> ()[]{} < > = + - * / % : , ! . |",
 
-    TToken("'...'", "...", 0, 3),
-    TToken("a whitespace", " ", 3, 4),
-    TToken("'<='", "<=", 4, 6),
-    TToken("a whitespace", " ", 6, 7),
-    TToken("'>='", ">=", 7, 9),
-    TToken("a whitespace", " ", 9, 10),
-    TToken("'=='", "==", 10, 12),
-    TToken("a whitespace", " ", 12, 13),
-    TToken("'!='", "!=", 13, 15),
-    TToken("a whitespace", " ", 15, 16),
-    TToken("'->'", "->", 16, 18),
-    TToken("a whitespace", " ", 18, 19),
-    TToken("'&&'", "&&", 19, 21),
-    TToken("a whitespace", " ", 21, 22),
-    TToken("'||'", "||", 22, 24),
-    TToken("a whitespace", " ", 24, 25),
-    TToken("'::'", "::", 25, 27),
-    TToken("a whitespace", " ", 27, 28),
-    TToken("'|>'", "|>", 28, 30),
-    TToken("a whitespace", " ", 30, 31),
-    TToken("'('", "(", 31, 32),
-    TToken("')'", ")", 32, 33),
-    TToken("'['", "[", 33, 34),
-    TToken("']'", "]", 34, 35),
-    TToken("'{'", "{", 35, 36),
-    TToken("'}'", "}", 36, 37),
-    TToken("a whitespace", " ", 37, 38),
-    TToken("'<'", "<", 38, 39),
-    TToken("a whitespace", " ", 39, 40),
-    TToken("'>'", ">", 40, 41),
-    TToken("a whitespace", " ", 41, 42),
-    TToken("'='", "=", 42, 43),
-    TToken("a whitespace", " ", 43, 44),
-    TToken("'+'", "+", 44, 45),
-    TToken("a whitespace", " ", 45, 46),
-    TToken("'-'", "-", 46, 47),
-    TToken("a whitespace", " ", 47, 48),
-    TToken("'*'", "*", 48, 49),
-    TToken("a whitespace", " ", 49, 50),
-    TToken("'/'", "/", 50, 51),
-    TToken("a whitespace", " ", 51, 52),
-    TToken("'%'", "%", 52, 53),
-    TToken("a whitespace", " ", 53, 54),
-    TToken("':'", ":", 54, 55),
-    TToken("a whitespace", " ", 55, 56),
-    TToken("','", ",", 56, 57),
-    TToken("a whitespace", " ", 57, 58),
-    TToken("'!'", "!", 58, 59),
-    TToken("a whitespace", " ", 59, 60),
-    TToken("'.'", ".", 60, 61),
-    TToken("a whitespace", " ", 61, 62),
-    TToken("'|'", "|", 62, 63)
+    TToken(TokenType::TripleDots,       "...",  0,  3),
+    TToken(TokenType::Whitespace,       " ",    3,  4),
+    TToken(TokenType::LessThanEqual,    "<=",   4,  6),
+    TToken(TokenType::Whitespace,       " ",    6,  7),
+    TToken(TokenType::GreaterThanEqual, ">=",   7,  9),
+    TToken(TokenType::Whitespace,       " ",    9, 10),
+    TToken(TokenType::DoubleEqual,      "==",  10, 12),
+    TToken(TokenType::Whitespace,       " ",   12, 13),
+    TToken(TokenType::NotEqual,         "!=",  13, 15),
+    TToken(TokenType::Whitespace,       " ",   15, 16),
+    TToken(TokenType::ArrowRight,       "->",  16, 18),
+    TToken(TokenType::Whitespace,       " ",   18, 19),
+    TToken(TokenType::DoubleAmpersand,  "&&",  19, 21),
+    TToken(TokenType::Whitespace,       " ",   21, 22),
+    TToken(TokenType::DoublePipe,       "||",  22, 24),
+    TToken(TokenType::Whitespace,       " ",   24, 25),
+    TToken(TokenType::PathSeparator,    "::",  25, 27),
+    TToken(TokenType::Whitespace,       " ",   27, 28),
+    TToken(TokenType::Triangle,         "|>",  28, 30),
+    TToken(TokenType::Whitespace,       " ",   30, 31),
+    TToken(TokenType::ParenOpen,        "(",   31, 32),
+    TToken(TokenType::ParenClose,       ")",   32, 33),
+    TToken(TokenType::BracketOpen,      "[",   33, 34),
+    TToken(TokenType::BracketClose,     "]",   34, 35),
+    TToken(TokenType::BraceOpen,        "{",   35, 36),
+    TToken(TokenType::BraceClose,       "}",   36, 37),
+    TToken(TokenType::Whitespace,       " ",   37, 38),
+    TToken(TokenType::LessThan,         "<",   38, 39),
+    TToken(TokenType::Whitespace,       " ",   39, 40),
+    TToken(TokenType::GreaterThan,      ">",   40, 41),
+    TToken(TokenType::Whitespace,       " ",   41, 42),
+    TToken(TokenType::Equal,            "=",   42, 43),
+    TToken(TokenType::Whitespace,       " ",   43, 44),
+    TToken(TokenType::Plus,             "+",   44, 45),
+    TToken(TokenType::Whitespace,       " ",   45, 46),
+    TToken(TokenType::Minus,            "-",   46, 47),
+    TToken(TokenType::Whitespace,       " ",   47, 48),
+    TToken(TokenType::Asterisk,         "*",   48, 49),
+    TToken(TokenType::Whitespace,       " ",   49, 50),
+    TToken(TokenType::Slash,            "/",   50, 51),
+    TToken(TokenType::Whitespace,       " ",   51, 52),
+    TToken(TokenType::Percent,          "%",   52, 53),
+    TToken(TokenType::Whitespace,       " ",   53, 54),
+    TToken(TokenType::Colon,            ":",   54, 55),
+    TToken(TokenType::Whitespace,       " ",   55, 56),
+    TToken(TokenType::Comma,            ",",   56, 57),
+    TToken(TokenType::Whitespace,       " ",   57, 58),
+    TToken(TokenType::ExclamationMark,  "!",   58, 59),
+    TToken(TokenType::Whitespace,       " ",   59, 60),
+    TToken(TokenType::Dot,              ".",   60, 61),
+    TToken(TokenType::Whitespace,       " ",   61, 62),
+    TToken(TokenType::Pipe,             "|",   62, 63)
 )
 
 pub fun symbol_merging() = assert_tokens(
     "<====>= ||> ..... ->= :::",
 
-    TToken("'<='", "<=", 0, 2),
-    TToken("'=='", "==", 2, 4),
-    TToken("'='", "=", 4, 5),
-    TToken("'>='", ">=", 5, 7),
-    TToken("a whitespace", " ", 7, 8),
-    TToken("'||'", "||", 8, 10),
-    TToken("'>'", ">", 10, 11),
-    TToken("a whitespace", " ", 11, 12),
-    TToken("'...'", "...", 12, 15),
-    TToken("'.'", ".", 15, 16),
-    TToken("'.'", ".", 16, 17),
-    TToken("a whitespace", " ", 17, 18),
-    TToken("'->'", "->", 18, 20),
-    TToken("'='", "=", 20, 21),
-    TToken("a whitespace", " ", 21, 22),
-    TToken("'::'", "::", 22, 24),
-    TToken("':'", ":", 24, 25)
+    TToken(TokenType::LessThanEqual,    "<=",   0,  2),
+    TToken(TokenType::DoubleEqual,      "==",   2,  4),
+    TToken(TokenType::Equal,            "=",    4,  5),
+    TToken(TokenType::GreaterThanEqual, ">=",   5,  7),
+    TToken(TokenType::Whitespace,       " ",    7,  8),
+    TToken(TokenType::DoublePipe,       "||",   8, 10),
+    TToken(TokenType::GreaterThan,      ">",   10, 11),
+    TToken(TokenType::Whitespace,       " ",   11, 12),
+    TToken(TokenType::TripleDots,       "...", 12, 15),
+    TToken(TokenType::Dot,              ".",   15, 16),
+    TToken(TokenType::Dot,              ".",   16, 17),
+    TToken(TokenType::Whitespace,       " ",   17, 18),
+    TToken(TokenType::ArrowRight,       "->",  18, 20),
+    TToken(TokenType::Equal,            "=",   20, 21),
+    TToken(TokenType::Whitespace,       " ",   21, 22),
+    TToken(TokenType::PathSeparator,    "::",  22, 24),
+    TToken(TokenType::Colon,            ":",   24, 25)
 )
 
 pub fun keywords() = assert_tokens(
-    "if else ext fun return val mut mod use as pub struct enum match while for",
+    "if else ext fun return continue break val mut mod use as pub struct enum match while for",
 
-    TToken("'if'", "if", 0, 2),
-    TToken("a whitespace", " ", 2, 3),
-    TToken("'else'", "else", 3, 7),
-    TToken("a whitespace", " ", 7, 8),
-    TToken("'ext'", "ext", 8, 11),
-    TToken("a whitespace", " ", 11, 12),
-    TToken("'fun'", "fun", 12, 15),
-    TToken("a whitespace", " ", 15, 16),
-    TToken("'return'", "return", 16, 22),
-    TToken("a whitespace", " ", 22, 23),
-    TToken("'val'", "val", 23, 26),
-    TToken("a whitespace", " ", 26, 27),
-    TToken("'mut'", "mut", 27, 30),
-    TToken("a whitespace", " ", 30, 31),
-    TToken("'mod'", "mod", 31, 34),
-    TToken("a whitespace", " ", 34, 35),
-    TToken("'use'", "use", 35, 38),
-    TToken("a whitespace", " ", 38, 39),
-    TToken("'as'", "as", 39, 41),
-    TToken("a whitespace", " ", 41, 42),
-    TToken("'pub'", "pub", 42, 45),
-    TToken("a whitespace", " ", 45, 46),
-    TToken("'struct'", "struct", 46, 52),
-    TToken("a whitespace", " ", 52, 53),
-    TToken("'enum'", "enum", 53, 57),
-    TToken("a whitespace", " ", 57, 58),
-    TToken("'match'", "match", 58, 63),
-    TToken("a whitespace", " ", 63, 64),
-    TToken("'while'", "while", 64, 69),
-    TToken("a whitespace", " ", 69, 70),
-    TToken("'for'", "for", 70, 73)
+    TToken(TokenType::KeywordIf,       "if",        0,  2),
+    TToken(TokenType::Whitespace,      " ",         2,  3),
+    TToken(TokenType::KeywordElse,     "else",      3,  7),
+    TToken(TokenType::Whitespace,      " ",         7,  8),
+    TToken(TokenType::KeywordExt,      "ext",       8, 11),
+    TToken(TokenType::Whitespace,      " ",        11, 12),
+    TToken(TokenType::KeywordFun,      "fun",      12, 15),
+    TToken(TokenType::Whitespace,      " ",        15, 16),
+    TToken(TokenType::KeywordReturn,   "return",   16, 22),
+    TToken(TokenType::Whitespace,      " ",        22, 23),
+    TToken(TokenType::KeywordContinue, "continue", 23, 31),
+    TToken(TokenType::Whitespace,      " ",        31, 32),
+    TToken(TokenType::KeywordBreak,    "break",    32, 37),
+    TToken(TokenType::Whitespace,      " ",        37, 38),
+    TToken(TokenType::KeywordVal,      "val",      38, 41),
+    TToken(TokenType::Whitespace,      " ",        41, 42),
+    TToken(TokenType::KeywordMut,      "mut",      42, 45),
+    TToken(TokenType::Whitespace,      " ",        45, 46),
+    TToken(TokenType::KeywordMod,      "mod",      46, 49),
+    TToken(TokenType::Whitespace,      " ",        49, 50),
+    TToken(TokenType::KeywordUse,      "use",      50, 53),
+    TToken(TokenType::Whitespace,      " ",        53, 54),
+    TToken(TokenType::KeywordAs,       "as",       54, 56),
+    TToken(TokenType::Whitespace,      " ",        56, 57),
+    TToken(TokenType::KeywordPub,      "pub",      57, 60),
+    TToken(TokenType::Whitespace,      " ",        60, 61),
+    TToken(TokenType::KeywordStruct,   "struct",   61, 67),
+    TToken(TokenType::Whitespace,      " ",        67, 68),
+    TToken(TokenType::KeywordEnum,     "enum",     68, 72),
+    TToken(TokenType::Whitespace,      " ",        72, 73),
+    TToken(TokenType::KeywordMatch,    "match",    73, 78),
+    TToken(TokenType::Whitespace,      " ",        78, 79),
+    TToken(TokenType::KeywordWhile,    "while",    79, 84),
+    TToken(TokenType::Whitespace,      " ",        84, 85),
+    TToken(TokenType::KeywordFor,      "for",      85, 88)
 )
 
 pub fun identifiers() = assert_tokens(
     "hello world111 funny foreign _test 3hi _2 ni_ce_",
 
-    TToken("an identifier", "hello", 0, 5),
-    TToken("a whitespace", " ", 5, 6),
-    TToken("an identifier", "world111", 6, 14),
-    TToken("a whitespace", " ", 14, 15),
-    TToken("an identifier", "funny", 15, 20),
-    TToken("a whitespace", " ", 20, 21),
-    TToken("an identifier", "foreign", 21, 28),
-    TToken("a whitespace", " ", 28, 29),
-    TToken("an identifier", "_test", 29, 34),
-    TToken("a whitespace", " ", 34, 35),
-    TToken("an integer", "3", 35, 36),
-    TToken("an identifier", "hi", 36, 38),
-    TToken("a whitespace", " ", 38, 39),
-    TToken("an identifier", "_2", 39, 41),
-    TToken("a whitespace", " ", 41, 42),
-    TToken("an identifier", "ni_ce_", 42, 48)
+    TToken(TokenType::Identifier, "hello",     0,  5),
+    TToken(TokenType::Whitespace, " ",         5,  6),
+    TToken(TokenType::Identifier, "world111",  6, 14),
+    TToken(TokenType::Whitespace, " ",        14, 15),
+    TToken(TokenType::Identifier, "funny",    15, 20),
+    TToken(TokenType::Whitespace, " ",        20, 21),
+    TToken(TokenType::Identifier, "foreign",  21, 28),
+    TToken(TokenType::Whitespace, " ",        28, 29),
+    TToken(TokenType::Identifier, "_test",    29, 34),
+    TToken(TokenType::Whitespace, " ",        34, 35),
+    TToken(TokenType::IntLiteral, "3",        35, 36),
+    TToken(TokenType::Identifier, "hi",       36, 38),
+    TToken(TokenType::Whitespace, " ",        38, 39),
+    TToken(TokenType::Identifier, "_2",       39, 41),
+    TToken(TokenType::Whitespace, " ",        41, 42),
+    TToken(TokenType::Identifier, "ni_ce_",   42, 48)
 )

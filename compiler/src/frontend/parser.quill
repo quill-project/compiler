@@ -2,3 +2,301 @@
 mod quill::parser
 
 use quill::*
+use quill::token::(Token, TokenType)
+use quill::ast::UntypedNode
+
+pub struct Parser(
+    current: Token, 
+    after: mut Stream[Token],
+    broken: Bool,
+    messages: mut List[Message]
+)
+
+// Creates a new parser over the given token stream, reporting messages
+// into the given list.
+// Expects only tokens for which 'TokenType::is_relevant' returns true
+// to be included in 'tokens'.
+pub fun Parser::from(
+    tokens: mut Stream[Token], messages: mut List[Message]
+) -> mut Parser
+    = Parser(tokens |> next(), tokens, false, messages)
+
+// Discards the 'current' token and replaces it with the next token from the
+// contained token stream.
+pub fun Parser::advance(self: mut Parser) {
+    self.current = self.after |> next()
+}
+
+// Asserts that the type of the 'current' token in 'self' is contained in the
+// given list of allowed 'types'. If that is not the case, an appropriate error
+// is added to the 'messages' in 'self' and 'self' is marked as broken.
+// If 'self' is already broken, no message is generated.
+// The current value of 'self.broken' is returned at the end of the call.
+pub fun Parser::expect(
+    self: mut Parser, ...types: List[TokenType]
+) -> Bool {
+    if self.broken { return true }
+    val valid = types |> values() |> any(|t| t == self.current.type)
+    if valid { return false }
+    self.messages |> push(Message::unexpected_token(self.current, types))
+    self.broken = true
+    return true
+}
+
+
+
+// Maps unary operators to their respective operator precedence
+pub val unary_operator_prec: Map[TokenType, Int] = Map::of(
+    Map::Entry(TokenType::Minus,            2),
+    Map::Entry(TokenType::ExclamationMark,  2)
+)
+
+// Maps binary operators to their respective operator precedence
+pub val binary_operator_prec: Map[TokenType, Int] = Map::of(
+    Map::Entry(TokenType::ParenOpen,        1),
+    Map::Entry(TokenType::Dot,              1),
+    Map::Entry(TokenType::Asterisk,         3),
+    Map::Entry(TokenType::Slash,            3),
+    Map::Entry(TokenType::Percent,          3),
+    Map::Entry(TokenType::Plus,             4),
+    Map::Entry(TokenType::Minus,            4),
+    Map::Entry(TokenType::LessThan,         5),
+    Map::Entry(TokenType::GreaterThan,      5),
+    Map::Entry(TokenType::LessThanEqual,    5),
+    Map::Entry(TokenType::GreaterThanEqual, 5),
+    Map::Entry(TokenType::DoubleEqual,      6),
+    Map::Entry(TokenType::NotEqual,         6),
+    Map::Entry(TokenType::DoubleAmpersand,  7),
+    Map::Entry(TokenType::DoublePipe,       8),
+    Map::Entry(TokenType::Triangle,         9)
+)
+
+
+
+// Shorthand for constructing an invalid AST node with the source being the
+// current token
+pub fun make_inv(s: mut Parser) -> UntypedNode
+    = UntypedNode(ast::Variant::Invalid, s.current.source)
+
+// Parses a path, such as 'std::println'. Stops after the first identifier
+// not followed by a path separator and expects the starting state to be
+// the first identifier of the path. Returns both the list of path segments
+// and the source span of the last identifier in the path.
+pub fun parse_path(s: mut Parser) -> Pair[List[String], Source] {
+    if s.broken { return Pair(List::of(s.current.content), s.current.source) }
+    return panic("TODO!") // TODO!
+}
+
+// Parses a list of given type names, such as '[Int, Float]'. Stops after the
+// closing ']' and expects the starting state to be at the opening '['.
+pub fun parse_given_type_args(s: mut Parser) -> Option[List[UntypedNode]] {
+    if s.broken { return Option::None }
+    return panic("TODO!") // TODO!
+}
+
+// Parses a list of names, such as 'a, b, c'. Stops at the next token with a
+// type equal to 'end' and expects the starting state to be at the first name.
+pub fun parse_name_list(s: mut Parser, end: TokenType) -> Option[List[String]] 
+    = Stream::new[Token](|| s.current)
+    |> take_until(|t| t.type == end)
+    |> fold[Token, Option[mut List[String]]](
+        Option::Some(List::empty[String]()), 
+        |acc, _| acc |> and_then(|a| {
+            if s |> expect(TokenType::Identifier) { return Option::None }
+            a |> push(s.current.content)
+            s |> advance()
+            if s |> expect(TokenType::Comma, end) { return Option::None }
+            if s.current.type == TokenType::Comma {
+                s |> advance()
+            }
+            return Option::Some(a)
+        })
+    )
+
+
+// Parses a value, meaning either a literal or a unary operator, 
+// e.g. '5', '-10.0'
+pub fun parse_value(s: mut Parser) -> UntypedNode {
+    if s.broken { return make_inv(s) }
+    val start: Token = s.current
+    val value: String = start.content
+    match start.type {
+        // expression in parentheses, e.g. '(5 + 5)'
+        ParenOpen {
+            s |> advance()
+            val value: UntypedNode = parse_expression(s, Int::MAX)
+            if s |> expect(TokenType::ParenClose) { return make_inv(s) }
+            s |> advance()
+            return value
+        }
+        // path and type arguments, e.g. 'std::println[String]'
+        Identifier {
+            val path: Pair[List[String], Source] = parse_path(s)
+            val t_args: Option[List[UntypedNode]] = parse_given_type_args(s)
+            return UntypedNode(
+                ast::Variant::PathRef(ast::PathRef(path.first, t_args)),
+                Source::range(start.source, path.second)
+            )
+        }
+        // value literals, e.g. '5', 'true', '2.53'
+        IntLiteral {
+            s |> advance()
+            val parsed: Int = Int::parse(value) 
+                |> expect("Lexer should only tokenize valid int literals")
+            return UntypedNode(ast::Variant::Int(parsed), start.source)
+        }
+        FloatLiteral {
+            s |> advance()
+            val parsed: Float = Float::parse(value)
+                |> expect("Lexer should only tokenize valid float literals")
+            return UntypedNode(ast::Variant::Float(parsed), start.source)
+        }
+        BoolLiteral {
+            s |> advance()
+            val parsed: Bool = value == "true"
+            return UntypedNode(ast::Variant::Bool(parsed), start.source)
+        }
+        UnitLiteral {
+            s |> advance()
+            return UntypedNode(ast::Variant::Unit, start.source)
+        }
+        StringLiteral {
+            s |> advance()
+            return UntypedNode(ast::Variant::String(value), start.source)
+        }
+        // closure literals
+        Pipe | DoublePipe {
+            mut arg_names: List[String] = List::empty()
+            if s.current.type == TokenType::Pipe {
+                s |> advance()
+                match parse_name_list(s, TokenType::Pipe) {
+                    Some(args) { arg_names = args }
+                    None { return make_inv(s) }
+                }
+                if s |> expect(TokenType::Pipe) { return make_inv(s) }
+            }
+            s |> advance()
+            mut body: List[UntypedNode] = List::empty()
+            mut end: Source = s.current.source
+            if s.current.type == TokenType::BraceOpen {
+                s |> advance()
+                body = parse_statement_list(s, TokenType::BraceClose)
+                if s |> expect(TokenType::BraceClose) { return make_inv(s) }
+                end = s.current.source
+                s |> advance()
+            } else {
+                val value: UntypedNode = parse_expression(s, Int::MAX)
+                end = value.source
+                body = List::of(
+                    UntypedNode(ast::Variant::Return(value), value.source)
+                )
+            }
+            return UntypedNode(
+                ast::Variant::Closure(ast::Closure(arg_names, body)),
+                Source::range(start.source, end)
+            )
+        }
+        // 'if'-expression, e.g. 'if x < 5 { 5 } else if x > 10 { 10 } else { x }'
+        KeywordIf {
+            s |> advance()
+            val cond: UntypedNode = parse_expression(s, Int::MAX)
+            if s |> expect(TokenType::BraceOpen) { return make_inv(s) }
+            s |> advance()
+            val if_value: UntypedNode = parse_expression(s, Int::MAX)
+            if s |> expect(TokenType::BraceClose) { return make_inv(s) }
+            s |> advance()
+            if s |> expect(TokenType::KeywordElse) { return make_inv(s) }
+            s |> advance()
+            if s |> expect(TokenType::KeywordIf, TokenType::BraceOpen) { 
+                return make_inv(s) 
+            }
+            val chained: Bool = s.current.type == TokenType::KeywordIf
+            if !chained {
+                s |> advance()
+            }
+            val else_value: UntypedNode = parse_expression(s, Int::MAX)
+            mut end: Source = else_value.source
+            if !chained {
+                if s |> expect(TokenType::BraceClose) { return make_inv(s) }
+                end = s.current.source
+                s |> advance()
+            }
+            return UntypedNode(
+                ast::Variant::IfExpr(ast::IfExpr(cond, if_value, else_value)),
+                Source::range(start.source, end)
+            )
+        }
+    }
+    val op: Token = s.current
+    mut prec: Int = 0
+    match unary_operator_prec |> get(op.type) {
+        Some(p) { prec = p }
+        None {
+            s.messages |> push(
+                Message::unexpected_construct(s.current, "an expression")
+            )
+            s.broken = true
+            return make_inv(s)
+        }
+    }
+    s |> advance()
+    val operand: UntypedNode = parse_expression(s, prec) 
+    val src: Source = Source::range(start.source, operand.source)
+    match op.type {
+        Minus { return UntypedNode(ast::Variant::Negate(operand), src) }
+        ExclamationMark { return UntypedNode(ast::Variant::Not(operand), src) }
+        _ { return panic("Unhandled token type in 'parse_value'") }
+    }
+}
+
+
+// Parses an expression, including literals, unary operators and binary operators,
+// e.g. '5 + 5', 'true', '!(3 < 4)'
+pub fun parse_expression(s: mut Parser, parent_prec: Int) -> UntypedNode {
+    if s.broken { return make_inv(s) }
+    return panic("TODO!") // TODO!
+}
+
+
+// Parses a type, such as a named type or a function type
+pub fun parse_type(s: mut Parser) -> UntypedNode {
+    if s.broken { return make_inv(s) }
+    return panic("TODO!") // TODO!
+}
+
+
+// Parses a list of argument / member names and their types, such as
+// 'a: Int, b: Float, c: String'
+pub fun parse_name_type_list(s: mut Parser) -> Option[List[Pair[String, UntypedNode]]] {
+    if s.broken { return Option::None }
+    return panic("TODO!") // TODO!
+}
+
+
+// Parses a local statement, including variable declarations, loops and 
+// other statements and expressions.
+pub fun parse_statement(s: mut Parser) -> UntypedNode {
+    if s.broken {
+        // TODO! Attempt recovery by finding the next:
+        // 'if', 'else', 'return', 'continue', 'break', 'match', 'while', 'for'
+    }
+    return panic("TODO!") // TODO!
+}
+
+
+// Repeatedly parses statements until the current token type is equal to the one
+// specified by 'end'.
+pub fun parse_statement_list(s: mut Parser, end: TokenType) -> List[UntypedNode] {
+    return panic("TODO!") // TODO!
+}
+
+
+// Parses only top level statements and declarations, such as functions, types,
+// module declarations, path usages, ...
+pub fun parse_declaration(s: mut Parser) -> UntypedNode {
+    if s.broken {
+        // TODO! Attempt recovery by finding the next:
+        // 'pub', 'ext', 'fun', 'mod', 'use', 'struct', 'enum'
+    }
+    return panic("TODO!") // TODO!
+}
