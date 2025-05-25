@@ -1,1 +1,1 @@
-*.quill linguist-language=Kotlin
+*.quill linguist-language=Kotlin linguist-detectable=false
