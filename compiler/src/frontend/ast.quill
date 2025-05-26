@@ -117,18 +117,20 @@ pub fun PathInvocation::as_string[N](self: PathInvocation[N]) -> String {
 pub fun Variant::as_string[N](self: Variant[N]) -> String {
     match self {
         Variant::TypeRef(Pair(mutable, ref)) {
-            return "type@"
-                |> concat(PathRef::as_string(ref))
+            return "type"
                 |> concat(if mutable { "+mut" } else { "" })
+                |> concat("@")
+                |> concat(PathRef::as_string(ref))
         }
         Variant::FunctionType(FunctionType(args, ret)) { 
-            return "Fun("
+            return "(Fun("
                 |> concat(args |> values() |> map(N::as_string) |> join(", "))
                 |> concat(")")
                 |> concat(ret 
                     |> map[N, String](|n| " -> " |> concat(N::as_string(n))) 
                     |> unwrap_or("")
                 )
+                |> concat(")")
         }
 
         Variant::PathRef(ref) { return PathRef::as_string(ref) }

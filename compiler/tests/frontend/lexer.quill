@@ -105,7 +105,15 @@ fun assert_tokens(content: String, ...expected: List[TToken]) {
             return TToken(t.type, t.content, t.source.start, t.source.end)
         })
         |> List::collect()
-    assert_eq(messages |> length(), 0)
+    if messages |> length() |> greater_than(0) {
+        val files = Map::of(Map::Entry("test.quill", content))
+        val msgs = messages 
+            |> values() |> map[Message, String](|m| m |> display(files)) 
+            |> join("\n\n")
+        return "Parsing assertion failed:\n" |> concat(content)
+            |> concat("\n\nParser reported message(s):\n") |> concat(msgs)
+            |> panic()
+    }
     if output == expected { return unit }
     return "Lexing assertion failed:\n"
         |> concat(content)

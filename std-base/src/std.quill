@@ -1,8 +1,8 @@
 
 mod std
 
-pub fun equal[T](a: T, b: T) -> Bool = a == b
-pub fun not_equal[T](a: T, b: T) -> Bool = a != b
+pub fun is[T](a: T, b: T) -> Bool = a == b
+pub fun is_not[T](a: T, b: T) -> Bool = a != b
 
 pub fun println[T](value: T) = value 
     |> T::as_string()

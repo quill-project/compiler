@@ -206,7 +206,7 @@ pub fun TokenType::as_hash(self: TokenType) -> Int {
 // be included in the token stream passed to the parser.
 pub fun TokenType::is_relevant(self: TokenType) -> Bool {
     match self {
-        Whitespace | LineComment | Invalid { return false }
+        Whitespace | LineComment { return false }
         _ { return true }
     }
 }

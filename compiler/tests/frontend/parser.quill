@@ -14,7 +14,15 @@ fun assert_tree(
         = lexer::tokenize("test.quill", content, messages)
     val parser: mut Parser = Parser::from(tokens, messages)
     val tree: ast::UntypedNode = f(parser)
-    assert_eq(messages |> length(), 0)
+    if messages |> length() |> greater_than(0) {
+        val files = Map::of(Map::Entry("test.quill", content))
+        val msgs = messages 
+            |> values() |> map[Message, String](|m| m |> display(files)) 
+            |> join("\n\n")
+        return "Parsing assertion failed:\n" |> concat(content)
+            |> concat("\n\nLexer/Parser reported message(s):\n") |> concat(msgs)
+            |> panic()
+    }
     val output: String = tree |> ast::UntypedNode::as_string()
     if output == expected { return unit }
     return "Parsing assertion failed:\n" |> concat(content)
@@ -65,4 +73,21 @@ pub fun binary() {
         "(if (is_logged_in()) then (is_verified()) else false)"
     )
     assert_tree(expression, "5 |> add(10)", "(5 |> add(10))")
+}
+
+pub fun types() {
+    assert_tree(parser::parse_type, "Int", "type@Int")
+    assert_tree(parser::parse_type, "mut Set[Int]", "type+mut@Set[type@Int]")
+    assert_tree(parser::parse_type, 
+        "Fun(Int, Int) -> Int",
+        "(Fun(type@Int, type@Int) -> type@Int)"
+    )
+    assert_tree(parser::parse_type,
+        "mut Map[Int, Option[mut Set[lexer::TokenType]]]",
+        "type+mut@Map[type@Int, type@Option[type+mut@Set[type@lexer::TokenType]]]"
+    )
+    assert_tree(parser::parse_type,
+        "mut Map[String, Fun(Float, Float) -> Float]",
+        "type+mut@Map[type@String, (Fun(type@Float, type@Float) -> type@Float)]"
+    )
 }

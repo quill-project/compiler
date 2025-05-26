@@ -3227,7 +3227,10 @@ function quill$$eq(a, b) {
             }
             case NodeType.MemberAccess: {
                 const accessed = generateCode(node.accessed, state);
-                return `${accessed}.${node.name}`;
+                const r = `${accessed}.${node.name}`;
+                if(into === null) { return r; }
+                state.scope().output += `${into} = ${r};\n`
+                return into;
             }
             case NodeType.Call: {
                 const called = generateCode(node.called, state);

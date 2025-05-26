@@ -31,6 +31,7 @@ pub fun Parser::advance(self: mut Parser) {
 // given list of allowed 'types'. If that is not the case, an appropriate error
 // is added to the 'messages' in 'self' and 'self' is marked as broken.
 // If 'self' is already broken, no message is generated.
+// If the current token is an invalid token, no message is generated.
 // The current value of 'self.broken' is returned at the end of the call.
 pub fun Parser::expect(
     self: mut Parser, ...types: List[TokenType]
@@ -38,7 +39,9 @@ pub fun Parser::expect(
     if self.broken { return true }
     val valid = types |> values() |> any(|t| t == self.current.type)
     if valid { return false }
-    self.messages |> push(Message::unexpected_token(self.current, types))
+    if self.current.type != TokenType::Invalid {
+        self.messages |> push(Message::unexpected_token(self.current, types))
+    }
     self.broken = true
     return true
 }
@@ -125,7 +128,7 @@ pub fun parse_given_type_args(s: mut Parser) -> Option[List[UntypedNode]] {
 // type equal to 'end' and expects the starting state to be at the first name.
 pub fun parse_name_list(s: mut Parser, end: TokenType) -> Option[List[String]] 
     = Stream::new[Token](|| s.current)
-    |> take_until(|t| t.type == end)
+    |> take_until(|t| t.type == end || s.broken)
     |> fold[Token, Option[mut List[String]]](
         Option::Some(List::empty[String]()), 
         |acc, _| acc |> and_then(|a| {
@@ -377,6 +380,36 @@ pub fun parse_expression(s: mut Parser, parent_prec: Int) -> UntypedNode
 pub fun parse_type(s: mut Parser) -> UntypedNode {
     if s.broken { return make_inv(s) }
     val start: Token = s.current
+    if s.current.content == "Fun" {
+        s |> advance()
+        if s |> expect(TokenType::ParenOpen) { return make_inv(s) }
+        s |> advance()
+        val arg_types: List[UntypedNode] = Stream::new[Token](|| s.current)
+            |> take_until(|t| t.type == TokenType::ParenClose || s.broken)
+            |> map[Token, UntypedNode](|_| {
+                val arg: UntypedNode = parse_type(s)
+                s |> expect(TokenType::Comma, TokenType::ParenClose)
+                if s.current.type == TokenType::Comma {
+                    s |> advance()
+                }
+                return arg
+            })
+            |> List::collect()
+        if s |> expect(TokenType::ParenClose) { return make_inv(s) }
+        mut end: Source = s.current.source
+        s |> advance()
+        mut ret_type: Option[UntypedNode] = Option::None
+        if s.current.type == TokenType::ArrowRight {
+            s |> advance()
+            val r = parse_type(s)
+            ret_type = Option::Some(r)
+            end = r.source
+        }
+        return UntypedNode(
+            ast::Variant::FunctionType(ast::FunctionType(arg_types, ret_type)),
+            Source::range(start.source, end)
+        )
+    }
     match s.current.type {
         KeywordMut | Identifier {
             val mutable: Bool = s.current.type == TokenType::KeywordMut
@@ -394,7 +427,11 @@ pub fun parse_type(s: mut Parser) -> UntypedNode {
             )
         }
         _ {
-            return panic("TODO!") // TODO!
+            s.messages |> push(
+                Message::unexpected_construct(s.current, "a type")
+            )
+            s.broken = true
+            return make_inv(s)
         }
     }
 }
@@ -402,36 +439,97 @@ pub fun parse_type(s: mut Parser) -> UntypedNode {
 
 // Parses a list of argument / member names and their types, such as
 // 'a: Int, b: Float, c: String'
-pub fun parse_name_type_list(s: mut Parser) -> Option[List[Pair[String, UntypedNode]]] {
-    if s.broken { return Option::None }
-    return panic("TODO!") // TODO!
-}
+pub fun parse_name_type_list(s: mut Parser, end: TokenType) -> Option[List[Pair[String, UntypedNode]]]
+    = Stream::new[Token](|| s.current)
+    |> take_until(|t| t.type == end || s.broken)
+    |> fold[Token, Option[mut List[Pair[String, UntypedNode]]]](
+        Option::Some(List::empty[Pair[String, UntypedNode]]()),
+        |acc, _| acc |> and_then(|args| {
+            if s |> expect(TokenType::Identifier) { return Option::None }
+            val name: String = s.current.content
+            s |> advance()
+            if s |> expect(TokenType::Colon) { return Option::None }
+            s |> advance()
+            val type: UntypedNode = parse_type(s)
+            val arg: Pair[String, UntypedNode] = Pair(name, type)
+            args |> push(arg)
+            if s |> expect(TokenType::Comma, end) { return Option::None }
+            if s.current.type == TokenType::Comma {
+                s |> advance()
+            }
+            return Option::Some(args)
+        })
+    )
 
+
+// A set containing all tokens that are ONLY used to start local statements.
+// 'val' and 'mut' are NOT included in this set because they may also be used
+// to define a GLOBAL variable.
+pub val statement_starters: Set[TokenType] = Set::of(
+    TokenType::KeywordIf, TokenType::KeywordElse, 
+    TokenType::KeywordReturn, TokenType::KeywordContinue,
+    TokenType::KeywordBreak, TokenType::KeywordMatch,
+    TokenType::KeywordWhile, TokenType::KeywordFor
+)
 
 // Parses a local statement, including variable declarations, loops and 
 // other statements and expressions.
 pub fun parse_statement(s: mut Parser) -> UntypedNode {
     if s.broken {
-        // TODO! Attempt recovery by finding the next:
-        // 'if', 'else', 'return', 'continue', 'break', 'match', 'while', 'for'
+        // if broken, attempt recovery to a known start of a local statement
+        val recovered: Fun(Token) -> Bool 
+            = |t| (statement_starters |> has(t.type))
+                || t.type == TokenType::EndOfFile
+        Stream::new[Token](|| s.current)
+            |> take_until(recovered)
+            |> for_each(|_| s |> advance())
+        s.broken = s.current.type == TokenType::EndOfFile
+        if s.broken { return make_inv(s) }
     }
-    return panic("TODO!") // TODO!
+
+    return panic("TODO!") // TODO! actually parse statements
 }
 
 
 // Repeatedly parses statements until the current token type is equal to the one
 // specified by 'end'.
-pub fun parse_statement_list(s: mut Parser, end: TokenType) -> List[UntypedNode] {
-    return panic("TODO!") // TODO!
-}
+pub fun parse_statement_list(s: mut Parser, end: TokenType) -> List[UntypedNode]
+    = Stream::new[Token](|| s.current)
+    |> take_until(|t| t.type == end)
+    |> map[Token, UntypedNode](|_| parse_statement(s))
+    |> List::collect()
 
+
+// A set containing all tokens that are ONLY used to start global definitions.
+// 'val' and 'mut' are NOT included in this set because they may also be used
+// to define local variables.
+pub val declaration_starters: Set[TokenType] = Set::of(
+    TokenType::KeywordPub, TokenType::KeywordExt, 
+    TokenType::KeywordFun, TokenType::KeywordMod,
+    TokenType::KeywordUse, TokenType::KeywordStruct,
+    TokenType::KeywordEnum
+)
 
 // Parses only top level statements and declarations, such as functions, types,
 // module declarations, path usages, ...
 pub fun parse_declaration(s: mut Parser) -> UntypedNode {
     if s.broken {
-        // TODO! Attempt recovery by finding the next:
-        // 'pub', 'ext', 'fun', 'mod', 'use', 'struct', 'enum'
+        // if broken, attempt recovery to a known start of a global declaration
+        val recovered: Fun(Token) -> Bool 
+            = |t| (declaration_starters |> has(t.type))
+                || t.type == TokenType::EndOfFile
+        Stream::new[Token](|| s.current)
+            |> take_until(recovered)
+            |> for_each(|_| s |> advance())
+        s.broken = true
     }
-    return panic("TODO!") // TODO!
+
+    return panic("TODO!") // TODO! actually parse declarations
 }
+
+// Repeatedly parses declarations until the end of the file is reached.
+pub fun parse_file(s: mut Parser) -> List[UntypedNode]
+    = Stream::new[Token](|| s.current)
+    |> take_until(|t| t.type == TokenType::EndOfFile)
+    |> map[Token, UntypedNode](|_| parse_declaration(s))
+    |> List::collect()

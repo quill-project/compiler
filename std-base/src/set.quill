@@ -43,12 +43,12 @@ pub fun Set::set_capacity[T](self: mut Set[T], capacity: Int) {
 }
 
 pub fun Set::add[T](self: mut Set[T], value: T) -> Bool {
-    if self.buckets |> length() |> equal(0) { self |> set_capacity(16) }
+    if self.buckets |> length() |> is(0) { self |> set_capacity(16) }
     val capacity = self.buckets |> length()
     val bucket_i = value |> T::as_hash() |> Int::abs() |> modulo(capacity)
     val bucket = self.buckets |> at(bucket_i)
     val added = bucket |> indices()
-        |> find(|i| bucket |> at(i) |> equal(value))
+        |> find(|i| bucket |> at(i) |> is(value))
         |> map[Int, Bool](|i| {
             bucket |> set(i, value)
             return false
@@ -122,7 +122,7 @@ pub fun Set::remove[T](self: mut Set[T], value: T) -> Bool {
     val bucket = self.buckets |> at(bucket_i) 
     return bucket
         |> indices()
-        |> find(|i| bucket |> at(i) |> equal(value))
+        |> find(|i| bucket |> at(i) |> is(value))
         |> map[Int, Unit](|i| {
             self.size = self.size - 1
             bucket |> remove(i)

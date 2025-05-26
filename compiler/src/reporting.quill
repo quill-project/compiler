@@ -84,7 +84,8 @@ pub fun Message::unexpected_construct(
 ) -> Message
     = Message(List::of(
         Message::Section::Error(
-            "Expected _, but got _" |> fmt(expected, token.content)
+            "Expected _, but got _" 
+                |> fmt(expected, TokenType::as_string(token.type))
         ),
         Message::Section::Code(token.source)
     ))
