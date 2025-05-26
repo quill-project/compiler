@@ -58,6 +58,7 @@ pub enum Variant[N](
     NotEqual: Pair[N, N],
     Negate: N,
     Not: N,
+    Member: Pair[N, String],
     Call: Invocation[N],
     PipedCall: Invocation[N],
     NamedCall: PathInvocation[N],

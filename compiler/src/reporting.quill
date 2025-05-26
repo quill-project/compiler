@@ -88,3 +88,9 @@ pub fun Message::unexpected_construct(
         ),
         Message::Section::Code(token.source)
     ))
+
+pub fun Message::non_call_pipe(at: Source) -> Message 
+    = Message(List::of(
+        Message::Section::Error("Pipe into non-call expression"),
+        Message::Section::Code(at)
+    ))
