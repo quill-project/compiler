@@ -84,14 +84,41 @@ pub fun make_inv(s: mut Parser) -> UntypedNode
 // and the source span of the last identifier in the path.
 pub fun parse_path(s: mut Parser) -> Pair[List[String], Source] {
     if s.broken { return Pair(List::of(s.current.content), s.current.source) }
-    return panic("TODO!") // TODO!
+    mut last_source: Source = s.current.source
+    val segments: mut List[String] = List::of(s.current.content)
+    s |> advance()
+    Stream::new[Unit](|| unit)
+        |> take_while(|_| s.current.type == TokenType::PathSeparator)
+        |> for_each(|_| {
+            s |> advance()
+            if s |> expect(TokenType::Identifier) { return unit }
+            segments |> push(s.current.content)
+            last_source = s.current.source
+            s |> advance()
+        })
+    return Pair(segments, last_source)
 }
 
 // Parses a list of given type names, such as '[Int, Float]'. Stops after the
 // closing ']' and expects the starting state to be at the opening '['.
 pub fun parse_given_type_args(s: mut Parser) -> Option[List[UntypedNode]] {
     if s.broken { return Option::None }
-    return panic("TODO!") // TODO!
+    if s.current.type != TokenType::BracketOpen { return Option::None }
+    s |> advance()
+    val t_args: List[UntypedNode] = Stream::new[Token](|| s.current)
+        |> take_until(|t| t.type == TokenType::BracketClose || s.broken)
+        |> map[Token, UntypedNode](|_| {
+            val arg = parse_type(s)
+            s |> expect(TokenType::Comma, TokenType::BracketClose)
+            if s.current.type == TokenType::Comma {
+                s |> advance()
+            }
+            return arg
+        })
+        |> List::collect()
+    if s |> expect(TokenType::BracketClose) { return Option::None }
+    s |> advance()
+    return Option::Some(t_args)
 }
 
 // Parses a list of names, such as 'a, b, c'. Stops at the next token with a
@@ -338,7 +365,7 @@ pub fun parse_expression(s: mut Parser, parent_prec: Int) -> UntypedNode
                 }
                 args |> insert(0, lhs)
                 return UntypedNode(
-                    ast::Variant::Call(ast::Invocation(called, args)), src
+                    ast::Variant::PipedCall(ast::Invocation(called, args)), src
                 )
             }
             _ { return panic("Unhandled token type in 'parse_expression'") }
@@ -349,7 +376,27 @@ pub fun parse_expression(s: mut Parser, parent_prec: Int) -> UntypedNode
 // Parses a type, such as a named type or a function type
 pub fun parse_type(s: mut Parser) -> UntypedNode {
     if s.broken { return make_inv(s) }
-    return panic("TODO!") // TODO!
+    val start: Token = s.current
+    match s.current.type {
+        KeywordMut | Identifier {
+            val mutable: Bool = s.current.type == TokenType::KeywordMut
+            if mutable {
+                s |> advance()
+                if s |> expect(TokenType::Identifier) { return make_inv(s) }
+            }
+            val path: Pair[List[String], Source] = parse_path(s)
+            val t_args: Option[List[UntypedNode]] = parse_given_type_args(s)
+            return UntypedNode(
+                ast::Variant::TypeRef(
+                    Pair(mutable, ast::PathRef(path.first, t_args))
+                ),
+                Source::range(start.source, path.second)
+            )
+        }
+        _ {
+            return panic("TODO!") // TODO!
+        }
+    }
 }
 
 

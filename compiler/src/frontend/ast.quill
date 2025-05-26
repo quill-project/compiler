@@ -5,6 +5,9 @@ use quill::*
 
 pub struct UntypedNode(value: Variant[UntypedNode], source: Source)
 
+pub fun UntypedNode::as_string(self: UntypedNode) -> String 
+    = self.value |> as_string()
+
 
 pub struct FunctionType[N](args: List[N], ret: Option[N])
 
@@ -12,7 +15,7 @@ pub struct PathRef[N](path: List[String], t_args: Option[List[N]])
 pub struct Closure[N](args: List[String], body: List[N])
 
 pub struct Invocation[N](invoked: N, args: List[N])
-pub struct PathInvocation[N](path: List[String], args: List[N])
+pub struct PathInvocation[N](path: List[String], args: List[N], t_args: Option[List[N]])
 pub struct IfExpr[N](cond: N, if_val: N, else_val: N)
 
 pub struct LocalVariable[N](name: String, mutable: Bool, type: Option[N], value: N)
@@ -36,6 +39,7 @@ pub struct CustomType[N](
 )
 
 pub enum Variant[N](
+    TypeRef: Pair[Bool, PathRef[N]],
     FunctionType: FunctionType[N],
 
     PathRef: PathRef[N],
@@ -85,3 +89,117 @@ pub enum Variant[N](
 
     Invalid
 )
+
+pub fun PathRef::as_string[N](self: PathRef[N]) -> String {
+    val t_args_s = self.t_args
+        |> map[List[N], String](|t| {
+            val a = t |> values() |> map(N::as_string) |> join(", ")
+            return "[" |> concat(a) |> concat("]")
+        })
+        |> unwrap_or("")
+    return self.path |> values() |> join("::") |> concat(t_args_s)
+}
+
+pub fun PathInvocation::as_string[N](self: PathInvocation[N]) -> String {
+    val path_s = self.path |> values() |> join("::")
+    val args_s = self.args |> values() |> skip(1) 
+        |> map(N::as_string) |> join(", ")
+    val t_args_s = self.t_args
+        |> map[List[N], String](|t| {
+            val a = t |> values() |> map(N::as_string) |> join(", ")
+            return "[" |> concat(a) |> concat("]")
+        })
+        |> unwrap_or("")
+    return path_s |> concat(t_args_s) 
+        |> concat("(") |> concat(args_s) |> concat(")")
+}
+
+pub fun Variant::as_string[N](self: Variant[N]) -> String {
+    match self {
+        Variant::TypeRef(Pair(mutable, ref)) {
+            return "type@"
+                |> concat(PathRef::as_string(ref))
+                |> concat(if mutable { "+mut" } else { "" })
+        }
+        Variant::FunctionType(FunctionType(args, ret)) { 
+            return "Fun("
+                |> concat(args |> values() |> map(N::as_string) |> join(", "))
+                |> concat(")")
+                |> concat(ret 
+                    |> map[N, String](|n| " -> " |> concat(N::as_string(n))) 
+                    |> unwrap_or("")
+                )
+        }
+
+        Variant::PathRef(ref) { return PathRef::as_string(ref) }
+        Variant::VariableRef(name) { return "var@" |> concat(name) }
+        Variant::Int(i) { return Int::as_string(i) }
+        Variant::Float(f) { return Float::as_string(f) }
+        Variant::Bool(b) { return Bool::as_string(b) }
+        Variant::Unit { return "unit" }
+        Variant::String(s) { return "\"" |> concat(s) |> concat("\"") }
+        Variant::Closure(Closure(args, body)) {
+            val args_s = args |> values() |> join(", ")
+            val body_s = body |> values() |> map(N::as_string) |> join("; ")
+            return "|_| { _ }" |> fmt(args_s, body_s)
+        }
+
+        Variant::Add(Pair(a, b)) { return "(_ + _)" |> fmt(N::as_string(a), N::as_string(b)) }
+        Variant::Subtract(Pair(a, b)) { return "(_ - _)" |> fmt(N::as_string(a), N::as_string(b)) }
+        Variant::Multiply(Pair(a, b)) { return "(_ * _)" |> fmt(N::as_string(a), N::as_string(b)) }
+        Variant::Divide(Pair(a, b)) { return "(_ / _)" |> fmt(N::as_string(a), N::as_string(b)) }
+        Variant::Remainder(Pair(a, b)) { return "(_ % _)" |> fmt(N::as_string(a), N::as_string(b)) }
+        Variant::LessThan(Pair(a, b)) { return "(_ < _)" |> fmt(N::as_string(a), N::as_string(b)) }
+        Variant::LessThanEqual(Pair(a, b)) { return "(_ <= _)" |> fmt(N::as_string(a), N::as_string(b)) }
+        Variant::Equal(Pair(a, b)) { return "(_ == _)" |> fmt(N::as_string(a), N::as_string(b)) }
+        Variant::NotEqual(Pair(a, b)) { return "(_ != _)" |> fmt(N::as_string(a), N::as_string(b)) }
+        Variant::Negate(x) { return "(- _)" |> fmt(N::as_string(x)) }
+        Variant::Not(x) { return "(! _)" |> fmt(N::as_string(x)) }
+        Variant::Member(Pair(obj, name)) { return "(_ ._)" |> fmt(N::as_string(obj), name) }
+        Variant::Call(Invocation(called, args)) {
+            val args_s = args |> values() |> map(N::as_string) |> join(", ")
+            return "(_(_))" |> fmt(N::as_string(called), args_s)
+        }
+        Variant::PipedCall(Invocation(called, args)) {
+            val args_s = args |> values() |> skip(1) 
+                |> map(N::as_string) |> join(", ")
+            return "(_ |> _(_))" |> fmt(
+                N::as_string(args |> at(0)), N::as_string(called), args_s
+            )
+        }
+        Variant::NamedCall(invocation) {
+            return "(fun@" 
+                |> concat(PathInvocation::as_string(invocation))
+                |> concat(")")
+        }
+        Variant::StructInit(invocation) {
+            return "(struct@" 
+                |> concat(PathInvocation::as_string(invocation))
+                |> concat(")")
+        }
+        Variant::EnumInit(invocation) {
+            return "(enum@" 
+                |> concat(PathInvocation::as_string(invocation))
+                |> concat(")")
+        }
+        Variant::IfExpr(IfExpr(c, i, e)) {
+            return "(if _ then _ else _)"
+                |> fmt(N::as_string(c), N::as_string(i), N::as_string(e))
+        }
+
+        Variant::LocalVariable(LocalVariable(name, mutable, type, value)) {
+            return "_ __ = _" |> fmt(
+                if mutable { "mut" } else { "val" }, name,
+                type |> map[N, String](|t| ": " |> concat(N::as_string(t)))
+                    |> unwrap_or(""),
+                N::as_string(value)
+            )
+        }
+        Variant::Assignment(Pair(a, b)) { 
+            return "_ = _" |> fmt(N::as_string(a), N::as_string(b)) 
+        }
+        Variant::Return(v) { return "return " |> concat(N::as_string(v)) }
+
+        _ { return "not yet implemented" }
+    }
+}

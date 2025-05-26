@@ -202,7 +202,11 @@ const tests = [
     "quill::tests::lexer::symbols",
     "quill::tests::lexer::symbol_merging",
     "quill::tests::lexer::keywords",
-    "quill::tests::lexer::identifiers"
+    "quill::tests::lexer::identifiers",
+
+    "quill::tests::parser::literals",
+    "quill::tests::parser::unary",
+    "quill::tests::parser::binary"
 ];
 
 const fs = require("fs");

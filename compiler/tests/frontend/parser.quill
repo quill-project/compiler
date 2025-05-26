@@ -1,0 +1,68 @@
+
+mod quill::tests::parser
+
+use std::test::*
+use quill::*
+use quill::token::Token
+use quill::parser::Parser
+
+fun assert_tree(
+    f: Fun(mut Parser) -> ast::UntypedNode, content: String, expected: String
+) {
+    val messages: mut List[Message] = List::empty()
+    val tokens: mut Stream[Token] 
+        = lexer::tokenize("test.quill", content, messages)
+    val parser: mut Parser = Parser::from(tokens, messages)
+    val tree: ast::UntypedNode = f(parser)
+    assert_eq(messages |> length(), 0)
+    val output: String = tree |> ast::UntypedNode::as_string()
+    if output == expected { return unit }
+    return "Parsing assertion failed:\n" |> concat(content)
+        |> concat("\n\nTest expected:\n") |> concat(expected)
+        |> concat("\n\nParser returned:\n") |> concat(output)
+        |> panic()
+}
+
+pub fun literals() {
+    assert_tree(parser::parse_value, "5", "5")
+    assert_tree(parser::parse_value, "true", "true")
+    assert_tree(parser::parse_value, "unit", "unit")
+    assert_tree(parser::parse_value, 
+        "|a, b| a + b", 
+        "|a, b| { return (a + b) }"
+    )
+    assert_tree(parser::parse_value, "hello::world", "hello::world")
+    assert_tree(parser::parse_value, 
+        "if x < 5 { 5 } else if x > 10 { 10 } else { x }", 
+        "(if (x < 5) then 5 else (if (10 < x) then 10 else x))"
+    )
+    assert_tree(parser::parse_value, "println[String]", "println[type@String]")
+}
+
+pub fun unary() {
+    assert_tree(parser::parse_value, "-5", "(- 5)")
+    assert_tree(parser::parse_value, "!true", "(! true)")
+}
+
+pub fun binary() {
+    val expression: Fun(mut Parser) -> ast::UntypedNode 
+        = |p| parser::parse_expression(p, Int::MAX)
+    
+    assert_tree(expression, "5 + 5 * 10", "(5 + (5 * 10))")
+    assert_tree(expression, "3 > -4", "((- 4) < 3)")
+    assert_tree(expression, 
+        "5 < 10 || 10 < 20", 
+        "(if (5 < 10) then true else (10 < 20))"
+    )
+    assert_tree(expression, "add(5, 10)", "(add(5, 10))")
+    assert_tree(expression, 
+        "my_cat.name == \"Bob\"", 
+        "((my_cat .name) == \"Bob\")"
+    )
+    assert_tree(expression, "0 >= x + 5", "((x + 5) <= 0)")
+    assert_tree(expression, 
+        "is_logged_in() && is_verified()", 
+        "(if (is_logged_in()) then (is_verified()) else false)"
+    )
+    assert_tree(expression, "5 |> add(10)", "(5 |> add(10))")
+}
