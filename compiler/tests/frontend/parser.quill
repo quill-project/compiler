@@ -117,4 +117,67 @@ pub fun control_flow() {
         "for n: range(0, 10) { if n == 5 { break }   println(x) }",
         "for n: (range(0, 10)) { if (n == 5) { break } else {  }; (println(x)) }"
     )
+    assert_tree(parser::parse_statement,
+        "match n { 0 { println(\"Hello\") } 1 { println(\"world\") } }",
+        "match n { 0 -> { (println(\"Hello\")) } 1 -> { (println(\"world\")) } }"
+    )
+}
+
+pub fun declarations() {
+    assert_tree(parser::parse_declaration, 
+        "mod std::Int",
+        "mod std::Int"
+    )
+    assert_tree(parser::parse_declaration,
+        "use quill::lexer::tokenize",
+        "use(tokenize -> quill::lexer::tokenize)"
+    )
+    assert_tree(parser::parse_declaration,
+        "use quill::token::(Token, TokenType::is_relevant as should_be_included)",
+        "use(Token -> quill::token::Token, should_be_included -> quill::token::TokenType::is_relevant)"
+    )
+    assert_tree(parser::parse_declaration,
+        "use quill::ast::*",
+        "use(* -> quill::ast::*)"
+    )
+    assert_tree(parser::parse_declaration,
+        "use quill::Message as Error",
+        "use(Error -> quill::Message)"
+    )
+    assert_tree(parser::parse_declaration, 
+        "pub val x = 5", 
+        "pub val x = 5"
+    )
+    assert_tree(parser::parse_declaration, 
+        "mut test::y = 10", 
+        "mut test::y = 10"
+    )
+    assert_tree(parser::parse_declaration, 
+        "mut z: Int = 15", 
+        "mut z: type@Int = 15"
+    )
+    assert_tree(parser::parse_declaration, 
+        "pub fun add[T](a: T, b: T) -> T = a + b", 
+        "pub fun add[T](a: type@T, b: type@T) -> type@T { return (a + b) }"
+    )
+    assert_tree(parser::parse_declaration,
+        "fun String::greet(self: String) { println(concat(\"Hello, \", self)) }",
+        "fun String::greet[](self: type@String) { (println((concat(\"Hello, \", self)))) }"
+    )
+    assert_tree(parser::parse_declaration,
+        "ext fun Int::as_float(self: Int) -> Float = \"return Number(self);\"",
+        "ext fun Int::as_float[](self: type@Int) -> type@Float = \"return Number(self);\""
+    )
+    assert_tree(parser::parse_declaration,
+        "struct pets::Cat(name: String, age: Int)",
+        "struct pets::Cat[](name: type@String, age: type@Int)"
+    )
+    assert_tree(parser::parse_declaration,
+        "pub struct Box[T](value: T)",
+        "pub struct Box[T](value: type@T)"
+    )
+    assert_tree(parser::parse_declaration,
+        "pub enum Option[T](Some: T, None)",
+        "pub enum Option[T](Some: type@T, None: type@Unit)"
+    )
 }

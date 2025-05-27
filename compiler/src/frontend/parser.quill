@@ -439,19 +439,31 @@ pub fun parse_type(s: mut Parser) -> UntypedNode {
 
 // Parses a list of argument / member names and their types, such as
 // 'a: Int, b: Float, c: String'
-pub fun parse_name_type_list(s: mut Parser, end: TokenType) -> Option[List[Pair[String, UntypedNode]]]
+pub fun parse_name_type_list(s: mut Parser, end: TokenType, types_opt: Bool) -> Option[List[Pair[String, UntypedNode]]]
     = Stream::new[Token](|| s.current)
     |> take_until(|t| t.type == end || s.broken)
     |> fold[Token, Option[mut List[Pair[String, UntypedNode]]]](
         Option::Some(List::empty[Pair[String, UntypedNode]]()),
         |acc, _| acc |> and_then(|args| {
             if s |> expect(TokenType::Identifier) { return Option::None }
-            val name: String = s.current.content
+            val name: Token = s.current
             s |> advance()
+            if types_opt && s.current.type != TokenType::Colon {
+                val t = UntypedNode(
+                    ast::Variant::TypeRef(Pair(
+                        false, 
+                        ast::PathRef(List::of("Unit"), Option::None)
+                    )), 
+                    name.source
+                )
+                val arg: Pair[String, UntypedNode] = Pair(name.content, t)
+                args |> push(arg)
+                return Option::Some(args)
+            }
             if s |> expect(TokenType::Colon) { return Option::None }
             s |> advance()
             val type: UntypedNode = parse_type(s)
-            val arg: Pair[String, UntypedNode] = Pair(name, type)
+            val arg: Pair[String, UntypedNode] = Pair(name.content, type)
             args |> push(arg)
             if s |> expect(TokenType::Comma, end) { return Option::None }
             if s.current.type == TokenType::Comma {
@@ -695,6 +707,72 @@ pub val declaration_starters: Set[TokenType] = Set::of(
     TokenType::KeywordEnum
 )
 
+// Parses a path used in a 'use' declaration, which may be a path
+// such as 'std::test' optionally followed by either an asterisk (wildcard)
+// ('std::test::*')
+// or a parenthesized list of even more paths
+// ('quill::token::(Token, TokenType, TokenType::is_relevant)')
+pub fun parse_usages(s: mut Parser, before: List[String]) -> Pair[List[Pair[String, List[String]]], Source] {
+    val path: mut List[String] = before |> slice_from(0)
+    mut end: Source = s.current.source
+    val single_result: Fun() -> Pair[List[Pair[String, List[String]]], Source]
+        = || Pair(List::of(Pair(path |> at(-1), path)), end)
+    if s |> expect(TokenType::Identifier) { return single_result() }
+    val ended: Bool = Stream::new[Token](|| s.current)
+        |> take_until(|t| t.type != TokenType::Identifier || s.broken)
+        |> map[Token, Bool](|_| {
+            path |> push(s.current.content)
+            end = s.current.source
+            s |> advance()
+            if s.current.type != TokenType::PathSeparator { return true }
+            s |> advance()
+            s |> expect(
+                TokenType::Identifier, TokenType::Asterisk, TokenType::ParenOpen
+            )
+            return false
+        })
+        |> any(|e| e)
+    if !ended {
+        match s.current.type {
+            Asterisk {
+                path |> push(s.current.content)
+                end = s.current.source
+                s |> advance()
+                return single_result()
+            }
+            ParenOpen {
+                s |> advance()
+                val usages: List[Pair[String, List[String]]]
+                    = Stream::new[Token](|| s.current)
+                    |> take_until(
+                        |t| t.type == TokenType::ParenClose || s.broken
+                    )
+                    |> map[Token, List[Pair[String, List[String]]]](|_| {
+                        val usage = parse_usages(s, path).first
+                        s |> expect(TokenType::Comma, TokenType::ParenClose)
+                        if s.current.type == TokenType::Comma { s |> advance() }
+                        return usage
+                    })
+                    |> reduce(List::concat)
+                    |> unwrap_or(List::empty())
+                val end: Source = s.current.source
+                s |> advance()
+                return Pair(usages, end)
+            }
+            _ { panic[Unit]("Unhandled token type in 'parse_usages'") }
+        }
+    }
+    if s.current.type == TokenType::KeywordAs {
+        s |> advance()
+        if s |> expect(TokenType::Identifier) { return single_result() }
+        val pattern: String = s.current.content
+        end = s.current.source
+        s |> advance()
+        return Pair(List::of(Pair(pattern, path)), end)
+    }
+    return single_result()
+}
+
 // Parses only top level statements and declarations, such as functions, types,
 // module declarations, path usages, ...
 pub fun parse_declaration(s: mut Parser) -> UntypedNode {
@@ -708,8 +786,190 @@ pub fun parse_declaration(s: mut Parser) -> UntypedNode {
             |> for_each(|_| s |> advance())
         s.broken = true
     }
-
-    return panic("TODO!") // TODO! actually parse declarations
+    val start: Token = s.current
+    mut public: Bool = s.current.type == TokenType::KeywordPub
+    if public {
+        s |> advance()
+        if s |> expect(
+            TokenType::KeywordExt, TokenType::KeywordFun, 
+            TokenType::KeywordMut, TokenType::KeywordVal,
+            TokenType::KeywordEnum, TokenType::KeywordStruct
+        ) { return make_inv(s) }
+    }
+    match s.current.type {
+        // mod example::test
+        KeywordMod {
+            s |> advance()
+            if s |> expect(TokenType::Identifier) { return make_inv(s) }
+            val path: Pair[List[String], Source] = parse_path(s)
+            return UntypedNode(
+                ast::Variant::Module(path.first),
+                Source::range(start.source, path.second)
+            )
+        }
+        // use example::test::add
+        // use example::test::PI as HALF_TAU
+        // use example::(test::subtract, execute::*)
+        KeywordUse {
+            s |> advance()
+            val usages: Pair[List[Pair[String, List[String]]], Source]
+                = parse_usages(s, List::empty())
+            return UntypedNode(
+                ast::Variant::Usages(usages.first),
+                Source::range(start.source, usages.second)
+            )
+        }
+        // val a = 5
+        // val b: Float = 3.5
+        // mut c: Int = 15
+        // mut example::d: Float = 20.1
+        KeywordVal | KeywordMut {
+            val mutable: Bool = s.current.type == TokenType::KeywordMut
+            s |> advance()
+            if s |> expect(TokenType::Identifier) { return make_inv(s) }
+            val path: List[String] = parse_path(s).first
+            if s |> expect(TokenType::Colon, TokenType::Equal) { 
+                return make_inv(s) 
+            }
+            mut type: Option[UntypedNode] = Option::None
+            if s.current.type == TokenType::Colon {
+                s |> advance()
+                type = Option::Some(parse_type(s))
+            }
+            if s |> expect(TokenType::Equal) { return make_inv(s) }
+            s |> advance()
+            val value: UntypedNode = parse_expression(s, Int::MAX)
+            return UntypedNode(
+                ast::Variant::GlobalVariable(ast::GlobalVariable(
+                    path, public, mutable, type, value
+                )),
+                Source::range(start.source, value.source)
+            )
+        }
+        KeywordFun | KeywordExt {
+            val external: Bool = s.current.type == TokenType::KeywordExt
+            if external {
+                s |> advance()
+            }
+            if s |> expect(TokenType::KeywordFun) { return make_inv(s) }
+            s |> advance()
+            if s |> expect(TokenType::Identifier) { return make_inv(s) }
+            val path: List[String] = parse_path(s).first
+            if s |> expect(TokenType::BracketOpen, TokenType::ParenOpen) {
+                return make_inv(s)
+            }
+            mut t_args: List[String] = List::empty()
+            if s.current.type == TokenType::BracketOpen {
+                s |> advance()
+                match parse_name_list(s, TokenType::BracketClose) {
+                    Some(args) { t_args = args }
+                    None { return make_inv(s) }
+                }
+                if s |> expect(TokenType::BracketClose) { return make_inv(s) }
+                s |> advance()
+            }
+            if s |> expect(TokenType::ParenOpen) { return make_inv(s) }
+            s |> advance()
+            mut args: List[Pair[String, UntypedNode]] = List::empty()
+            match parse_name_type_list(s, TokenType::ParenClose, false) {
+                Some(a) { args = a }
+                None { return make_inv(s) }
+            }
+            if s |> expect(TokenType::ParenClose) { return make_inv(s) }
+            s |> advance()
+            mut ret_t: Option[UntypedNode] = Option::None
+            if s.current.type == TokenType::ArrowRight {
+                s |> advance()
+                ret_t = Option::Some(parse_type(s))
+            }
+            if !external {
+                if s |> expect(TokenType::Equal, TokenType::BraceOpen) { 
+                    return make_inv(s) 
+                }
+            }
+            if !external && s.current.type == TokenType::BraceOpen {
+                s |> advance()
+                val body: List[UntypedNode] 
+                    = parse_statement_list(s, TokenType::BraceClose)
+                if s |> expect(TokenType::BraceClose) { return make_inv(s) }
+                val end: Source = s.current.source
+                s |> advance()
+                return UntypedNode(
+                    ast::Variant::Function(ast::Function(
+                        path, public, t_args, args, ret_t, body
+                    )),
+                    Source::range(start.source, end)
+                )
+            } else if !external && s.current.type == TokenType::Equal {
+                s |> advance()
+                val value: UntypedNode = parse_expression(s, Int::MAX)
+                val body: List[UntypedNode] = List::of(UntypedNode(
+                    ast::Variant::Return(value), value.source
+                ))
+                return UntypedNode(
+                    ast::Variant::Function(ast::Function(
+                        path, public, t_args, args, ret_t, body
+                    )),
+                    Source::range(start.source, value.source)
+                )
+            } else {
+                if s |> expect(TokenType::Equal) { return make_inv(s) }
+                s |> advance()
+                if s |> expect(TokenType::StringLiteral) { return make_inv(s) }
+                val body: Token = s.current
+                s |> advance()
+                return UntypedNode(
+                    ast::Variant::ExternalFunction(ast::ExternalFunction(
+                        path, public, t_args, args, ret_t, body.content
+                    )),
+                    Source::range(start.source, body.source)
+                )
+            }
+        }
+        KeywordStruct | KeywordEnum {
+            val is_struct: Bool = s.current.type == TokenType::KeywordStruct
+            s |> advance()
+            if s |> expect(TokenType::Identifier) { return make_inv(s) }
+            val path: List[String] = parse_path(s).first
+            if s |> expect(TokenType::BracketOpen, TokenType::ParenOpen) {
+                return make_inv(s)
+            }
+            mut t_args: List[String] = List::empty()
+            if s.current.type == TokenType::BracketOpen {
+                s |> advance()
+                match parse_name_list(s, TokenType::BracketClose) {
+                    Some(args) { t_args = args }
+                    None { return make_inv(s) }
+                }
+                if s |> expect(TokenType::BracketClose) { return make_inv(s) }
+                s |> advance()
+            }
+            if s |> expect(TokenType::ParenOpen) { return make_inv(s) }
+            s |> advance()
+            mut args: List[Pair[String, UntypedNode]] = List::empty()
+            match parse_name_type_list(s, TokenType::ParenClose, !is_struct) {
+                Some(a) { args = a }
+                None { return make_inv(s) }
+            }
+            if s |> expect(TokenType::ParenClose) { return make_inv(s) }
+            val end: Source = s.current.source
+            s |> advance()
+            val type_def = ast::CustomType(path, public, t_args, args)
+            val src = Source::range(start.source, end)
+            return if is_struct {
+                UntypedNode(ast::Variant::Structure(type_def), src)
+            } else {
+                UntypedNode(ast::Variant::Enumeration(type_def), src)
+            }
+        }
+        _ {
+            s.messages |> push(
+                Message::unexpected_construct(s.current, "a top-level statement")
+            )
+            s.broken = true
+            return make_inv(s)
+        }
+    }
 }
 
 // Repeatedly parses declarations until the end of the file is reached.
