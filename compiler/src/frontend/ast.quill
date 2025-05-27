@@ -114,6 +114,13 @@ pub fun PathInvocation::as_string[N](self: PathInvocation[N]) -> String {
         |> concat("(") |> concat(args_s) |> concat(")")
 }
 
+pub fun MatchBranch::as_string[N](self: MatchBranch[N]) -> String
+    = "_ -> { _ }" |> fmt(
+        self.patterns |> values() |> map(N::as_string) |> join(" | "),
+        self.body |> values() |> map(N::as_string) |> join("; ")
+    )
+
+
 pub fun Variant::as_string[N](self: Variant[N]) -> String {
     match self {
         Variant::TypeRef(Pair(mutable, ref)) {
@@ -201,6 +208,34 @@ pub fun Variant::as_string[N](self: Variant[N]) -> String {
             return "_ = _" |> fmt(N::as_string(a), N::as_string(b)) 
         }
         Variant::Return(v) { return "return " |> concat(N::as_string(v)) }
+        Variant::Continue { return "continue" }
+        Variant::Break { return "break" }
+        Variant::If(If(cond, if_body, else_body)) {
+            val if_body_s = if_body |> values() |> map(N::as_string) |> join("; ")
+            val else_body_s = else_body |> values() |> map(N::as_string) |> join("; ")
+            return "if _ { _ } else { _ }" |> fmt(
+                N::as_string(cond), if_body_s, else_body_s
+            )
+        }
+        Variant::While(While(cond, body)) {
+            return "while _ { _ }" |> fmt(
+                N::as_string(cond),
+                body |> values() |> map(N::as_string) |> join("; ")
+            )
+        }
+        Variant::For(For(name, seq, body)) {
+            return "for _: _ { _ }" |> fmt(
+                name, N::as_string(seq),
+                body |> values() |> map(N::as_string) |> join("; ")
+            )
+        }
+        Variant::Match(Match(matched, branches)) {
+            val branches_s = branches |> values() 
+                |> map(MatchBranch::as_string[N]) |> join(" ")
+            return "match _ { _ }" |> fmt(
+                N::as_string(matched), branches_s
+            )
+        }
 
         _ { return "not yet implemented" }
     }

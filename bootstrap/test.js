@@ -207,7 +207,9 @@ const tests = [
     "quill::tests::parser::literals",
     "quill::tests::parser::unary",
     "quill::tests::parser::binary",
-    "quill::tests::parser::types"
+    "quill::tests::parser::types",
+    "quill::tests::parser::variables",
+    "quill::tests::parser::control_flow"
 ];
 
 const fs = require("fs");

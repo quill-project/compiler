@@ -91,3 +91,30 @@ pub fun types() {
         "type+mut@Map[type@String, (Fun(type@Float, type@Float) -> type@Float)]"
     )
 }
+
+pub fun variables() {
+    assert_tree(parser::parse_statement, "val x = 5", "val x = 5")
+    assert_tree(parser::parse_statement, "mut y = 10", "mut y = 10")
+    assert_tree(parser::parse_statement, "val z: Int = 15", "val z: type@Int = 15")
+    assert_tree(parser::parse_statement, "y = 5 + 10", "y = (5 + 10)")
+}
+
+pub fun control_flow() {
+    assert_tree(parser::parse_statement, "return a + b", "return (a + b)")
+    assert_tree(parser::parse_statement, 
+        "if x < 5 { mut r = x   r = r + 5   return r } else { return x }", 
+        "if (x < 5) { mut r = x; r = (r + 5); return r } else { return x }"
+    )
+    assert_tree(parser::parse_statement, 
+        "if x < 5 { return 5 } else if x > 10 { return 10 } else { return x }", 
+        "if (x < 5) { return 5 } else { if (10 < x) { return 10 } else { return x } }"
+    )
+    assert_tree(parser::parse_statement, 
+        "while x < 5 { println(x)   x = x + 1 }", 
+        "while (x < 5) { (println(x)); x = (x + 1) }"
+    )
+    assert_tree(parser::parse_statement, 
+        "for n: range(0, 10) { if n == 5 { break }   println(x) }",
+        "for n: (range(0, 10)) { if (n == 5) { break } else {  }; (println(x)) }"
+    )
+}
