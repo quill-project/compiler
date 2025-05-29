@@ -1,0 +1,71 @@
+
+mod quill::types
+
+use quill::*
+use quill::ast::UntypedNode
+
+pub enum Variant(
+    Unit,
+    Integer,
+    Float,
+    Boolean,
+    String,
+    Struct: List[String],
+    Enum: List[String],
+    Function: Pair[List[Type], Type],
+    List: Type,
+
+    Invalid
+)
+
+pub struct Type(
+    value: Variant,
+    mutable: Bool,
+    source: Source
+)
+
+pub struct TypedNode(
+    value: ast::Variant[TypedNode],
+    source: Source,
+    type: Type
+)
+
+
+pub struct ModuleContext(
+    module: List[String],
+    aliases: Map[String, List[String]]
+)
+
+pub struct Symbol(
+    node: UntypedNode,
+    context: ModuleContext,
+    checked: mut List[TypedNode]
+)
+
+pub struct SymbolTable(
+    names: mut Set[List[String]],
+    symbols: mut Map[List[String], Symbol]
+)
+
+
+pub enum ScopeExit(
+    EndReached,
+    Continued,
+    Returned,
+    Broke
+)
+
+pub struct Variable(
+    mutable: Bool,
+    type: Type
+)
+
+pub struct Scope(
+    locals: Map[String, Variable]
+)
+
+pub struct Checker(
+    scopes: List[Scope],
+    return_type: Type,
+    symbols: SymbolTable
+)
