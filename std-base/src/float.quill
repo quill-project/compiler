@@ -29,6 +29,8 @@ pub fun Float::greater_than(lhs: Float, rhs: Float) -> Bool = lhs > rhs
 pub fun Float::less_than_eq(lhs: Float, rhs: Float) -> Bool = lhs <= rhs
 pub fun Float::greater_than_eq(lhs: Float, rhs: Float) -> Bool = lhs >= rhs
 
+pub fun Float::clone(self: Float) -> Float = self
+
 pub fun Float::as_radians(self: Float) -> Float
     = self * Float::TAU / 360.0
 

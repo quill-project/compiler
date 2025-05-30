@@ -52,28 +52,28 @@ pub fun parse_hex_number(number: String) -> Option[Int] = number
 
 // Maps Quill keywords to their respective keyword token types.
 pub val keywords: Map[String, TokenType] = Map::of(
-    Map::Entry("if", TokenType::KeywordIf),
-    Map::Entry("else", TokenType::KeywordElse),
-    Map::Entry("ext", TokenType::KeywordExt),
-    Map::Entry("fun", TokenType::KeywordFun),
-    Map::Entry("return", TokenType::KeywordReturn),
-    Map::Entry("continue", TokenType::KeywordContinue),
-    Map::Entry("break", TokenType::KeywordBreak),
-    Map::Entry("val", TokenType::KeywordVal),
-    Map::Entry("mut", TokenType::KeywordMut),
-    Map::Entry("mod", TokenType::KeywordMod),
-    Map::Entry("use", TokenType::KeywordUse),
-    Map::Entry("as", TokenType::KeywordAs),
-    Map::Entry("pub", TokenType::KeywordPub),
-    Map::Entry("struct", TokenType::KeywordStruct),
-    Map::Entry("enum", TokenType::KeywordEnum),
-    Map::Entry("match", TokenType::KeywordMatch),
-    Map::Entry("while", TokenType::KeywordWhile),
-    Map::Entry("for", TokenType::KeywordFor),
+    Pair("if", TokenType::KeywordIf),
+    Pair("else", TokenType::KeywordElse),
+    Pair("ext", TokenType::KeywordExt),
+    Pair("fun", TokenType::KeywordFun),
+    Pair("return", TokenType::KeywordReturn),
+    Pair("continue", TokenType::KeywordContinue),
+    Pair("break", TokenType::KeywordBreak),
+    Pair("val", TokenType::KeywordVal),
+    Pair("mut", TokenType::KeywordMut),
+    Pair("mod", TokenType::KeywordMod),
+    Pair("use", TokenType::KeywordUse),
+    Pair("as", TokenType::KeywordAs),
+    Pair("pub", TokenType::KeywordPub),
+    Pair("struct", TokenType::KeywordStruct),
+    Pair("enum", TokenType::KeywordEnum),
+    Pair("match", TokenType::KeywordMatch),
+    Pair("while", TokenType::KeywordWhile),
+    Pair("for", TokenType::KeywordFor),
 
-    Map::Entry("true", TokenType::BoolLiteral),
-    Map::Entry("false", TokenType::BoolLiteral),
-    Map::Entry("unit", TokenType::UnitLiteral)
+    Pair("true", TokenType::BoolLiteral),
+    Pair("false", TokenType::BoolLiteral),
+    Pair("unit", TokenType::UnitLiteral)
 )
 
 // Turns a given source file into a stream of tokens, including tokens

@@ -20,6 +20,8 @@ pub fun Int::greater_than_eq(lhs: Int, rhs: Int) -> Bool = lhs >= rhs
 
 pub fun Int::as_hash(self: Int) -> Int = self
 
+pub fun Int::clone(self: Int) -> Int = self
+
 pub fun Int::abs(self: Int) -> Int 
     = if self < 0 { -self } else { self } 
 

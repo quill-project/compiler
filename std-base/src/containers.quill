@@ -8,6 +8,8 @@ pub fun Box::as_string[T](self: Box[T]) -> String
 
 pub fun Box::as_hash[T](self: Box[T]) -> Int = T::as_hash(self.value)
 
+pub fun Box::clone[T](self: Box[T]) -> mut Box[T] = Box(T::clone(self.value))
+
 
 pub struct Pair[A, B](first: A, second: B)
 
@@ -20,6 +22,12 @@ pub fun Pair::as_string[A, B](self: Pair[A, B]) -> String
 pub fun Pair::as_hash[A, B](self: Pair[A, B]) -> Int
     = A::as_hash(self.first)
     |> hash::combine_ord(B::as_hash(self.second))
+
+pub fun Pair::clone[A, B](self: Pair[A, B]) -> mut Pair[A, B]
+    = Pair(
+        A::clone(self.first), 
+        B::clone(self.second)
+    )
 
 
 pub struct Triplet[A, B, C](first: A, second: B, third: C)
@@ -35,3 +43,10 @@ pub fun Triplet::as_hash[A, B, C](self: Triplet[A, B, C]) -> Int
     = A::as_hash(self.first)
     |> hash::combine_ord(B::as_hash(self.second))
     |> hash::combine_ord(C::as_hash(self.third))
+
+pub fun Triplet::clone[A, B, C](self: Triplet[A, B, C]) -> mut Triplet[A, B, C]
+    = Triplet(
+        A::clone(self.first), 
+        B::clone(self.second), 
+        C::clone(self.third)
+    )

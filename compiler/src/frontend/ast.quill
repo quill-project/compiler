@@ -330,7 +330,5 @@ pub fun Variant::as_string[N](self: Variant[N]) -> String {
         }
 
         Variant::Invalid { return "!INVALID!" }
-
-        _ { return "!TODO!" }
     }
 }

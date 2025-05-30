@@ -1,0 +1,124 @@
+
+mod quill::tests::types
+
+use std::test::*
+use quill::*
+
+fun build_table(content: String) -> mut types::SymbolTable {
+    val messages: mut List[Message] = List::empty()
+    val tokens: mut Stream[token::Token]
+        = lexer::tokenize("test.quill", content, messages)
+    val parser = parser::Parser::from(tokens, messages)
+    val nodes: List[ast::UntypedNode] = parser::parse_file(parser)
+    val table = types::SymbolTable::from(nodes, messages)
+    if messages |> length() |> greater_than(0) {
+        val files = Map::of(Pair("test.quill", content))
+        val msgs = messages 
+            |> values() |> map[Message, String](|m| m |> display(files)) 
+            |> join("\n\n")
+        return "Symbol table building failed:\n" |> concat(content)
+            |> concat("\n\nReported message(s):\n") |> concat(msgs)
+            |> panic()
+    }
+    return table
+}
+
+fun table_get(table: types::SymbolTable, path: String) -> types::Symbol {
+    val p: List[String] = path |> split("::") |> List::collect()
+    return table.symbols |> get(p) |> unwrap_or_else(
+        || "Symbol table assertion failed:\n'_' is missing from the table"
+        |> fmt(path)
+        |> panic()
+    )
+}
+
+pub fun collection() {
+    val t = build_table("
+pub fun add(a: Int, b: Int) -> Int = a + b
+
+mod foo
+enum Option[T](Some: T, None)
+pub fun greet(thing: String) = println(\"hello, \" |> concat(thing))
+fun apply[T, R](f: Fun(T) -> R, a: T) -> R = f(a)
+
+mod bar::baz
+pub fun multiply(x: Float, y: Float, z: Float) -> Float = x * y * z
+val PI = 3.1415
+    ")
+    val add =      t |> table_get("add")
+    assert_eq[List[String]](add     .type_args,      List::empty())
+    assert_eq[List[String]](add     .context.module, List::empty())
+    val option =   t |> table_get("foo::Option")
+    assert_eq[List[String]](option  .type_args,      List::of("T"))
+    assert_eq[List[String]](option  .context.module, List::of("foo"))
+    val greet =    t |> table_get("foo::greet")
+    assert_eq[List[String]](greet   .type_args,      List::empty())
+    assert_eq[List[String]](greet   .context.module, List::of("foo"))
+    val apply =    t |> table_get("foo::apply")
+    assert_eq[List[String]](apply   .type_args,      List::of("T", "R"))
+    assert_eq[List[String]](apply   .context.module, List::of("foo"))
+    val multiply = t |> table_get("bar::baz::multiply")
+    assert_eq[List[String]](multiply.type_args,      List::empty())
+    assert_eq[List[String]](multiply.context.module, List::of("bar", "baz"))
+    val pi =       t |> table_get("bar::baz::PI")
+    assert_eq[List[String]](pi      .type_args,      List::empty())
+    assert_eq[List[String]](pi      .context.module, List::of("bar", "baz"))
+}
+
+pub fun aliases() {
+    val t = build_table("
+pub fun add(a: Int, b: Int) -> Int = a + b
+
+mod std
+enum Option[T](Some: T, None)
+
+mod foo
+pub fun greet(thing: String) = println(\"hello, \" |> concat(thing))
+fun apply[T, R](f: Fun(T) -> R, a: T) -> R = f(a)
+
+mod bar::baz
+use foo::greet
+pub fun multiply(x: Float, y: Float, z: Float) -> Float = x * y * z
+val PI = 3.1415
+    ")
+    val add =   t |> table_get("add")
+    assert_eq[Option[List[String]]](
+        add.context.aliases |> get("Option"), 
+        Option::Some(List::of("std", "Option"))
+    )
+    assert_eq(add.context.aliases |> get("greet"), Option::None)
+    assert_eq(add.context.aliases |> get("multiply"), Option::None)
+    val apply = t |> table_get("foo::apply")
+    assert_eq[Option[List[String]]](
+        apply.context.aliases |> get("Option"), 
+        Option::Some(List::of("std", "Option"))
+    )
+    assert_eq(apply.context.aliases |> get("greet"), Option::None)
+    assert_eq(apply.context.aliases |> get("multiply"), Option::None)
+    val pi =    t |> table_get("bar::baz::PI")
+    assert_eq[Option[List[String]]](
+        pi.context.aliases |> get("Option"), 
+        Option::Some(List::of("std", "Option"))
+    )
+    assert_eq[Option[List[String]]](
+        pi.context.aliases |> get("greet"), 
+        Option::Some(List::of("foo", "greet"))
+    )
+    assert_eq(pi.context.aliases |> get("multiply"), Option::None)
+}
+
+pub fun hoisting() {
+    val t = build_table("
+mod foo
+pub fun add[T](a: T, b: T) -> T = a + b
+
+mod bar
+fun test() {}
+use foo::add // 'use' is below 'test',...
+    ")
+    val test = t |> table_get("bar::test")
+    assert_eq[Option[List[String]]](
+        test.context.aliases |> get("add"), 
+        Option::Some(List::of("foo", "add")) // ...but still applies to 'test'.
+    )
+}

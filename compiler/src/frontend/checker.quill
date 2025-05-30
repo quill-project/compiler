@@ -1,0 +1,63 @@
+
+mod quill::checker
+
+use quill::*
+use quill::types::*
+use quill::ast::UntypedNode
+
+pub enum ScopeExit(
+    EndReached,
+    Continued,
+    Returned,
+    Broke
+)
+
+pub struct Variable(
+    mutable: Bool,
+    type: Type
+)
+
+pub struct Scope(
+    locals: mut Map[String, Variable]
+)
+
+pub struct Function(
+    scopes: mut List[Scope],
+    return_type: Type
+)
+
+pub struct Checker(
+    functions: mut List[mut Function],
+    type_args: mut Map[String, Type],
+    symbols: SymbolTable,
+    dependencies: mut List[SymbolInstance],
+    messages: mut List[Message]
+)
+
+pub fun Checker::check_declaration(
+    self: mut Checker, node: UntypedNode
+) -> TypedNode {
+    // TODO! check global declaration
+    return panic("not yet implemented")
+}
+
+pub fun Checker::check_statement(
+    self: mut Checker, node: UntypedNode
+) -> TypedNode {
+    // TODO! check local statement
+    return panic("not yet implemented")
+}
+
+pub fun Checker::check(
+    self: mut Checker, node: UntypedNode, exp: Type
+) -> TypedNode {
+    // TODO! check expression
+    return panic("not yet implemented")
+}
+
+pub fun Checker::infer(
+    self: mut Checker, node: UntypedNode, report: Bool
+) -> TypedNode {
+    // TODO! infer expression
+    return panic("not yet implemented")
+}

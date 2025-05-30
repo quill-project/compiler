@@ -50,28 +50,28 @@ pub fun Parser::expect(
 
 // Maps unary operators to their respective operator precedence
 pub val unary_operator_prec: Map[TokenType, Int] = Map::of(
-    Map::Entry(TokenType::Minus,            2),
-    Map::Entry(TokenType::ExclamationMark,  2)
+    Pair(TokenType::Minus,            2),
+    Pair(TokenType::ExclamationMark,  2)
 )
 
 // Maps binary operators to their respective operator precedence
 pub val binary_operator_prec: Map[TokenType, Int] = Map::of(
-    Map::Entry(TokenType::ParenOpen,        1),
-    Map::Entry(TokenType::Dot,              1),
-    Map::Entry(TokenType::Asterisk,         3),
-    Map::Entry(TokenType::Slash,            3),
-    Map::Entry(TokenType::Percent,          3),
-    Map::Entry(TokenType::Plus,             4),
-    Map::Entry(TokenType::Minus,            4),
-    Map::Entry(TokenType::LessThan,         5),
-    Map::Entry(TokenType::GreaterThan,      5),
-    Map::Entry(TokenType::LessThanEqual,    5),
-    Map::Entry(TokenType::GreaterThanEqual, 5),
-    Map::Entry(TokenType::DoubleEqual,      6),
-    Map::Entry(TokenType::NotEqual,         6),
-    Map::Entry(TokenType::DoubleAmpersand,  7),
-    Map::Entry(TokenType::DoublePipe,       8),
-    Map::Entry(TokenType::Triangle,         9)
+    Pair(TokenType::ParenOpen,        1),
+    Pair(TokenType::Dot,              1),
+    Pair(TokenType::Asterisk,         3),
+    Pair(TokenType::Slash,            3),
+    Pair(TokenType::Percent,          3),
+    Pair(TokenType::Plus,             4),
+    Pair(TokenType::Minus,            4),
+    Pair(TokenType::LessThan,         5),
+    Pair(TokenType::GreaterThan,      5),
+    Pair(TokenType::LessThanEqual,    5),
+    Pair(TokenType::GreaterThanEqual, 5),
+    Pair(TokenType::DoubleEqual,      6),
+    Pair(TokenType::NotEqual,         6),
+    Pair(TokenType::DoubleAmpersand,  7),
+    Pair(TokenType::DoublePipe,       8),
+    Pair(TokenType::Triangle,         9)
 )
 
 

@@ -79,6 +79,13 @@ pub fun Set::as_hash[T](self: Set[T]) -> Int = self
     |> reduce(hash::combine_unord)
     |> unwrap_or(0)
 
+pub fun Set::clone[T](self: Set[T]) -> Set[T] 
+    = Set(
+        self.load_factor, 
+        self.size, 
+        self.buckets |> clone()
+    )
+
 pub fun Set::load_factor[T](self: Set[T]) -> Float = self.load_factor
 
 pub fun Set::capacity[T](self: Set[T]) -> Int = self.buckets |> length()

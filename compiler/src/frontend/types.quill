@@ -2,6 +2,7 @@
 mod quill::types
 
 use quill::*
+use quill::checker::Checker
 use quill::ast::UntypedNode
 
 pub enum Variant(
@@ -10,19 +11,72 @@ pub enum Variant(
     Float,
     Boolean,
     String,
-    Struct: List[String],
-    Enum: List[String],
+    Struct: Pair[List[String], List[Type]],
+    Enum: Pair[List[String], List[Type]],
     Function: Pair[List[Type], Type],
     List: Type,
 
-    Invalid
+    Invalid,
+    Unknown
 )
+
+pub fun Variant::as_hash(self: Variant) -> Int {
+    match self {
+        Unit { return 0 }
+        Integer { return 1 }
+        Float { return 2 }
+        Boolean { return 3 }
+        String { return 4 }
+        Struct(args) { return args |> as_hash() |> hash::combine_ord(5) }
+        Enum(args) { return args |> as_hash() |> hash::combine_ord(6) }
+        Function(args) { return args |> as_hash() |> hash::combine_ord(7) }
+        List(elem_t) { return elem_t |> as_hash() |> hash::combine_ord(8) }
+
+        Invalid { return 9 }
+        Unknown { return 10 }
+    }
+}
+
+pub fun Variant::as_string(self: Variant) -> String {
+    match self {
+        Unit { return "Unit" }
+        Integer { return "Int" }
+        Float { return "Float" }
+        Boolean { return "Bool" }
+        String { return "String" }
+        Struct(Pair(path, t_arg_t)) | Enum(Pair(path, t_arg_t)) {
+            val path_s: String = path |> values() |> join("::")
+            val t_arg_i_s: String = t_arg_t |> values()
+                |> map(Type::as_string) |> join(", ")
+            val t_arg_s: String = if t_arg_t |> length() |> is(0) { "" }
+                else { "[_]" |> fmt(t_arg_i_s) }
+            return path_s |> concat(t_arg_s)
+        }
+        Function(Pair(arg_t, ret_t)) {
+            val arg_s: String = arg_t |> values() 
+                |> map(Type::as_string) |> join(", ")
+            return "Fun(_) -> _" |> fmt(arg_s, ret_t |> as_string())
+        }
+        List(elem_t) { return "List[_]" |> fmt(elem_t |> as_string()) }
+
+        Invalid { return "<invalid>" }
+        Unknown { return "<unknown>" }
+    }
+}
 
 pub struct Type(
     value: Variant,
     mutable: Bool,
     source: Source
 )
+
+pub fun Type::as_hash(self: Type) -> Int 
+    = self.value |> as_hash()
+    |> hash::combine_ord(self.mutable |> as_hash())
+
+pub fun Type::as_string(self: Type) -> String
+    = (if self.mutable { "mut " } else { "" })
+    |> concat(self.value |> as_string())
 
 pub struct TypedNode(
     value: ast::Variant[TypedNode],
@@ -38,34 +92,178 @@ pub struct ModuleContext(
 
 pub struct Symbol(
     node: UntypedNode,
+    type_args: List[String],
     context: ModuleContext,
-    checked: mut List[TypedNode]
+    instances: mut Map[List[Type], Pair[TypedNode, Int]],
+    next_id: Int
+)
+
+pub struct SymbolInstance(
+    path: List[String],
+    type_args: List[Type],
+    id: mut Box[Int]
 )
 
 pub struct SymbolTable(
-    names: mut Set[List[String]],
-    symbols: mut Map[List[String], Symbol]
+    symbols: mut Map[List[String], mut Symbol]
 )
+ 
+// Collects the paths of all symbols declared by the provided 'nodes'
+// into a set.
+fun SymbolTable::collect_names(nodes: List[UntypedNode]) -> Set[List[String]] {
+    mut module: List[String] = List::empty()
+    val paths: mut Set[List[String]] = Set::empty()
+    nodes |> values() |> for_each(|node| {
+        match node.value {
+            Module(path) { module = path }
 
+            GlobalVariable(ast::GlobalVariable(path, _, _, _, _)) |
+            Function(ast::Function(path, _, _, _, _, _)) |
+            ExternalFunction(ast::ExternalFunction(path, _, _, _, _, _)) |
+            Structure(ast::CustomType(path, _, _, _)) |
+            Enumeration(ast::CustomType(path, _, _, _)) {
+                val abs: List[String] = List::concat(module, path)
+                paths |> add(abs)
+            }
 
-pub enum ScopeExit(
-    EndReached,
-    Continued,
-    Returned,
-    Broke
-)
+            _ {}
+        }
+    })
+    return paths
+}
 
-pub struct Variable(
-    mutable: Bool,
-    type: Type
-)
+// Adds a given alias to a path alias map.
+fun SymbolTable::process_alias(
+    alias: Pair[String, List[String]],
+    aliases: mut Map[String, List[String]],
+    names: Set[List[String]]
+) {
+    if alias.second |> at(-1) |> is_not("*") {
+        aliases |> add(alias)
+        return unit
+    }
+    val repl: List[String] = alias.second
+    names |> values()
+        |> filter(|p| {
+            val rpl_l: Int = repl |> length()
+            if rpl_l < 2 { return false }
+            if p |> length() |> is_not(rpl_l) { return false }
+            return (repl |> slice_to(-1)) == (p |> slice_to(-1))
+        })
+        |> for_each(|p| {
+            aliases |> set(p |> at(-1), p)
+        })
+}
 
-pub struct Scope(
-    locals: Map[String, Variable]
-)
+// Builds a map of all symbols declared by the provided 'nodes'.
+fun SymbolTable::collect_symbols(
+    nodes: List[UntypedNode], 
+    names: Set[List[String]],
+    messages: mut List[Message]
+) -> mut Map[List[String], mut Symbol] {
+    mut symbols: mut Map[List[String], mut Symbol] = Map::empty()
+    mut aliases: mut Map[String, List[String]] = Map::empty()
+    // We are mutating this context object even after symbols are registered,
+    // to which they will keep a reference.
+    // This means that 'use'-statements will behave as if they were hoisted.
+    mut context: ModuleContext = ModuleContext(List::empty(), aliases)
+    val std_alias = Pair("*", List::of("std", "*"))
+    SymbolTable::process_alias(std_alias, aliases, names)
+    nodes |> values() |> for_each(|node| {
+        val err_duplicate: Fun(List[String], Symbol) = |abs_path, prev| {
+            messages |> push(Message::duplicate_symbol(
+                abs_path, prev.node.source, node.source
+            ))
+        }
+        match node.value {
+            Module(path) {
+                aliases = Map::empty()
+                context = ModuleContext(path, aliases)
+                SymbolTable::process_alias(std_alias, aliases, names)
+            }
+            Usages(usages) { usages 
+                |> values() 
+                |> for_each(|a| SymbolTable::process_alias(a, aliases, names))
+            }
 
-pub struct Checker(
-    scopes: List[Scope],
-    return_type: Type,
-    symbols: SymbolTable
-)
+            GlobalVariable(ast::GlobalVariable(path, _, _, _, _)) {
+                val abs_path: List[String] = List::concat(context.module, path)
+                val symbol = Symbol(
+                    node, List::empty(), context, Map::empty(), 0
+                )
+                symbols |> set(abs_path, symbol) 
+                    |> map[Symbol, Unit](|p| err_duplicate(abs_path, p))
+            }
+            Function(ast::Function(path, _, t_args, _, _, _)) |
+            ExternalFunction(ast::ExternalFunction(path, _, t_args, _, _, _)) |
+            Structure(ast::CustomType(path, _, t_args, _)) |
+            Enumeration(ast::CustomType(path, _, t_args, _)) {
+                val abs_path: List[String] = List::concat(context.module, path)
+                val symbol = Symbol(node, t_args, context, Map::empty(), 0)
+                symbols |> set(abs_path, symbol) 
+                    |> map[Symbol, Unit](|p| err_duplicate(abs_path, p))
+            }
+
+            _ {}
+        }
+    })
+    return symbols
+}
+
+// Creates a new symbol table and populates it with the declarations provided
+// by the given untyped nodes.
+pub fun SymbolTable::from(
+    nodes: List[UntypedNode], messages: mut List[Message]
+) -> mut SymbolTable {
+    val names: Set[List[String]] = SymbolTable::collect_names(nodes)
+    return SymbolTable(SymbolTable::collect_symbols(nodes, names, messages))
+}
+
+// Type checks the given symbol instance and inserts the result into the
+// symbol table. Only the symbol specified by the 'path' property of the given
+// instance will be written to. In addition, instantiations caused by this
+// instance will be pushed onto 'dependencies', and any reports caused by this
+// instance will be pushed onto 'messages'.
+pub fun SymbolTable::check_symbol(
+    self: mut SymbolTable, 
+    instance: SymbolInstance, 
+    dependencies: mut List[SymbolInstance],
+    messages: mut List[Message]
+) {
+    val symbol: mut Symbol = self.symbols 
+        |> get(instance.path) 
+        |> expect("Requested instances must be for existing symbols")
+    if symbol.instances |> has(instance.type_args) { return unit }
+    val id: Int = symbol.next_id
+    instance.id.value = id
+    symbol.next_id = id + 1
+    val named_t_args: mut Map[String, Type] = instance.type_args 
+        |> indices()
+        |> map[Int, Pair[String, Type]](|i| Pair(
+            symbol.type_args |> at(i),
+            instance.type_args |> at(i)
+        ))
+        |> Map::collect()
+    val checker = Checker(
+        List::empty(), // no function scope
+        named_t_args,
+        self, dependencies, messages
+    )
+    val checked: TypedNode = checker |> check_declaration(symbol.node)
+    val variant: Pair[TypedNode, Int] = Pair(checked, id)
+    symbol.instances |> set(instance.type_args, variant)
+}
+
+// Returns a new list of instances representing all symbols present in the
+// symbol table that do not take any type arguments and therefore can (and must)
+// always be instantiated exactly once.
+pub fun SymbolTable::base_instances(
+    self: SymbolTable
+) -> mut List[SymbolInstance]
+    = self.symbols 
+    |> entries()
+    |> filter(|s| s.second.type_args |> length() |> is(0))
+    |> map[Pair[List[String], mut Symbol], SymbolInstance](
+        |s| SymbolInstance(s.first, List::empty(), Box(0))
+    )
+    |> List::collect()

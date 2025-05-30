@@ -95,3 +95,18 @@ pub fun Message::non_call_pipe(at: Source) -> Message
         Message::Section::Error("Pipe into non-call expression"),
         Message::Section::Code(at)
     ))
+
+// Type checking
+
+pub fun Message::duplicate_symbol(path: List[String], prev: Source, dupl: Source) -> Message 
+    = Message(List::of(
+        Message::Section::Error(
+            "'_' is declared more than once"
+                |> fmt(path |> values() |> join("::"))
+        ),
+        Message::Section::Code(dupl),
+        Message::Section::Info(
+            "A symbol with the path was previously defined here:"
+        ),
+        Message::Section::Code(prev)
+    ))

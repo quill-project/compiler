@@ -2966,21 +2966,21 @@ const quill = (function() {
                                 pattern.node, matched, state, pattern
                             );
                             if(pattern === branch.patterns[0]) { continue; }
-                            for(const name in branch.patterns[0].variables) {
-                                if(pattern.variables[name] !== undefined) { continue; }
+                            for(const v of branch.patterns[0].variables) {
+                                if(pattern.variables.some(e => e.name === v.name)) { continue; }
                                 throw message.from(
                                     message.error("'match'-pattern has partially defined variables"),
-                                    message.note(`'${name}' is defined in this pattern:`),
+                                    message.note(`'${v.name}' is defined in this pattern:`),
                                     message.code(branch.patterns[0].node),
                                     message.note(`...but not in this pattern:`),
                                     message.code(pattern.node)
                                 );
                             }
-                            for(const name in pattern.variables) {
-                                if(branch.patterns[0].variables[name] !== undefined) { continue; }
+                            for(const v of pattern.variables) {
+                                if(branch.patterns[0].variables.some(e => e.name === v.name)) { continue; }
                                 throw message.from(
                                     message.error("'match'-pattern has partially defined variables"),
-                                    message.note(`'${name}' is defined in this pattern:`),
+                                    message.note(`'${v.name}' is defined in this pattern:`),
                                     message.code(pattern.node),
                                     message.note(`...but not in this pattern:`),
                                     message.code(branch.patterns[0].node)

@@ -8,6 +8,8 @@ pub fun String::as_hash(self: String) -> Int = self
     |> reduce(hash::combine_ord)
     |> unwrap_or(0)
 
+pub fun String::clone(self: String) -> String = self
+
 pub fun String::join(from: mut Sequence[String], delim: String) -> String = from 
     |> reduce(|acc, curr| acc 
         |> concat(delim) 

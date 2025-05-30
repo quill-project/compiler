@@ -17,6 +17,9 @@ pub fun Option::as_hash[T](self: Option[T]) -> Int {
     }
 }
 
+pub fun Option::clone[T](self: Option[T]) -> Option[T] 
+    = self |> map(T::clone)
+
 pub fun Option::and[T](self: Option[T], other: Option[T]) -> Option[T] {
     match self {
         Some(_) { return other }

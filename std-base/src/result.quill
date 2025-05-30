@@ -17,6 +17,13 @@ pub fun Result::as_hash[O, E](self: Result[O, E]) -> Int {
     }
 }
 
+pub fun Result::clone[O, E](self: Result[O, E]) -> Result[O, E] {
+    match self {
+        Ok(v) { return Result::Ok(O::clone(v)) }
+        Err(e) { return Result::Err(E::clone(e)) }
+    }
+}
+
 pub fun Result::and[O, E](self: Result[O, E], other: Result[O, E]) -> Result[O, E] {
     match self {
         Ok(_) { return other }

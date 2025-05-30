@@ -15,7 +15,7 @@ fun assert_tree(
     val parser: mut Parser = Parser::from(tokens, messages)
     val tree: ast::UntypedNode = f(parser)
     if messages |> length() |> greater_than(0) {
-        val files = Map::of(Map::Entry("test.quill", content))
+        val files = Map::of(Pair("test.quill", content))
         val msgs = messages 
             |> values() |> map[Message, String](|m| m |> display(files)) 
             |> join("\n\n")
