@@ -119,10 +119,13 @@ pub fun Message::immutable_builtin(name: String, at: Source) -> Message
         Message::Section::Code(at),
         Message::Section::Info(
             "The builtin type is not behind a reference through which it could be mutated"
+        ),
+        Message::Section::Info(
+            "'mut Box[_]' can be used to store the value behind a mutable reference" |> fmt(name)
         )
     ))
 
-pub fun Message::type_arg_builtin(name: String, at: Source) -> Message
+pub fun Message::type_args_builtin(name: String, at: Source) -> Message
     = Message(List::of(
         Message::Section::Error(
             "Builtin type '_' does not accept any type arguments" |> fmt(name)
@@ -152,14 +155,32 @@ pub fun Message::wrong_type_arg_c(path: List[String], exp_c: Int, got_c: Int, at
         Message::Section::Code(at)
     ))
 
-pub fun Message::immutable_generic(at: Source) -> Message
+pub fun Message::immutable_generic(at: Source, name: String) -> Message
     = Message(List::of(
         Message::Section::Error(
             "References to generic type arguments may not be marked as mutable"
         ),
         Message::Section::Code(at),
         Message::Section::Info(
-            "Mutability needs to be defined on the type passed during instantiation"
+            "Mutability must be defined on the type passed for '_'" |> fmt(name)
         )
     ))
 
+pub fun Message::args_on_generic(at: Source, name: String) -> Message
+    = Message(List::of(
+        Message::Section::Error(
+            "Type arguments may not be instantiated with type arguments"
+        ),
+        Message::Section::Code(at),
+        Message::Section::Info(
+            "Type arguments must be defined on the type passed for '_'" |> fmt(name)
+        )
+    ))
+
+pub fun Message::unknown_type(path: List[String], at: Source) -> Message
+    = Message(List::of(
+        Message::Section::Error(
+            "'_' is not a known type" |> fmt(path |> values() |> join("::"))
+        ),
+        Message::Section::Code(at)
+    ))

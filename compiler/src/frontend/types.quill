@@ -100,8 +100,7 @@ pub struct Symbol(
 
 pub struct SymbolInstance(
     path: List[String],
-    type_args: List[Type],
-    id: mut Box[Int]
+    type_args: List[Type]
 )
 
 pub struct SymbolTable(
@@ -234,9 +233,6 @@ pub fun SymbolTable::check_symbol(
         |> get(instance.path) 
         |> expect("Requested instances must be for existing symbols")
     if symbol.instances |> has(instance.type_args) { return unit }
-    val id: Int = symbol.next_id
-    instance.id.value = id
-    symbol.next_id = id + 1
     val named_t_args: mut Map[String, Type] = instance.type_args 
         |> indices()
         |> map[Int, Pair[String, Type]](|i| Pair(
@@ -250,8 +246,10 @@ pub fun SymbolTable::check_symbol(
         self, dependencies, messages
     )
     val checked: TypedNode = checker |> check_declaration(symbol.node)
+    val id: Int = symbol.next_id
     val variant: Pair[TypedNode, Int] = Pair(checked, id)
     symbol.instances |> set(instance.type_args, variant)
+    symbol.next_id = id + 1
 }
 
 // Returns a new list of instances representing all symbols present in the
@@ -264,6 +262,6 @@ pub fun SymbolTable::base_instances(
     |> entries()
     |> filter(|s| s.second.type_args |> length() |> is(0))
     |> map[Pair[List[String], mut Symbol], SymbolInstance](
-        |s| SymbolInstance(s.first, List::empty(), Box(0))
+        |s| SymbolInstance(s.first, List::empty())
     )
     |> List::collect()
