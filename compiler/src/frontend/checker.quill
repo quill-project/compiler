@@ -6,19 +6,21 @@ use quill::types::*
 use quill::ast::UntypedNode
 
 pub enum ScopeExit(
-    EndReached,
+    None,
     Continued,
     Returned,
     Broke
 )
 
 pub struct Variable(
+    source: Source,
     mutable: Bool,
+    used: Bool,
     type: Type
 )
 
 pub struct Scope(
-    locals: mut Map[String, Variable]
+    locals: mut Map[String, mut Variable]
 )
 
 pub struct Function(
@@ -30,13 +32,42 @@ pub struct Checker(
     functions: mut List[mut Function],
     type_args: mut Map[String, Type],
     symbols: SymbolTable,
+    context: ModuleContext,
     dependencies: mut List[SymbolInstance],
     messages: mut List[Message]
 )
 
+pub fun Checker::enter_scope(self: mut Checker) {
+    val function: mut Function = self.functions |> at(-1)
+    val scope: Scope = Scope(Map::empty())
+    function.scopes |> push(scope)
+}
+
+pub fun Checker::scope(self: mut Checker) -> Scope {
+    val function: mut Function = self.functions |> at(-1)
+    return function.scopes |> at(-1)
+}
+
+pub fun Checker::exit_scope(self: mut Checker) {
+    val function: mut Function = self.functions |> at(-1)
+    val scope: Scope = function.scopes 
+        |> pop() 
+        |> expect("caller should ensure checker is in scope")
+    scope.locals 
+        |> entries()
+        |> filter(|local| !local.second.used)
+        |> for_each(|local| {
+            self.messages |> push(
+                Message::dead_local(local.first, local.second.source)
+            )
+        })
+}
+
 pub fun Checker::check_annotation(self: Checker, node: UntypedNode) -> TypedNode {
     match node.value {
-        TypeRef(Pair(mutable, ast::PathRef(path, t_args))) {
+        TypeRef(Pair(mutable, ast::PathRef(short_path, t_args))) {
+            val path: List[String] = self.symbols 
+                |> expand(self.context, short_path)
             val g_t_args: List[TypedNode] = t_args
                 |> map[List[UntypedNode], List[TypedNode]](|a| a
                     |> values()
@@ -227,34 +258,125 @@ pub fun Checker::check_declaration(
     match node.value {
         Module(path) { return make_node(ast::Variant::Module(path)) }
         Usages(aliases) { return make_node(ast::Variant::Usages(aliases)) }
-        GlobalVariable(ast::GlobalVariable(path, public, mutable, type, value)) {
-            // TODO!
-            return panic("not yet implemented")
+        GlobalVariable(ast::GlobalVariable(
+            path, public, mutable, type, value
+        )) {
+            val t_type: TypedNode = self |> check_annotation(type)
+            val t_value: TypedNode = self |> check(value, t_type.type)
+            return make_node(ast::Variant::GlobalVariable(ast::GlobalVariable(
+                path, public, mutable, t_type, t_value
+            )))
         }
-        ast::Variant::Function(ast::Function(path, public, t_args, args, return_type, body)) {
-            // TODO!
-            return panic("not yet implemented")
+        ast::Variant::Function(ast::Function(
+            path, public, t_args, args, return_type, body
+        )) {
+            val args_t: List[Pair[String, TypedNode]] = args
+                |> values()
+                |> map(|a| Pair(a.first, self |> check_annotation(a.second)))
+                |> List::collect()
+            val return_type_t: Option[TypedNode] = return_type
+                |> map(|n| self |> check_annotation(n))
+            val scope_vars: mut Map[String, mut Variable] = args_t
+                |> values()
+                |> map(|a| Pair(
+                    a.first, 
+                    Variable(node.source, false, false, a.second.type)
+                ))
+                |> Map::collect()
+            val scope = Scope(scope_vars)
+            val full_ret_t = return_type_t 
+                |> map[TypedNode, Type](|n| n.type)
+                |> unwrap_or_else(|| Type(Variant::Unit, false, node.source)) 
+            val func = Function(List::of(scope), full_ret_t)
+            self.functions |> push(func)
+            val body_t: Pair[List[TypedNode], ScopeExit] 
+                = self |> check_statement_list(body)
+            self |> exit_scope()
+            self.functions |> pop()
+            val always_returns: Bool = body_t.second == ScopeExit::Returned
+                || func.return_type.value == Variant::Unit
+            if !always_returns {
+                self.messages |> push(
+                    Message::missing_return(func.return_type, node.source)
+                )
+            }
+            return make_node(ast::Variant::Function(ast::Function(
+                path, public, t_args, args_t, return_type_t, body_t.first
+            )))
         }
-        ExternalFunction(ast::ExternalFunction(path, public, t_args, args, return_type, body)) {
-            // TODO!
-            return panic("not yet implemented")
+        ExternalFunction(ast::ExternalFunction(
+            path, public, t_args, args, return_type, body
+        )) {
+            val args_t: List[Pair[String, TypedNode]] = args
+                |> values()
+                |> map(|a| Pair(a.first, self |> check_annotation(a.second)))
+                |> List::collect()
+            val return_type_t: Option[TypedNode] = return_type
+                |> map(|n| self |> check_annotation(n))
+            return make_node(ast::Variant::ExternalFunction(
+                ast::ExternalFunction(
+                    path, public, t_args, args_t, return_type_t, body
+                )
+            ))
         }
         Structure(ast::CustomType(path, public, t_args, members)) {
-            // TODO!
-            return panic("not yet implemented")
+            val members_t: List[Pair[String, TypedNode]] = members
+                |> values()
+                |> map(|m| Pair(m.first, self |> check_annotation(m.second)))
+                |> List::collect()
+            return make_node(ast::Variant::Structure(ast::CustomType(
+                path, public, t_args, members_t
+            )))
         }
         Enumeration(ast::CustomType(path, public, t_args, members)) {
-            // TODO!
-            return panic("not yet implemented")
+            val members_t: List[Pair[String, TypedNode]] = members
+                |> values()
+                |> map(|m| Pair(m.first, self |> check_annotation(m.second)))
+                |> List::collect()
+            return make_node(ast::Variant::Enumeration(ast::CustomType(
+                path, public, t_args, members_t
+            )))
         }
 
         _ { return make_node(ast::Variant::Invalid) }
     }
 }
 
+pub fun Checker::check_statement_list(
+    self: mut Checker, nodes: List[UntypedNode]
+) -> Pair[List[TypedNode], ScopeExit] {
+    val start: Triplet[mut List[TypedNode], ScopeExit, Option[Source]]
+        = Triplet(List::empty(), ScopeExit::None, Option::None)
+    val checked = nodes
+        |> values()
+        |> map[UntypedNode, Pair[TypedNode, ScopeExit]](
+            |n| self |> check_statement(n)
+        )
+        |> fold(start, |prev, curr| {
+            val nodes: mut List[TypedNode] = prev.first
+            val prev_exit: ScopeExit = prev.second
+            val prev_dead: Option[Source] = prev.third
+            val curr_node: TypedNode = curr.first
+            val curr_exit: ScopeExit = curr.second
+            nodes |> push(curr_node)
+            val next_exit: ScopeExit = if prev_exit != ScopeExit::None 
+                { prev_exit } else { curr_exit }
+            val next_dead: Option[Source] = prev_dead
+                |> map[Source, Source](|d| Source::range(d, curr_node.source))
+                |> or_else(|| if prev_exit != ScopeExit::None 
+                    { Option::Some(curr_node.source) } else { Option::None[Source] }
+                )
+            return Triplet(nodes, next_exit, next_dead)
+        })
+    checked.third |> map[Source, Unit](|dead| {
+        self.messages |> push(Message::dead_statements(dead))
+    })
+    return Pair(checked.first, checked.second)
+}
+
 pub fun Checker::check_statement(
     self: mut Checker, node: UntypedNode
-) -> TypedNode {
+) -> Pair[TypedNode, ScopeExit] {
     // TODO! check local statement
     return panic("not yet implemented")
 }
@@ -265,6 +387,9 @@ pub fun Checker::check(
     // TODO! check expression
     return panic("not yet implemented")
 }
+
+pub val PUSH_REPORTS: Bool = true
+pub val HIDE_REPORTS: Bool = false
 
 pub fun Checker::infer(
     self: mut Checker, node: UntypedNode, report: Bool

@@ -84,6 +84,12 @@ pub struct TypedNode(
     type: Type
 )
 
+pub fun TypedNode::as_string(self: TypedNode) -> String
+    = "_ (=_)" |> fmt(
+        ast::Variant::as_string(self.value),
+        Type::as_string(self.type)
+    )
+
 
 pub struct ModuleContext(
     module: List[String],
@@ -218,6 +224,25 @@ pub fun SymbolTable::from(
     return SymbolTable(SymbolTable::collect_symbols(nodes, names, messages))
 }
 
+// Given a context and a short path, attempts to expand the path to an absolute path.
+// For example, if in a module 'example' with a function 'add' you pass 'add',
+// this function will expand it to 'example::add'.
+// If in the same module you have written `use foo::bar` and you pass 'bar',
+// this function will expand it to 'foo::bar'.
+// If there is no way to expand it, the original path will be returned.
+pub fun ModuleContext::expand(
+    self: SymbolTable, context: ModuleContext, short: List[String]
+) -> List[String] {
+    val local: List[String] = List::concat(context.module, short)
+    if self.symbols |> has(local) { return local }
+    return context.aliases 
+        |> get(short |> at(-1)) 
+        |> map[List[String], List[String]](
+            |repl| List::concat(repl, short |> slice_from(1))
+        )
+        |> unwrap_or(short)
+}
+
 // Type checks the given symbol instance and inserts the result into the
 // symbol table. Only the symbol specified by the 'path' property of the given
 // instance will be written to. In addition, instantiations caused by this
@@ -242,8 +267,7 @@ pub fun SymbolTable::check_symbol(
         |> Map::collect()
     val checker = Checker(
         List::empty(), // no function scope
-        named_t_args,
-        self, dependencies, messages
+        named_t_args, self, symbol.context, dependencies, messages
     )
     val checked: TypedNode = checker |> check_declaration(symbol.node)
     val id: Int = symbol.next_id

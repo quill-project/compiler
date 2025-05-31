@@ -4,14 +4,14 @@ mod quill::tests::types
 use std::test::*
 use quill::*
 
-fun build_table(content: String) -> mut types::SymbolTable {
+pub fun build_table(content: String) -> mut types::SymbolTable {
     val messages: mut List[Message] = List::empty()
     val tokens: mut Stream[token::Token]
         = lexer::tokenize("test.quill", content, messages)
     val parser = parser::Parser::from(tokens, messages)
     val nodes: List[ast::UntypedNode] = parser::parse_file(parser)
     val table = types::SymbolTable::from(nodes, messages)
-    if messages |> length() |> greater_than(0) {
+    if messages |> values() |> any(Message::is_error) {
         val files = Map::of(Pair("test.quill", content))
         val msgs = messages 
             |> values() |> map[Message, String](|m| m |> display(files)) 
@@ -43,7 +43,7 @@ fun apply[T, R](f: Fun(T) -> R, a: T) -> R = f(a)
 
 mod bar::baz
 pub fun multiply(x: Float, y: Float, z: Float) -> Float = x * y * z
-val PI = 3.1415
+val PI: Float = 3.1415
     ")
     val add =      t |> table_get("add")
     assert_eq[List[String]](add     .type_args,      List::empty())
@@ -79,7 +79,7 @@ fun apply[T, R](f: Fun(T) -> R, a: T) -> R = f(a)
 mod bar::baz
 use foo::greet
 pub fun multiply(x: Float, y: Float, z: Float) -> Float = x * y * z
-val PI = 3.1415
+val PI: Float = 3.1415
     ")
     val add =   t |> table_get("add")
     assert_eq[Option[List[String]]](

@@ -105,7 +105,7 @@ fun assert_tokens(content: String, ...expected: List[TToken]) {
             return TToken(t.type, t.content, t.source.start, t.source.end)
         })
         |> List::collect()
-    if messages |> length() |> greater_than(0) {
+    if messages |> values() |> any(Message::is_error) {
         val files = Map::of(Pair("test.quill", content))
         val msgs = messages 
             |> values() |> map[Message, String](|m| m |> display(files)) 

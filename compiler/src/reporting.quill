@@ -2,6 +2,7 @@
 mod quill
 
 use quill::token::(Token, TokenType)
+use quill::types::Type
 
 
 pub struct Source(path: String, start: Int, end: Int)
@@ -45,6 +46,14 @@ pub fun Message::display(self: Message, files: Map[String, String]) -> String
     )
     |> join("\n")
 
+pub fun Message::is_error(self: Message) -> Bool
+    = self.sections |> values() |> any(|s| {
+        match s {
+            Error(_) { return true }
+            _ { return false }
+        }
+    })
+
 // Tokenization
 
 pub fun Message::invalid_character(invalid: String, at: Source) -> Message
@@ -68,10 +77,13 @@ pub fun Message::invalid_hex_escape(at: Source) -> Message
 // Parsing
 
 pub fun Message::unexpected_token(token: Token, exp_types: List[TokenType]) -> Message {
-    val exp = exp_types |> slice(0, -1) |> values() 
+    val list_exp: String = exp_types 
+        |> slice(0, -1) |> values() 
         |> map(TokenType::as_string)
         |> join(", ") |> concat(" or ") 
         |> concat(exp_types |> at(-1) |> TokenType::as_string())
+    val exp: String = if exp_types |> length() |> is_not(1) { list_exp }
+        else { TokenType::as_string(exp_types |> at(0)) }
     val got = token.type |> TokenType::as_string()
     return Message(List::of(
         Message::Section::Error("Expected _, but got _" |> fmt(exp, got)),
@@ -181,6 +193,29 @@ pub fun Message::unknown_type(path: List[String], at: Source) -> Message
     = Message(List::of(
         Message::Section::Error(
             "'_' is not a known type" |> fmt(path |> values() |> join("::"))
+        ),
+        Message::Section::Code(at)
+    ))
+
+pub fun Message::dead_statements(at: Source) -> Message
+    = Message(List::of(
+        Message::Section::Warning("Statements will never be executed"),
+        Message::Section::Code(at)
+    ))
+
+pub fun Message::dead_local(name: String, at: Source) -> Message
+    = Message(List::of(
+        Message::Section::Warning(
+            "Local variable '_' is never used" |> fmt(name)
+        ),
+        Message::Section::Code(at)
+    ))
+
+pub fun Message::missing_return(t: Type, at: Source) -> Message
+    = Message(List::of(
+        Message::Section::Error(
+            "Function body does not always return a value of type '_'" 
+                |> fmt(t |> as_string())
         ),
         Message::Section::Code(at)
     ))

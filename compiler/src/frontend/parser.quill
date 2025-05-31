@@ -452,7 +452,7 @@ pub fun parse_name_type_list(s: mut Parser, end: TokenType, types_opt: Bool) -> 
                 val t = UntypedNode(
                     ast::Variant::TypeRef(Pair(
                         false, 
-                        ast::PathRef(List::of("Unit"), Option::None)
+                        ast::PathRef(List::of("std", "Unit"), Option::None)
                     )), 
                     name.source
                 )
@@ -784,7 +784,7 @@ pub fun parse_declaration(s: mut Parser) -> UntypedNode {
         Stream::new[Token](|| s.current)
             |> take_until(recovered)
             |> for_each(|_| s |> advance())
-        s.broken = true
+        s.broken = false
     }
     val start: Token = s.current
     mut public: Bool = s.current.type == TokenType::KeywordPub
@@ -828,14 +828,9 @@ pub fun parse_declaration(s: mut Parser) -> UntypedNode {
             s |> advance()
             if s |> expect(TokenType::Identifier) { return make_inv(s) }
             val path: List[String] = parse_path(s).first
-            if s |> expect(TokenType::Colon, TokenType::Equal) { 
-                return make_inv(s) 
-            }
-            mut type: Option[UntypedNode] = Option::None
-            if s.current.type == TokenType::Colon {
-                s |> advance()
-                type = Option::Some(parse_type(s))
-            }
+            if s |> expect(TokenType::Colon) { return make_inv(s) }
+            s |> advance()
+            val type: UntypedNode = parse_type(s)
             if s |> expect(TokenType::Equal) { return make_inv(s) }
             s |> advance()
             val value: UntypedNode = parse_expression(s, Int::MAX)

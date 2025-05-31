@@ -26,7 +26,7 @@ pub struct Match[N](matched: N, branches: List[MatchBranch[N]])
 pub struct MatchBranch[N](patterns: List[N], body: List[N])
 
 pub struct GlobalVariable[N](
-    path: List[String], public: Bool, mutable: Bool, type: Option[N], value: N
+    path: List[String], public: Bool, mutable: Bool, type: N, value: N
 )
 pub struct Function[N](
     path: List[String], public: Bool,
@@ -259,12 +259,11 @@ pub fun Variant::as_string[N](self: Variant[N]) -> String {
                 |> concat(")")
         }
         Variant::GlobalVariable(GlobalVariable(path, public, mutable, type, value)) {
-            return "__ __ = _" |> fmt(
+            return "__ _: _ = _" |> fmt(
                 if public { "pub " } else { "" },
                 if mutable { "mut" } else { "val" },
                 path |> values() |> join("::"),
-                type |> map[N, String](|t| ": " |> concat(N::as_string(t)))
-                    |> unwrap_or(""),
+                N::as_string(type),
                 N::as_string(value)
             )
         }
@@ -279,7 +278,7 @@ pub fun Variant::as_string[N](self: Variant[N]) -> String {
                     )
                     |> join(", "),
                 ret_t 
-                    |> map[UntypedNode, String](
+                    |> map[N, String](
                         |t| " -> " |> concat(N::as_string(t))
                     )
                     |> unwrap_or(""),
@@ -297,7 +296,7 @@ pub fun Variant::as_string[N](self: Variant[N]) -> String {
                     )
                     |> join(", "),
                 ret_t 
-                    |> map[UntypedNode, String](
+                    |> map[N, String](
                         |t| " -> " |> concat(N::as_string(t))
                     )
                     |> unwrap_or(""),

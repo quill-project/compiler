@@ -1,8 +1,8 @@
 
 mod std::Int
 
-pub val MAX = 9223372036854775807
-pub val MIN = -9223372036854775807 - 1
+pub val MAX: Int = 9223372036854775807
+pub val MIN: Int = -9223372036854775807 - 1
 
 
 mod std

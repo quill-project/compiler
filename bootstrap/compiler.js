@@ -3087,6 +3087,7 @@ function quill$$eq(a, b) {
         return {
             checker,
             nextVarNumber: 0,
+            nextMatchedNumber: 0,
             scopes: [],
 
             enterScope: function() {
@@ -3323,10 +3324,12 @@ function quill$$eq(a, b) {
                     out += `const body${branchI} = (`;
                     for(const varI in vars) {
                         if(varI > 0) { out += ", "; }
-                        out += `matched${varI}`;
+                        const matchI = state.nextMatchedNumber;
+                        state.nextMatchedNumber += 1;
+                        out += `matched${matchI}`;
                         const name = vars[varI].name;
                         if(name !== null) {
-                            state.scope().aliases[name] = `matched${varI}`;
+                            state.scope().aliases[name] = `matched${matchI}`;
                         }
                     }
                     out += `) => {\n`;

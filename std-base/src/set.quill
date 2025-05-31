@@ -95,6 +95,7 @@ pub fun Set::size[T](self: Set[T]) -> Int = self.size
 pub fun Set::is_empty[T](self: Set[T]) -> Bool = self.size == 0
 
 pub fun Set::has[T](self: Set[T], value: T) -> Bool {
+    if self.buckets |> length() |> is(0) { return false }
     val bucket_i = T::as_hash(value) 
         |> Int::abs() 
         |> modulo(self.buckets |> length())
@@ -123,6 +124,7 @@ pub fun Set::values_rep[T](self: Set[T]) -> mut Stream[T] {
 // removal
 
 pub fun Set::remove[T](self: mut Set[T], value: T) -> Bool {
+    if self.buckets |> length() |> is(0) { return false }
     val bucket_i = T::as_hash(value) 
         |> Int::abs() 
         |> modulo(self.buckets |> length())

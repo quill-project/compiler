@@ -1,0 +1,117 @@
+
+mod quill::tests::checker
+
+use std::test::*
+use quill::*
+use quill::types::*
+use quill::tests::types::build_table
+
+fun check_symbols(content: String) -> mut SymbolTable {
+    val table: mut SymbolTable = build_table(content)
+    val messages: mut List[Message] = List::empty()
+    val queue: mut List[SymbolInstance] = table |> base_instances()
+    Stream::new[mut List[SymbolInstance]](|| queue)
+        |> take_while(|q| q |> length() |> is_not(0))
+        |> for_each(|q| {
+            val i: SymbolInstance = q |> pop() |> expect("stream ends on empty")
+            table |> check_symbol(i, q, messages)
+        })
+    if messages |> values() |> any(Message::is_error) {
+        val files = Map::of(Pair("test.quill", content))
+        val msgs = messages 
+            |> values() |> map[Message, String](|m| m |> display(files)) 
+            |> join("\n\n")
+        return "Checking assertion failed:\n" |> concat(content)
+            |> concat("\n\nReported message(s):\n") |> concat(msgs)
+            |> panic()
+    }
+    return table
+}
+
+fun assert_symbol(
+    table: mut SymbolTable, content: String, path: String, t_args: List[Type], expected: String
+) {
+    val path_segs: List[String] = path 
+        |> split("::") 
+        |> List::collect()
+    val messages: mut List[Message] = List::empty()
+    val queue: mut List[SymbolInstance] 
+        = List::of(SymbolInstance(path_segs, t_args))
+    Stream::new[mut List[SymbolInstance]](|| queue)
+        |> take_while(|q| q |> length() |> is_not(0))
+        |> for_each(|q| {
+            val i: SymbolInstance = q |> pop() |> expect("stream ends on empty")
+            table |> check_symbol(i, q, messages)
+        })
+    if messages |> values() |> any(Message::is_error) {
+        val files = Map::of(Pair("test.quill", content))
+        val msgs = messages 
+            |> values() |> map[Message, String](|m| m |> display(files)) 
+            |> join("\n\n")
+        return "Checking assertion failed:\n" |> concat(content)
+            |> concat("\n\nReported message(s):\n") |> concat(msgs)
+            |> panic()
+    }
+    val symbol: Symbol = table.symbols 
+        |> get(path_segs) 
+        |> unwrap_or_else(
+            || panic("Checking assertion failed: '_' not found" |> fmt(path))
+        )
+    val instance: Pair[TypedNode, Int] = symbol.instances
+        |> get(t_args)
+        |> expect("instance was put in the queue earlier")
+    val output: String = TypedNode::as_string(instance.first)
+    if output != expected {
+        val t_args_s = t_args |> values() |> map(Type::as_string) |> join(", ")
+        return "Checking assertion failed ('_' for [_]):\n" 
+            |> fmt(path, t_args_s) |> concat(content)
+            |> concat("\n\nTest expected:\n") |> concat(expected)
+            |> concat("\n\nParser returned:\n") |> concat(output)
+            |> panic()
+    }
+}
+
+pub fun declarations() {
+    val c = "
+fun greet(thing: String) {}
+
+mod container
+pub struct Box[T](value: T)
+fun display[T](self: Box[T]) {}
+
+mod arithmetic
+fun add[T](a: T, b: T) {}
+fun incr(r: mut container::Box[Int]) {}
+fun sum[T](of: std::List[T]) {}
+    "
+    val t = check_symbols(c)
+    val s = Source("test.quill", 0, 0)
+    assert_symbol(t, c, 
+        "greet", List::empty(), 
+        "fun greet[](thing: type@String (=String)) {  } (=Unit)"
+    )
+    assert_symbol(t, c, 
+        "container::Box", List::of(Type(Variant::String, false, s)), 
+        "pub struct Box[T](value: type@T (=String)) (=Unit)"
+    )
+    assert_symbol(t, c, 
+        "container::display", List::of(Type(Variant::String, false, s)), 
+        "fun display[T](self: type@container::Box[type@T (=String)] (=container::Box[String])) {  } (=Unit)"
+    )
+    assert_symbol(t, c, 
+        "arithmetic::add", List::of(Type(Variant::Integer, false, s)), 
+        "fun add[T](a: type@T (=Int), b: type@T (=Int)) {  } (=Unit)"
+    )
+    assert_symbol(t, c, 
+        "arithmetic::add", List::of(Type(Variant::Float, false, s)), 
+        "fun add[T](a: type@T (=Float), b: type@T (=Float)) {  } (=Unit)"
+    )
+    assert_symbol(t, c, 
+        "arithmetic::incr", List::empty(), 
+        "fun incr[](r: type+mut@container::Box[type@Int (=Int)] (=mut container::Box[Int])) {  } (=Unit)"
+    )
+    assert_symbol(t, c, 
+        "arithmetic::sum", List::of(Type(Variant::Integer, false, s)), 
+        "fun sum[T](of: type@std::List[type@T (=Int)] (=List[Int])) {  } (=Unit)"
+    )
+}

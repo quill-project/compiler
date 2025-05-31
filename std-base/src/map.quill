@@ -107,6 +107,7 @@ pub fun Map::is_empty[K, V](self: Map[K, V]) -> Bool
     = self.size == 0
 
 pub fun Map::get[K, V](self: Map[K, V], key: K) -> Option[V] {
+    if 0 == (self.buckets |> length()) { return Option::None }
     val bucket_i = Int::abs(K::as_hash(key)) % (self.buckets |> length())
     return self.buckets |> at(bucket_i) |> values()
         |> find(|e| e.first == key)
@@ -169,6 +170,7 @@ pub fun Map::entries_rep[K, V](self: Map[K, V]) -> mut Stream[mut Pair[K, V]] = 
 // removal
 
 pub fun Map::remove[K, V](self: mut Map[K, V], key: K) -> Option[V] {
+    if 0 == (self.buckets |> length()) { return Option::None }
     val bucket_i = Int::abs(K::as_hash(key)) % (self.buckets |> length())
     val bucket = self.buckets |> at(bucket_i)
     return bucket 
