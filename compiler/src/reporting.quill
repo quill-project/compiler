@@ -110,3 +110,56 @@ pub fun Message::duplicate_symbol(path: List[String], prev: Source, dupl: Source
         ),
         Message::Section::Code(prev)
     ))
+
+pub fun Message::immutable_builtin(name: String, at: Source) -> Message
+    = Message(List::of(
+        Message::Section::Error(
+            "Builtin type '_' may not be marked as mutable" |> fmt(name)
+        ),
+        Message::Section::Code(at),
+        Message::Section::Info(
+            "The builtin type is not behind a reference through which it could be mutated"
+        )
+    ))
+
+pub fun Message::type_arg_builtin(name: String, at: Source) -> Message
+    = Message(List::of(
+        Message::Section::Error(
+            "Builtin type '_' does not accept any type arguments" |> fmt(name)
+        ),
+        Message::Section::Code(at)
+    ))
+
+pub fun Message::no_type_args_builtin(name: String, at: Source) -> Message
+    = Message(List::of(
+        Message::Section::Error(
+            "Builtin type '_' requires type arguments" |> fmt(name)
+        ),
+        Message::Section::Code(at)
+    ))
+
+pub fun Message::wrong_type_arg_c(path: List[String], exp_c: Int, got_c: Int, at: Source) -> Message
+    = Message(List::of(
+        Message::Section::Error(
+            "Type '_' expects _ type argument_, but _ _ provided" |> fmt(
+                path |> values() |> join("::"),
+                exp_c |> as_string(),
+                if exp_c == 1 { "" } else { "s" },
+                got_c |> as_string(),
+                if got_c == 1 { "was" } else { "were" }
+            )
+        ),
+        Message::Section::Code(at)
+    ))
+
+pub fun Message::immutable_generic(at: Source) -> Message
+    = Message(List::of(
+        Message::Section::Error(
+            "References to generic type arguments may not be marked as mutable"
+        ),
+        Message::Section::Code(at),
+        Message::Section::Info(
+            "Mutability needs to be defined on the type passed during instantiation"
+        )
+    ))
+

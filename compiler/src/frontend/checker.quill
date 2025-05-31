@@ -34,11 +34,120 @@ pub struct Checker(
     messages: mut List[Message]
 )
 
+pub fun Checker::check_annotation(self: Checker, node: UntypedNode) -> TypedNode {
+    match node.value {
+        TypeRef(Pair(mutable, ast::PathRef(path, t_args))) {
+            val make_builtin: Fun(Variant) = |t| {
+                if mutable {
+                    self.messages |> push(Message::immutable_builtin(
+                        path |> at(-1), node.source
+                    ))
+                }
+                if t_args |> is_some() {
+                    self.messages |> push(Message::type_args_builtin(
+                        path |> at(-1), node.source
+                    ))
+                }
+                return TypedNode(
+                    ast::Variant::TypeRef(Pair(
+                        false, ast::PathRef(path, Option::None)
+                    )),
+                    node.source, 
+                    Type(t, false, node.source)
+                )
+            }
+            if path |> length() |> is(1) {
+                match self.type_args |> get(path |> at(0)) {
+                    Some(t) {
+                        if mutable {
+                            self.messages |> push(
+                                Message::immutable_generic(node.source)
+                            )
+                        }
+                        if t_args |> is_some() {
+                            // TODO! error
+                        }
+                        return TypedNode(
+                            ast::Variant::TypeRef(Pair(
+                                false, 
+                                ast::PathRef(path, Option::None)
+                            )),
+                            node.source,
+                            t
+                        )
+                    }
+                }
+            }
+            match path {
+                List::of("Unit") | List::of("std", "Unit") { 
+                    return make_builtin(Variant::Unit) 
+                }
+                List::of("Int") | List::of("std", "Int") { 
+                    return make_builtin(Variant::Integer) 
+                }
+                List::of("Float") | List::of("std", "Float") { 
+                    return make_builtin(Variant::Float) 
+                }
+                List::of("Bool") | List::of("std", "Bool") { 
+                    return make_builtin(Variant::Boolean) 
+                }
+                List::of("String") | List::of("std", "String") { 
+                    return make_builtin(Variant::String) 
+                }
+                List::of("List") | List::of("std", "List") {
+                    match t_args {
+                        None {
+                            self.message |> push(Message::no_type_args_builtin(
+                                path |> at(-1), node.source
+                            ))
+                        }
+                        Some(args) {
+                            if args |> length() |> is_not(1) {
+                                self.message |> push(Message::wrong_type_arg_c(
+                                    List::of("std", "List"), 1, 
+                                    args |> length(), node.source
+                                ))
+                            }
+                            val elem_t: TypedNode = self 
+                                |> check_annotation(args |> at(0))
+                            return TypedNode(
+                                ast::Variant::TypeRef(Pair(
+                                    mutable, 
+                                    ast::PathRef(path, Option::Some(
+                                        List::of(elem_t)
+                                    ))
+                                )),
+                                node.source, 
+                                Type(
+                                    Variant::List(elem_t.type), 
+                                    mutable, node.source
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+            // TODO! type references to structs and enums
+        }
+        // TODO! functions
+    }
+}
+
 pub fun Checker::check_declaration(
     self: mut Checker, node: UntypedNode
 ) -> TypedNode {
-    // TODO! check global declaration
-    return panic("not yet implemented")
+    val make_node: Fun(ast::Variant[TypedNode]) -> TypedNode
+        = |v| TypedNode(v, node.source, Type(Variant::Unit, false, node.source))
+    match node.value {
+        Module(_) | Usages(_) { return make_node(node.value) }
+        GlobalVariable(ast::GlobalVariable(path, public, mutable, type, value)) {}
+        Function(ast::Function(path, public, t_args, args, return_type, body)) {}
+        ExternalFunction(ast::ExternalFunction(path, public, t_args, args, return_type, body)) {}
+        Structure(ast::CustomType(path, public, t_args, members)) {}
+        Enumeration(ast::CustomType(path, public, t_args, members)) {}
+
+        _ { return make_node(ast::Variant::Invalid) }
+    }
 }
 
 pub fun Checker::check_statement(

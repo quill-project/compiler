@@ -17,7 +17,7 @@ function collectFiles(dir, ext) {
 }
 
 const files = [
-    ...collectFiles("./std-js/src", ".quill"),
+    ...collectFiles("./std-bootstrap-js/src", ".quill"),
     ...collectFiles("./std-base/src", ".quill"),
     ...collectFiles("./compiler/src", ".quill"),
     ...collectFiles("./cli/src", ".quill")
