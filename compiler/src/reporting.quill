@@ -217,5 +217,36 @@ pub fun Message::missing_return(t: Type, at: Source) -> Message
             "Function body does not always return a value of type '_'" 
                 |> fmt(t |> as_string())
         ),
+        Message::Section::Code(at),
+        Message::Section::Info(
+            "This is only allowed for functions that don't specify a return type (or 'Unit')"
+        )
+    ))
+
+pub fun Message::stray_loop_controls(at: Source) -> Message
+    = Message(List::of(
+        Message::Section::Error(
+            "Loop control statements used outside of loop"
+        ),
+        Message::Section::Code(at),
+        Message::Section::Info(
+            "'continue' and 'break' must be used inside of 'while'- or 'for'-loops"
+        )
+    ))
+
+pub fun Message::const_assignment(at: Source) -> Message
+    = Message(List::of(
+        Message::Section::Error("Assignment to immutable expression"),
         Message::Section::Code(at)
+    ))
+
+pub fun Message::not_iterable(t: Type, at: Source) -> Message
+    = Message(List::of(
+        Message::Section::Error(
+            "Cannot iterate over '_'" |> fmt(t |> as_string())
+        ),
+        Message::Section::Code(at),
+        Message::Section::Info(
+            "'for'-loops must iterate over 'mut Sequence[T]'"
+        )
     ))

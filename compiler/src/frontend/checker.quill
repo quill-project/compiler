@@ -7,10 +7,26 @@ use quill::ast::UntypedNode
 
 pub enum ScopeExit(
     None,
-    Continued,
-    Returned,
-    Broke
+    Loop,
+    Function
 )
+
+pub fun ScopeExit::level(self: ScopeExit) -> Int {
+    match self {
+        None { return 0 }
+        Loop { return 1 }
+        Function { return 2 }
+    }
+}
+
+pub fun ScopeExit::combine(a: ScopeExit, b: ScopeExit) -> ScopeExit {
+    match Int::min(a |> level(), b |> level()) {
+        2 { return ScopeExit::Function }
+        1 { return ScopeExit::Loop }
+        0 { return ScopeExit::None }
+        _ { return panic("Unhandled level!") }
+    }
+}
 
 pub struct Variable(
     source: Source,
@@ -25,7 +41,7 @@ pub struct Scope(
 
 pub struct Function(
     scopes: mut List[Scope],
-    return_type: Type
+    return_type: Option[Type]
 )
 
 pub struct Checker(
@@ -46,6 +62,24 @@ pub fun Checker::enter_scope(self: mut Checker) {
 pub fun Checker::scope(self: mut Checker) -> Scope {
     val function: mut Function = self.functions |> at(-1)
     return function.scopes |> at(-1)
+}
+
+pub fun Checker::find_variable(
+    self: mut Checker, name: String
+) -> Option[mut Variable] {
+    val scopes: mut Sequence[Scope] 
+        = self.functions 
+        |> reversed()
+        |> map[mut Function, mut Sequence[Scope]](
+            |func| func.scopes |> reversed()
+        )
+        |> flatten()
+    return scopes
+        |> map[Scope, Option[mut Variable]](
+            |scope| scope.locals |> get(name)
+        )
+        |> find(Option::is_some)
+        |> flatten()
 }
 
 pub fun Checker::exit_scope(self: mut Checker) {
@@ -287,17 +321,17 @@ pub fun Checker::check_declaration(
             val full_ret_t = return_type_t 
                 |> map[TypedNode, Type](|n| n.type)
                 |> unwrap_or_else(|| Type(Variant::Unit, false, node.source)) 
-            val func = Function(List::of(scope), full_ret_t)
+            val func = Function(List::of(scope), Option::Some(full_ret_t))
             self.functions |> push(func)
             val body_t: Pair[List[TypedNode], ScopeExit] 
-                = self |> check_statement_list(body)
+                = self |> check_statement_list(body, false)
             self |> exit_scope()
             self.functions |> pop()
-            val always_returns: Bool = body_t.second == ScopeExit::Returned
-                || func.return_type.value == Variant::Unit
+            val always_returns = body_t.second == ScopeExit::Function
+                || full_ret_t.value == Variant::Unit
             if !always_returns {
                 self.messages |> push(
-                    Message::missing_return(func.return_type, node.source)
+                    Message::missing_return(full_ret_t, node.source)
                 )
             }
             return make_node(ast::Variant::Function(ast::Function(
@@ -343,14 +377,14 @@ pub fun Checker::check_declaration(
 }
 
 pub fun Checker::check_statement_list(
-    self: mut Checker, nodes: List[UntypedNode]
+    self: mut Checker, nodes: List[UntypedNode], in_loop: Bool
 ) -> Pair[List[TypedNode], ScopeExit] {
     val start: Triplet[mut List[TypedNode], ScopeExit, Option[Source]]
         = Triplet(List::empty(), ScopeExit::None, Option::None)
     val checked = nodes
         |> values()
         |> map[UntypedNode, Pair[TypedNode, ScopeExit]](
-            |n| self |> check_statement(n)
+            |n| self |> check_statement(n, in_loop)
         )
         |> fold(start, |prev, curr| {
             val nodes: mut List[TypedNode] = prev.first
@@ -374,11 +408,198 @@ pub fun Checker::check_statement_list(
     return Pair(checked.first, checked.second)
 }
 
+pub fun Checker::is_assignable(
+    self: mut Checker, node: TypedNode
+) -> Bool {
+    match node.value {
+        PathRef(ast::PathRef(path, Option::None)) {
+            match self.symbols.symbols |> get(path) {
+                // not found error handled elsewhere
+                None { return true } 
+                Some(symbol) {
+                    match symbol.node.value {
+                        // public / private check handled elsewhere
+                        GlobalVariable(v) { return v.mutable } 
+                        _ { return false }
+                    }
+                }
+            }
+        }
+        VariableRef(name) {
+            match self |> find_variable(name) {
+                // not found error handled elsewhere
+                None { return true }
+                // public / private check handled elsewhere
+                Some(variable) { return variable.mutable }
+            }
+        }
+        // public / private check handled elsewhere
+        Member(_) { return true } 
+
+        Invalid { return true }
+        _ { return false }
+    }
+}
+
 pub fun Checker::check_statement(
-    self: mut Checker, node: UntypedNode
+    self: mut Checker, node: UntypedNode, in_loop: Bool
 ) -> Pair[TypedNode, ScopeExit] {
-    // TODO! check local statement
-    return panic("not yet implemented")
+    val make_node: Fun(ast::Variant[TypedNode]) -> TypedNode
+        = |v| TypedNode(v, node.source, Type(Variant::Unit, false, node.source))
+    match node.value {
+        LocalVariable(v) { match v.type {
+            Some(ann) {
+                val ann_t: TypedNode = self |> check_annotation(ann)
+                val value_t: TypedNode = self |> check(v.value, ann_t.type)
+                val scope: Scope = self |> scope()
+                scope.locals |> set(v.name, Variable(
+                    node.source, v.mutable, false, ann_t.type
+                ))
+                return Pair(
+                    make_node(ast::Variant::LocalVariable(ast::LocalVariable(
+                        v.name, v.mutable, Option::Some(ann_t), value_t
+                    ))), 
+                    ScopeExit::None
+                )
+            }
+            None {
+                val value_t: TypedNode = self |> infer(v.value, PUSH_REPORTS)
+                val scope: Scope = self |> scope()
+                scope.locals |> set(v.name, Variable(
+                    node.source, v.mutable, false, value_t.type
+                ))
+                return Pair(
+                    make_node(ast::Variant::LocalVariable(ast::LocalVariable(
+                        v.name, v.mutable, Option::None, value_t
+                    ))), 
+                    ScopeExit::None
+                )
+            }
+        } }
+        Assignment(Pair(dest, value)) {
+            val dest_t: TypedNode = self |> infer(dest, PUSH_REPORTS)
+            val assignable: Bool = self |> is_assignable(dest_t)
+            if !assignable {
+                self.messages |> push(Message::const_assignment(dest.source))
+            }
+            val value_t: TypedNode = self |> check(value, dest_t.type)
+            return Pair(
+                make_node(ast::Variant::Assignment(Pair(dest_t, value_t))), 
+                ScopeExit::None
+            )
+        }
+        Return(value) {
+            val func: mut Function = self.functions |> at(-1)
+            match func.return_type {
+                None {
+                    val value_t: TypedNode = self |> infer(value, PUSH_REPORTS)
+                    func.return_type = Option::Some(value_t.type)
+                    return Pair(
+                        make_node(ast::Variant::Return(value_t)),
+                        ScopeExit::Function
+                    )
+                }
+                Some(ret_t) {
+                    val value_t: TypedNode = self |> check(value, ret_t)
+                    return Pair(
+                        make_node(ast::Variant::Return(value_t)),
+                        ScopeExit::Function
+                    )
+                }
+            }
+        }
+        Continue {
+            if !in_loop {
+                self.messages |> push(Message::stray_loop_controls(node.source))
+            }
+            return Pair(make_node(ast::Variant::Continue), ScopeExit::Loop)
+        }
+        Break {
+            if !in_loop {
+                self.messages |> push(Message::stray_loop_controls(node.source))
+            }
+            return Pair(make_node(ast::Variant::Break), ScopeExit::Loop)
+        }
+        If(ast::If(cond, if_body, else_body)) {
+            val bool: Type = Type(Variant::Boolean, false, node.source)
+            val cond_t: TypedNode = self |> check(cond, bool)
+            self |> enter_scope()
+            val if_body_t: Pair[List[TypedNode], ScopeExit]
+                = self |> check_statement_list(if_body, in_loop)
+            self |> exit_scope()
+            self |> enter_scope()
+            val else_body_t: Pair[List[TypedNode], ScopeExit]
+                = self |> check_statement_list(else_body, in_loop)
+            self |> exit_scope()
+            val exit = ScopeExit::combine(if_body_t.second, else_body_t.second)
+            return Pair(
+                make_node(ast::Variant::If(ast::If(
+                    cond_t, if_body_t.first, else_body_t.first
+                ))), 
+                exit
+            )
+        }
+        While(ast::While(cond, body)) {
+            val bool: Type = Type(Variant::Boolean, false, node.source)
+            val cond_t: TypedNode = self |> check(cond, bool)
+            self |> enter_scope()
+            val body_t: Pair[List[TypedNode], ScopeExit]
+                = self |> check_statement_list(body, true)
+            self |> exit_scope()
+            val body_exit_level = ScopeExit::level(body_t.second)
+            val exit = if body_exit_level > ScopeExit::level(ScopeExit::Loop)
+                { body_t.second } else { ScopeExit::None }
+            return Pair(
+                make_node(ast::Variant::While(ast::While(
+                    cond_t, body_t.first
+                ))),
+                exit
+            )
+        }
+        For(ast::For(name, in, body)) {
+            val in_t: TypedNode = self |> infer(in, PUSH_REPORTS)
+            mut iter_type: Type = in_t.type
+            match in_t.type {
+                Type(
+                    Variant::Struct(Pair(List::of("std", "Sequence"), seq_t_args)), 
+                    true, _
+                ) {
+                    iter_type = seq_t_args |> get(0) |> unwrap_or_else(
+                        || Type(Variant::Invalid, false, in.source)
+                    )
+                }
+                Type(Variant::Invalid, _, _) {}
+                _ {
+                    self.messages |> push(
+                        Message::not_iterable(in_t.type, node.source)
+                    )
+                }
+            }
+            val function: mut Function = self.functions |> at(-1)
+            val scope: Scope = Scope(Map::of(
+                Pair(name, Variable(node.source, false, false, iter_type))
+            ))
+            function.scopes |> push(scope)
+            val body_t: Pair[List[TypedNode], ScopeExit]
+                = self |> check_statement_list(body, true)
+            self |> exit_scope()
+            val body_exit_level = ScopeExit::level(body_t.second)
+            val exit = if body_exit_level > ScopeExit::level(ScopeExit::Loop)
+                { body_t.second } else { ScopeExit::None }
+            return Pair(
+                make_node(ast::Variant::For(ast::For(name, in_t, body_t.first))),
+                exit
+            )
+        }
+        Match(ast::Match(matched, branches)) {
+            // TODO! check branches
+            // TODO! exhaustiveness checking
+            // TODO! build typed node
+            return panic("not yet implemented")
+        }
+
+        _ { return Pair(make_node(ast::Variant::Invalid), ScopeExit::None) }
+    }
 }
 
 pub fun Checker::check(
