@@ -49,6 +49,7 @@ pub enum Variant[N](
 
     PathRef: PathRef[N],
     VariableRef: String,
+    FunctionRef: PathRef[N],
     Int: Int,
     Float: Float,
     Bool: Bool,

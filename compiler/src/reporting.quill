@@ -250,3 +250,17 @@ pub fun Message::not_iterable(t: Type, at: Source) -> Message
             "'for'-loops must iterate over 'mut Sequence[T]'"
         )
     ))
+
+pub fun Message::unexpected_type(exp: Type, got: Type) -> Message
+    = Message(List::of(
+        Message::Section::Error(
+            "Expected '_', but got '_'" 
+                |> fmt(exp |> as_string(), got |> as_string())
+        ),
+        Message::Section::Code(got.source),
+        Message::Section::Info(
+            "Expectation for '_' originates from here:" 
+                |> fmt(exp |> as_string())
+        ),
+        Message::Section::Code(exp.source)
+    ))
