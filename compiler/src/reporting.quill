@@ -264,3 +264,29 @@ pub fun Message::unexpected_type(exp: Type, got: Type) -> Message
         ),
         Message::Section::Code(exp.source)
     ))
+
+pub fun Message::unexpected_numeric(exp: Type, at: Source) -> Message
+    = Message(List::of(
+        Message::Section::Error(
+            "Expected '_', but got a numeric type" 
+                |> fmt(exp |> as_string())
+        ),
+        Message::Section::Code(at),
+        Message::Section::Info(
+            "Expectation for '_' originates from here:" 
+                |> fmt(exp |> as_string())
+        ),
+        Message::Section::Code(exp.source)
+    ))
+
+pub fun Message::arithmetic_operands(lhs: Type, rhs: Type, at: Source) -> Message
+    = Message(List::of(
+        Message::Section::Error(
+            "'_' and '_' are not valid operands for arithmetic expressions"
+                |> fmt(lhs |> as_string(), rhs |> as_string())
+        ),
+        Message::Section::Code(at),
+        Message::Section::Info(
+            "Arithmetic expressions require their operands to be of the same number type"
+        )
+    ))

@@ -621,16 +621,70 @@ pub fun Checker::check_statement(
     }
 }
 
+fun Checker::operands_numeric(
+    self: mut Checker, lhs: Type, rhs: Type, at: Source, report: Bool
+) -> Type {
+    match Pair(lhs.value, rhs.value) {
+        Pair(Variant::Integer, Variant::Integer) |
+        Pair(Variant::Float, Variant::Float) {
+            return lhs
+        }
+        _ { 
+            if report {
+                self.messages |> push(
+                    Message::arithmetic_operands(lhs, rhs, at)
+                )
+            } 
+            return Type(Variant::Invalid, false, at)
+        }
+    }
+}
+
 pub fun Checker::check(
     self: mut Checker, node: UntypedNode, exp: Type
 ) -> TypedNode {
     val make_literal: Fun(Variant, ast::Variant[TypedNode]) -> TypedNode = |t, v| {
-        if t != exp.value {
+        if exp.value != t && exp.value != Variant::Invalid {
             self.messages |> push(
                 Message::unexpected_type(exp, Type(t, false, node.source))
             )
         }
         return TypedNode(v, node.source, exp)
+    }
+    val check_numeric: Fun() -> Type = || {
+        match exp.value {
+            Integer | Float { return exp }
+            _ {
+                self.messages |> push(
+                    Message::unexpected_numeric(exp, node.source)
+                )
+                return Type(Variant::Invalid, false, node.source)
+            }
+        }
+    }
+    val check_arithmetic: Fun(
+        Pair[UntypedNode, UntypedNode], 
+        Fun(Pair[TypedNode, TypedNode]) -> ast::Variant[TypedNode]
+    ) -> TypedNode = |operands, constr| {
+        val n: Type = check_numeric()
+        val lhs: TypedNode = self |> check(operands.first, n)
+        val rhs: TypedNode = self |> check(operands.second, n)
+        return TypedNode(constr(Pair(lhs, rhs)), node.source, n)
+    }
+    val check_ordering: Fun(
+        Pair[UntypedNode, UntypedNode], 
+        Fun(Pair[TypedNode, TypedNode]) -> ast::Variant[TypedNode]
+    ) -> TypedNode = |operands, constr| {
+        val r: Type = Type(Variant::Boolean, false, node.source)
+        if exp.value != r.value && exp.value != Variant::Invalid {
+            self.messages |> push(Message::unexpected_type(exp, r))
+        }
+        val lhs: TypedNode = self |> infer(operands.first, PUSH_REPORTS)
+        val rhs: TypedNode = self |> infer(operands.second, PUSH_REPORTS)
+        self |> operands_numeric(
+            lhs.type, rhs.type, node.source, PUSH_REPORTS
+        )
+        return TypedNode(constr(Pair(lhs, rhs)), node.source, r)
     }
     match node.value {
         PathRef(ast::PathRef(path, t_args)) {
@@ -657,26 +711,26 @@ pub fun Checker::check(
         Closure(ast::Closure(args, body)) {
             return panic("not yet implemented")
         }
-        Add(operands) {
-            return panic("not yet implemented")
+        Add(o) {
+            return check_arithmetic(o, |op| ast::Variant::Add(op))
         }
-        Subtract(operands) {
-            return panic("not yet implemented")
+        Subtract(o) {
+            return check_arithmetic(o, |op| ast::Variant::Subtract(op))
         }
-        Multiply(operands) {
-            return panic("not yet implemented")
+        Multiply(o) {
+            return check_arithmetic(o, |op| ast::Variant::Multiply(op))
         }
-        Divide(operands) {
-            return panic("not yet implemented")
+        Divide(o) {
+            return check_arithmetic(o, |op| ast::Variant::Divide(op))
         }
-        Remainder(operands) {
-            return panic("not yet implemented")
+        Remainder(o) {
+            return check_arithmetic(o, |op| ast::Variant::Remainder(op))
         }
-        LessThan(operands) {
-            return panic("not yet implemented")
+        LessThan(o) {
+            return check_ordering(o, |op| ast::Variant::LessThan(op))
         }
-        LessThanEqual(operands) {
-            return panic("not yet implemented")
+        LessThanEqual(o) {
+            return check_ordering(o, |op| ast::Variant::LessThanEqual(op))
         }
         Equal(operands) {
             return panic("not yet implemented")
@@ -726,6 +780,28 @@ pub val PUSH_REPORTS: Bool = true
 pub fun Checker::infer(
     self: mut Checker, node: UntypedNode, report: Bool
 ) -> TypedNode {
+    val infer_arithmetic: Fun(
+        Pair[UntypedNode, UntypedNode], 
+        Fun(Pair[TypedNode, TypedNode]) -> ast::Variant[TypedNode]
+    ) -> TypedNode = |operands, constr| {
+        val lhs: TypedNode = self |> infer(operands.first, report)
+        val rhs: TypedNode = self |> infer(operands.second, report)
+        val t: Type = self 
+            |> operands_numeric(lhs.type, rhs.type, node.source, report)
+        return TypedNode(constr(Pair(lhs, rhs)), node.source, t)
+    } 
+    val infer_ordering: Fun(
+        Pair[UntypedNode, UntypedNode], 
+        Fun(Pair[TypedNode, TypedNode]) -> ast::Variant[TypedNode]
+    ) -> TypedNode = |operands, constr| {
+        val r: Type = Type(Variant::Boolean, false, node.source)
+        val lhs: TypedNode = self |> infer(operands.first, PUSH_REPORTS)
+        val rhs: TypedNode = self |> infer(operands.second, PUSH_REPORTS)
+        self |> operands_numeric(
+            lhs.type, rhs.type, node.source, PUSH_REPORTS
+        )
+        return TypedNode(constr(Pair(lhs, rhs)), node.source, r)
+    }
     match node.value {
         PathRef(ast::PathRef(path, t_args)) {
             // -> PathRef (global variable)
@@ -761,26 +837,26 @@ pub fun Checker::infer(
         Closure(ast::Closure(args, body)) {
             return panic("not yet implemented")
         }
-        Add(operands) {
-            return panic("not yet implemented")
+        Add(o) {
+            return infer_arithmetic(o, |op| ast::Variant::Add(op))
         }
-        Subtract(operands) {
-            return panic("not yet implemented")
+        Subtract(o) {
+            return infer_arithmetic(o, |op| ast::Variant::Subtract(op))
         }
-        Multiply(operands) {
-            return panic("not yet implemented")
+        Multiply(o) {
+            return infer_arithmetic(o, |op| ast::Variant::Multiply(op))
         }
-        Divide(operands) {
-            return panic("not yet implemented")
+        Divide(o) {
+            return infer_arithmetic(o, |op| ast::Variant::Divide(op))
         }
-        Remainder(operands) {
-            return panic("not yet implemented")
+        Remainder(o) {
+            return infer_arithmetic(o, |op| ast::Variant::Remainder(op))
         }
-        LessThan(operands) {
-            return panic("not yet implemented")
+        LessThan(o) {
+            return infer_ordering(o, |op| ast::Variant::LessThan(op))
         }
-        LessThanEqual(operands) {
-            return panic("not yet implemented")
+        LessThanEqual(o) {
+            return infer_ordering(o, |op| ast::Variant::LessThanEqual(op))
         }
         Equal(operands) {
             return panic("not yet implemented")

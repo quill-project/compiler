@@ -115,3 +115,15 @@ fun sum[T](of: std::List[T]) {}
         "fun sum[T](of: type@std::List[type@T (=Int)] (=List[Int])) {  } (=Unit)"
     )
 }
+
+pub fun numeric() {
+    val c = "
+pub val FIVE_PLUS_TEN: Int = 5 + 10
+    "
+    val t = check_symbols(c)
+    val s = Source("test.quill", 0, 0)
+    assert_symbol(t, c, 
+        "FIVE_PLUS_TEN", List::empty(), 
+        "pub val FIVE_PLUS_TEN: type@Int (=Int) = (5 (=Int) + 10 (=Int)) (=Int) (=Unit)"
+    )
+}

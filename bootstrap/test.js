@@ -216,7 +216,8 @@ const tests = [
     "quill::tests::types::aliases",
     "quill::tests::types::hoisting",
     
-    "quill::tests::checker::declarations"
+    "quill::tests::checker::declarations",
+    "quill::tests::checker::numeric"
 ];
 
 const fs = require("fs");
