@@ -321,3 +321,42 @@ pub fun Message::expected_numeric(got: Type, at: Source) -> Message
         ),
         Message::Section::Code(got.source)
     ))
+
+pub fun Message::insufficient_closure_context(at: Source) -> Message
+    = Message(List::of(
+        Message::Section::Error(
+            "Not enough context to infer closure argument types"
+        ),
+        Message::Section::Code(at),
+        Message::Section::Info(
+            "Closures need context in the form of type annotations"
+                |> concat(" (be that as variable types, function argument types, ...) to infer their argument types")
+        )
+    ))
+
+pub fun Message::unexpected_closure_argc(exp_c: Int, got_c: Int, at: Source) -> Message
+    = Message(List::of(
+        Message::Section::Error(
+            "Expected a closure with _ argument_, but got _ argument_"  |> fmt(
+                Int::as_string(exp_c),
+                if exp_c != 1 { "s" } else { "" },
+                Int::as_string(got_c),
+                if got_c != 1 { "s" } else { "" }
+            )
+        ),
+        Message::Section::Code(at)
+    ))
+
+pub fun Message::unexpected_closure(exp: Type, at: Source) -> Message
+    = Message(List::of(
+        Message::Section::Error(
+            "Expected '_', but got a closure" 
+                |> fmt(exp |> as_string())
+        ),
+        Message::Section::Code(at),
+        Message::Section::Info(
+            "Expectation for '_' originates from here:" 
+                |> fmt(exp |> as_string())
+        ),
+        Message::Section::Code(exp.source)
+    ))

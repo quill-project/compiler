@@ -43,7 +43,7 @@ pub struct Scope(
 
 pub struct Function(
     scopes: mut List[Scope],
-    return_type: Option[Type]
+    return_type: Type
 )
 
 pub struct Checker(
@@ -100,14 +100,12 @@ pub fun Checker::exit_scope(self: mut Checker) {
 }
 
 pub fun Checker::join_types(
-    self: mut Checker, a: Type, b: Type, at: Source, report: Bool
+    self: mut Checker, a: Type, b: Type, at: Source
 ) -> Type {
     match Type::join(a, b) {
         Some(t) { return t }
         None {
-            if report {
-                self.messages |> push(Message::incompatible_types(a, b, at))
-            }
+            self.messages |> push(Message::incompatible_types(a, b, at))
             return Type(Variant::Invalid, !IS_MUTABLE, at)
         }
     }
@@ -347,7 +345,7 @@ pub fun Checker::check_declaration(
                 |> unwrap_or_else(
                     || Type(Variant::Unit, !IS_MUTABLE, node.source)
                 ) 
-            val func = Function(List::of(scope), Option::Some(full_ret_t))
+            val func = Function(List::of(scope), full_ret_t)
             self.functions |> push(func)
             val body_t: Pair[List[TypedNode], ScopeExit] 
                 = self |> check_statement_list(body, !IN_LOOP)
@@ -493,7 +491,7 @@ pub fun Checker::check_statement(
                 )
             }
             None {
-                val value_t: TypedNode = self |> infer(v.value, PUSH_REPORTS)
+                val value_t: TypedNode = self |> infer(v.value)
                 val scope: Scope = self |> scope()
                 scope.locals |> set(v.name, Variable(
                     node.source, v.mutable, !IS_USED, value_t.type
@@ -507,7 +505,7 @@ pub fun Checker::check_statement(
             }
         } }
         Assignment(Pair(dest, value)) {
-            val dest_t: TypedNode = self |> infer(dest, PUSH_REPORTS)
+            val dest_t: TypedNode = self |> infer(dest)
             val assignable: Bool = self |> is_assignable(dest_t)
             if !assignable {
                 self.messages |> push(Message::const_assignment(dest.source))
@@ -520,27 +518,13 @@ pub fun Checker::check_statement(
         }
         Return(value) {
             val func: mut Function = self.functions |> at(-1)
-            match func.return_type {
-                None {
-                    val value_t: TypedNode = self |> infer(value, PUSH_REPORTS)
-                    func.return_type = Option::Some(value_t.type)
-                    return Pair(
-                        make_node(ast::Variant::Return(value_t)),
-                        ScopeExit::Function
-                    )
-                }
-                Some(ret_t) {
-                    val value_t: TypedNode = self |> infer(value, PUSH_REPORTS)
-                    val n_ret_t: Type = self |> join_types(
-                        ret_t, value_t.type, node.source, PUSH_REPORTS
-                    )
-                    func.return_type = Option::Some(n_ret_t)
-                    return Pair(
-                        make_node(ast::Variant::Return(value_t)),
-                        ScopeExit::Function
-                    )
-                }
-            }
+            val value_t: TypedNode = self |> infer(value)
+            func.return_type = self 
+                |> join_types(func.return_type, value_t.type, node.source)
+            return Pair(
+                make_node(ast::Variant::Return(value_t)),
+                ScopeExit::Function
+            )
         }
         Continue {
             if !in_loop {
@@ -591,7 +575,7 @@ pub fun Checker::check_statement(
             )
         }
         For(ast::For(name, in, body)) {
-            val in_t: TypedNode = self |> infer(in, PUSH_REPORTS)
+            val in_t: TypedNode = self |> infer(in)
             mut iter_type: Type = in_t.type
             match in_t.type {
                 Type(
@@ -628,9 +612,10 @@ pub fun Checker::check_statement(
             )
         }
         Match(ast::Match(matched, branches)) {
-            // TODO! check branches
-            // TODO! exhaustiveness checking
-            // TODO! build typed node
+            // - check branches
+            // - exhaustiveness checking
+            // - build typed node
+            // TODO!
             return panic("not yet implemented")
         }
 
@@ -639,7 +624,7 @@ pub fun Checker::check_statement(
 }
 
 fun Checker::operands_numeric(
-    self: mut Checker, lhs: Type, rhs: Type, at: Source, report: Bool
+    self: mut Checker, lhs: Type, rhs: Type, at: Source
 ) -> Type {
     match Pair(lhs.value, rhs.value) {
         Pair(Variant::Integer, Variant::Integer) |
@@ -649,14 +634,59 @@ fun Checker::operands_numeric(
         Pair(Variant::Invalid, _) { return lhs }
         Pair(_, Variant::Invalid) { return rhs }
         _ { 
-            if report {
-                self.messages |> push(
-                    Message::arithmetic_operands(lhs, rhs, at)
-                )
-            } 
+            self.messages |> push(Message::arithmetic_operands(lhs, rhs, at))
             return Type(Variant::Invalid, !IS_MUTABLE, at)
         }
     }
+}
+
+pub fun Checker::check_closure(
+    self: mut Checker, node: UntypedNode, c: ast::Closure[UntypedNode],
+    arg_types: List[Type]
+) -> TypedNode {
+    val exp_arg_c: Int = arg_types |> length()
+    val got_arg_c: Int = c.args |> length()
+    if exp_arg_c != got_arg_c {
+        self.messages |> push(Message::unexpected_closure_argc(
+            exp_arg_c, got_arg_c, node.source
+        ))
+    }
+    val scope_vars: mut Map[String, mut Variable] = range(0, got_arg_c)
+        |> map[Int, Pair[String, mut Variable]](|i| Pair(
+            c.args |> at(i),
+            Variable(
+                node.source, !IS_MUTABLE, !IS_USED, 
+                arg_types |> get(i) |> unwrap_or_else(
+                    || Type(Variant::Invalid, !IS_MUTABLE, node.source)
+                )
+            )
+        ))
+        |> Map::collect()
+    val func = Function(
+        List::of(Scope(scope_vars)), 
+        Type(Variant::Unknown, !IS_MUTABLE, node.source)
+    )
+    self.functions |> push(func)
+    self |> enter_scope()
+    val body_t: Pair[List[TypedNode], ScopeExit] 
+        = self |> check_statement_list(c.body, !IN_LOOP)
+    self |> exit_scope()
+    self.functions |> pop()
+    val always_returns = body_t.second == ScopeExit::Function
+        || func.return_type.value == Variant::Unit
+    if !always_returns {
+        self.messages |> push(
+            Message::missing_return(func.return_type, node.source)
+        )
+    }
+    return TypedNode(
+        ast::Variant::Closure(ast::Closure(List::empty(), body_t.first)),
+        node.source,
+        Type(
+            Variant::Function(Pair(List::empty(), func.return_type)),
+            !IS_MUTABLE, node.source    
+        )
+    )
 }
 
 pub fun Checker::check(
@@ -698,11 +728,9 @@ pub fun Checker::check(
         if exp.value != r.value && exp.value != Variant::Invalid {
             self.messages |> push(Message::unexpected_type(exp, r))
         }
-        val lhs: TypedNode = self |> infer(operands.first, PUSH_REPORTS)
-        val rhs: TypedNode = self |> infer(operands.second, PUSH_REPORTS)
-        self |> operands_numeric(
-            lhs.type, rhs.type, node.source, PUSH_REPORTS
-        )
+        val lhs: TypedNode = self |> infer(operands.first)
+        val rhs: TypedNode = self |> infer(operands.second)
+        self |> operands_numeric(lhs.type, rhs.type, node.source)
         return TypedNode(constr(Pair(lhs, rhs)), node.source, r)
     }
     val check_comparison: Fun(
@@ -713,16 +741,17 @@ pub fun Checker::check(
         if exp.value != r.value && exp.value != Variant::Invalid {
             self.messages |> push(Message::unexpected_type(exp, r))
         }
-        val lhs: TypedNode = self |> infer(operands.first, PUSH_REPORTS)
-        val rhs: TypedNode = self |> infer(operands.second, PUSH_REPORTS)
-        self |> join_types(lhs.type, rhs.type, node.source, PUSH_REPORTS)
+        val lhs: TypedNode = self |> infer(operands.first)
+        val rhs: TypedNode = self |> infer(operands.second)
+        self |> join_types(lhs.type, rhs.type, node.source)
         return TypedNode(constr(Pair(lhs, rhs)), node.source, r)
     }
     match node.value {
         PathRef(ast::PathRef(path, t_args)) {
             // -> PathRef (global variable)
-            // -> VariableRef (local variable)
+            // -> VariableRef (local variable) (MARK AS USED!)
             // -> FunctionRef (function)
+            // TODO!
             return panic("not yet implemented")
         }
         Int(value) {
@@ -740,8 +769,28 @@ pub fun Checker::check(
         String(value) {
             return make_literal(Variant::String, ast::Variant::String(value))
         }
-        Closure(ast::Closure(args, body)) {
-            return panic("not yet implemented")
+        Closure(c) {
+            match exp.value {
+                Variant::Function(Pair(exp_arg_t, exp_ret_t)) {
+                    val checked: TypedNode
+                        = self |> check_closure(node, c, exp_arg_t)
+                    if !Type::matches(exp, checked.type) {
+                        self.messages |> push(
+                            Message::unexpected_type(exp, checked.type)
+                        )
+                    }
+                    return checked
+                }
+                _ {
+                    self.messages |> push(
+                        Message::unexpected_closure(exp, node.source)
+                    )
+                    return TypedNode(
+                        ast::Variant::Invalid, node.source,
+                        Type(Variant::Invalid, !IS_MUTABLE, node.source)
+                    )
+                }
+            }
         }
         Add(o) {
             return check_arithmetic(o, |op| ast::Variant::Add(op))
@@ -784,6 +833,7 @@ pub fun Checker::check(
             return TypedNode(ast::Variant::Not(v), node.source, r)
         }
         Member(Pair(accessed, mem_name)) {
+            // TODO!
             return panic("not yet implemented")
         }
         Call(ast::Invocation(invoked, args)) {
@@ -791,17 +841,26 @@ pub fun Checker::check(
             // -> NamedCall (function)
             // -> StructInit (structure)
             // -> EnumInit (enumeration)
+            // TODO!
             return panic("not yet implemented")
         }
         PipedCall(ast::Invocation(invoked, args)) {
             // 1. do required expansions
             // 2. turn into 'Call'
             // 3. return result of checking result of 2.
+            // TODO!
             return panic("not yet implemented")
         }
         IfExpr(ast::IfExpr(cond, if_val, else_val)) {
-            // REMEMBER TO ALLOW FOR PROPER INFERENCE
-            return panic("not yet implemented")
+            val c = Type(Variant::Boolean, !IS_MUTABLE, cond.source)
+            val cond_t: TypedNode = self |> check(cond, c)
+            val if_val_t: TypedNode = self |> check(if_val, exp)
+            val else_val_t: TypedNode = self |> check(else_val, exp)
+            return TypedNode(
+                ast::Variant::IfExpr(ast::IfExpr(cond_t, if_val_t, else_val_t)),
+                node.source,
+                exp
+            )
         }
 
         _ {
@@ -814,19 +873,17 @@ pub fun Checker::check(
     }
 }
 
-pub val PUSH_REPORTS: Bool = true
-
 pub fun Checker::infer(
-    self: mut Checker, node: UntypedNode, report: Bool
+    self: mut Checker, node: UntypedNode
 ) -> TypedNode {
     val infer_arithmetic: Fun(
         Pair[UntypedNode, UntypedNode], 
         Fun(Pair[TypedNode, TypedNode]) -> ast::Variant[TypedNode]
     ) -> TypedNode = |operands, constr| {
-        val lhs: TypedNode = self |> infer(operands.first, report)
-        val rhs: TypedNode = self |> infer(operands.second, report)
+        val lhs: TypedNode = self |> infer(operands.first)
+        val rhs: TypedNode = self |> infer(operands.second)
         val t: Type = self 
-            |> operands_numeric(lhs.type, rhs.type, node.source, report)
+            |> operands_numeric(lhs.type, rhs.type, node.source)
         return TypedNode(constr(Pair(lhs, rhs)), node.source, t)
     } 
     val infer_ordering: Fun(
@@ -834,9 +891,9 @@ pub fun Checker::infer(
         Fun(Pair[TypedNode, TypedNode]) -> ast::Variant[TypedNode]
     ) -> TypedNode = |operands, constr| {
         val r: Type = Type(Variant::Boolean, !IS_MUTABLE, node.source)
-        val lhs: TypedNode = self |> infer(operands.first, report)
-        val rhs: TypedNode = self |> infer(operands.second, report)
-        self |> operands_numeric(lhs.type, rhs.type, node.source, report)
+        val lhs: TypedNode = self |> infer(operands.first)
+        val rhs: TypedNode = self |> infer(operands.second)
+        self |> operands_numeric(lhs.type, rhs.type, node.source)
         return TypedNode(constr(Pair(lhs, rhs)), node.source, r)
     }
     val infer_comparison: Fun(
@@ -844,16 +901,17 @@ pub fun Checker::infer(
         Fun(Pair[TypedNode, TypedNode]) -> ast::Variant[TypedNode]
     ) -> TypedNode = |operands, constr| {
         val r: Type = Type(Variant::Boolean, !IS_MUTABLE, node.source)
-        val lhs: TypedNode = self |> infer(operands.first, report)
-        val rhs: TypedNode = self |> infer(operands.second, report)
-        self |> join_types(lhs.type, rhs.type, node.source, report)
+        val lhs: TypedNode = self |> infer(operands.first)
+        val rhs: TypedNode = self |> infer(operands.second)
+        self |> join_types(lhs.type, rhs.type, node.source)
         return TypedNode(constr(Pair(lhs, rhs)), node.source, r)
     }
     match node.value {
         PathRef(ast::PathRef(path, t_args)) {
             // -> PathRef (global variable)
-            // -> VariableRef (local variable)
+            // -> VariableRef (local variable) (MARK AS USED!)
             // -> FunctionRef (function)
+            // TODO!
             return panic("not yet implemented")
         }
         Int(value) { return TypedNode(
@@ -881,8 +939,13 @@ pub fun Checker::infer(
             node.source,
             Type(Variant::String, !IS_MUTABLE, node.source)
         ) }
-        Closure(ast::Closure(args, body)) {
-            return panic("not yet implemented")
+        Closure(c) {
+            if 0 != (c.args |> length()) {
+                self.messages |> push(
+                    Message::insufficient_closure_context(node.source)
+                )
+            }
+            return self |> check_closure(node, c, List::empty())
         }
         Add(o) {
             return infer_arithmetic(o, |op| ast::Variant::Add(op))
@@ -912,30 +975,26 @@ pub fun Checker::infer(
             return infer_comparison(o, |op| ast::Variant::NotEqual(op))
         }
         Negate(value) {
-            val v: TypedNode = self |> infer(value, report)
+            val v: TypedNode = self |> infer(value)
             mut r: Type = v.type
             match v.type.value {
                 Integer | Float {}
                 _ { 
-                    if report {
-                        self.messages |> push(
-                            Message::expected_numeric(v.type, node.source)
-                        )
-                    }
+                    self.messages |> push(
+                        Message::expected_numeric(v.type, node.source)
+                    )
                     r = Type(Variant::Invalid, !IS_MUTABLE, node.source) 
                 }
             }
             return TypedNode(ast::Variant::Negate(v), node.source, r)
         }
         Not(value) {
-            val v: TypedNode = self |> infer(value, report)
-            val r: Type = Type(Variant::Boolean, !IS_MUTABLE, node.source)
-            if v.type.value != r.value && v.type.value != Variant::Invalid {
-                self.messages |> push(Message::unexpected_type(r, v.type))
-            }
+            val r = Type(Variant::Boolean, !IS_MUTABLE, node.source)
+            val v: TypedNode = self |> check(value, r)
             return TypedNode(ast::Variant::Not(v), node.source, r)
         }
         Member(Pair(accessed, mem_name)) {
+            // TODO!
             return panic("not yet implemented")
         }
         Call(ast::Invocation(invoked, args)) {
@@ -943,17 +1002,27 @@ pub fun Checker::infer(
             // -> NamedCall (function)
             // -> StructInit (structure)
             // -> EnumInit (enumeration)
+            // TODO!
             return panic("not yet implemented")
         }
         PipedCall(ast::Invocation(invoked, args)) {
             // 1. do required expansions
             // 2. turn into 'Call'
             // 3. return result of checking result of 2.
+            // TODO!
             return panic("not yet implemented")
         }
         IfExpr(ast::IfExpr(cond, if_val, else_val)) {
-            // REMEMBER TO ALLOW FOR PROPER INFERENCE
-            return panic("not yet implemented")
+            val c = Type(Variant::Boolean, !IS_MUTABLE, node.source)
+            val cond_t: TypedNode = self |> check(cond, c)
+            val if_val_t: TypedNode = self |> infer(if_val)
+            val else_val_t: TypedNode = self |> infer(else_val)
+            val r: Type = self 
+                |> join_types(if_val_t.type, else_val_t.type, node.source)
+            return TypedNode(
+                ast::Variant::IfExpr(ast::IfExpr(cond_t, if_val_t, else_val_t)), 
+                node.source, r
+            )
         }
 
         _ {
