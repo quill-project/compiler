@@ -70,6 +70,8 @@ pub struct Type(
     source: Source
 )
 
+pub val IS_MUTABLE: Bool = true
+
 pub fun Type::as_hash(self: Type) -> Int 
     = self.value |> as_hash()
     |> hash::combine_ord(self.mutable |> as_hash())
@@ -77,6 +79,75 @@ pub fun Type::as_hash(self: Type) -> Int
 pub fun Type::as_string(self: Type) -> String
     = (if self.mutable { "mut " } else { "" })
     |> concat(self.value |> as_string())
+
+pub fun Type::join(a: Type, b: Type) -> Option[Type] {
+    val join_rlist: Fun(List[Type], List[Type]) -> Option[mut List[Type]] 
+        = |args_a, args_b| args_a |> values()
+        |> zip(args_b |> values(), Type::join)
+        |> fold(Option::Some(List::empty[Type]()), |a, t| a |> and_then(
+            |r| t |> map(|n| {
+                r |> push(n)
+                return r
+            })
+        ))
+    val mutable: Bool = a.mutable && b.mutable
+    match Pair(a.value, b.value) {
+        Pair(Variant::Unit, Variant::Unit) |
+        Pair(Variant::Integer, Variant::Integer) |
+        Pair(Variant::Float, Variant::Float) |
+        Pair(Variant::Boolean, Variant::Boolean) |
+        Pair(Variant::String, Variant::String) { return Option::Some(a) }
+        Pair(
+            Variant::Struct(Pair(a_path, a_args)), 
+            Variant::Struct(Pair(b_path, b_args))
+        ) {
+            val len_match: Bool = (a_args |> length()) == (b_args |> length())
+            if a_path == b_path && len_match {
+                return join_rlist(a_args, b_args)
+                    |> map(|args| Type(
+                        Variant::Struct(Pair(a_path, args)), mutable, a.source
+                    ))
+            }
+        }
+        Pair(
+            Variant::Enum(Pair(a_path, a_args)),
+            Variant::Enum(Pair(b_path, b_args))
+        ) {
+            val len_match: Bool = (a_args |> length()) == (b_args |> length())
+            if a_path == b_path && len_match {
+                return join_rlist(a_args, b_args)
+                    |> map(|args| Type(
+                        Variant::Enum(Pair(a_path, args)), 
+                        !IS_MUTABLE, a.source
+                    ))
+            }
+        }
+        Pair(
+            Variant::Function(Pair(a_args, a_ret)), 
+            Variant::Function(Pair(b_args, b_ret))
+        ) {
+            if (a_args |> length()) == (b_args |> length()) {
+                return join_rlist(a_args, b_args)
+                    |> and_then(|args| Type::join(a_ret, b_ret) 
+                        |> map(|ret| Type(
+                            Variant::Function(Pair(args, ret)), 
+                            !IS_MUTABLE, a.source
+                        ))
+                    )
+            }
+        }
+        Pair(Variant::List(a_elem), Variant::List(b_elem)) {
+            return Type::join(a_elem, b_elem)
+                |> map(|elem| Type(Variant::List(elem), mutable, a.source))
+        }
+        Pair(Variant::Unknown, _) { return Option::Some(b) }
+        Pair(_, Variant::Unknown) { return Option::Some(a) }
+        Pair(Variant::Invalid, _) { return Option::Some(a) }
+        Pair(_, Variant::Invalid) { return Option::Some(b) }
+        _ {}
+    }
+    return Option::None
+}
 
 pub struct TypedNode(
     value: ast::Variant[TypedNode],

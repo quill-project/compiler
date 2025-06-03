@@ -290,3 +290,34 @@ pub fun Message::arithmetic_operands(lhs: Type, rhs: Type, at: Source) -> Messag
             "Arithmetic expressions require their operands to be of the same number type"
         )
     ))
+
+pub fun Message::incompatible_types(a: Type, b: Type, at: Source) -> Message
+    = Message(List::of(
+        Message::Section::Error(
+            "'_' and '_' are not compatible, but used in the same context"
+                |> fmt(a |> as_string(), b |> as_string())
+        ),
+        Message::Section::Code(at),
+        Message::Section::Info(
+            "'_' originates from here:" |> fmt(a |> as_string())
+        ),
+        Message::Section::Code(a.source),
+        Message::Section::Info(
+            "'_' originates from here:" |> fmt(b |> as_string())
+        ),
+        Message::Section::Code(b.source)
+    ))
+
+pub fun Message::expected_numeric(got: Type, at: Source) -> Message
+    = Message(List::of(
+        Message::Section::Error(
+            "Expected a numeric type, but got '_'" 
+                |> fmt(got |> as_string())
+        ),
+        Message::Section::Code(at),
+        Message::Section::Info(
+            "'_' originates from here:" 
+                |> fmt(got |> as_string())
+        ),
+        Message::Section::Code(got.source)
+    ))

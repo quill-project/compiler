@@ -91,19 +91,19 @@ fun sum[T](of: std::List[T]) {}
         "fun greet[](thing: type@String (=String)) {  } (=Unit)"
     )
     assert_symbol(t, c, 
-        "container::Box", List::of(Type(Variant::String, false, s)), 
+        "container::Box", List::of(Type(Variant::String, !IS_MUTABLE, s)), 
         "pub struct Box[T](value: type@T (=String)) (=Unit)"
     )
     assert_symbol(t, c, 
-        "container::display", List::of(Type(Variant::String, false, s)), 
+        "container::display", List::of(Type(Variant::String, !IS_MUTABLE, s)), 
         "fun display[T](self: type@container::Box[type@T (=String)] (=container::Box[String])) {  } (=Unit)"
     )
     assert_symbol(t, c, 
-        "arithmetic::add", List::of(Type(Variant::Integer, false, s)), 
+        "arithmetic::add", List::of(Type(Variant::Integer, !IS_MUTABLE, s)), 
         "fun add[T](a: type@T (=Int), b: type@T (=Int)) {  } (=Unit)"
     )
     assert_symbol(t, c, 
-        "arithmetic::add", List::of(Type(Variant::Float, false, s)), 
+        "arithmetic::add", List::of(Type(Variant::Float, !IS_MUTABLE, s)), 
         "fun add[T](a: type@T (=Float), b: type@T (=Float)) {  } (=Unit)"
     )
     assert_symbol(t, c, 
@@ -111,7 +111,7 @@ fun sum[T](of: std::List[T]) {}
         "fun incr[](r: type+mut@container::Box[type@Int (=Int)] (=mut container::Box[Int])) {  } (=Unit)"
     )
     assert_symbol(t, c, 
-        "arithmetic::sum", List::of(Type(Variant::Integer, false, s)), 
+        "arithmetic::sum", List::of(Type(Variant::Integer, !IS_MUTABLE, s)), 
         "fun sum[T](of: type@std::List[type@T (=Int)] (=List[Int])) {  } (=Unit)"
     )
 }
@@ -119,11 +119,25 @@ fun sum[T](of: std::List[T]) {}
 pub fun numeric() {
     val c = "
 pub val FIVE_PLUS_TEN: Int = 5 + 10
+
+fun test() -> Float {
+    if 0.5 < 10.0 { return -3.0 * 0.2 + 0.5 - 3.0 }
+    return 2.5 + 2.0 / 0.5 % 3.0
+}
     "
     val t = check_symbols(c)
     val s = Source("test.quill", 0, 0)
     assert_symbol(t, c, 
         "FIVE_PLUS_TEN", List::empty(), 
         "pub val FIVE_PLUS_TEN: type@Int (=Int) = (5 (=Int) + 10 (=Int)) (=Int) (=Unit)"
+    )
+    assert_symbol(t, c,
+        "test", List::empty(),
+        "fun test[]() -> type@Float (=Float) { \
+if (0.5 (=Float) < 10 (=Float)) (=Bool) { \
+return ((((- 3 (=Float)) (=Float) * 0.2 (=Float)) (=Float) + 0.5 (=Float)) (=Float) - 3 (=Float)) (=Float) (=Unit) \
+} else {  } (=Unit); \
+return (2.5 (=Float) + ((2 (=Float) / 0.5 (=Float)) (=Float) % 3 (=Float)) (=Float)) (=Float) (=Unit) \
+} (=Unit)"
     )
 }

@@ -30,7 +30,7 @@ pub fun Option::and[T](self: Option[T], other: Option[T]) -> Option[T] {
 pub fun Option::and_then[I, O](self: Option[I], f: Fun(I) -> Option[O]) -> Option[O] {
     match self {
         Some(value) { return f(value) }
-        None { return self }
+        None { return Option::None[O] }
     }
 }
 
