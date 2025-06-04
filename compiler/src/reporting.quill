@@ -419,3 +419,9 @@ pub fun Message::unknown_path(path: List[String], at: Source) -> Message
         ),
         Message::Section::Code(at)
     ))
+
+pub fun Message::failed_t_arg_inference(at: Source) -> Message
+    = Message(List::of(
+        Message::Section::Error("Failed to infer generic type arguments"),
+        Message::Section::Code(at)
+    ))

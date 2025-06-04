@@ -155,7 +155,13 @@ fun feed(c: mut pet::Cat) {
 
 fun rebirth(c: mut pet::Cat, name: String) {
     c.name = name
-    val f: Fun(mut pet::Cat) = feed
+    c.hunger = pet::NO_HUNGER
+}
+
+pub enum Option[T](Some: T, Nope: Int)
+
+fun test() {
+    val a: Option[Int] = Option::None
 }
     "
     val t = check_symbols(c)
@@ -172,7 +178,11 @@ fun rebirth(c: mut pet::Cat, name: String) {
         "test::rebirth", List::empty(),
         "fun rebirth[](c: type+mut@pet::Cat (=mut pet::Cat), name: type@String (=String)) { \
 (var@c (=mut pet::Cat) .name) (=String) = var@name (=String) (=Unit); \
-val f = test::feed (=Fun(mut pet::Cat) -> Unit) (=Unit) \
+(var@c (=mut pet::Cat) .hunger) (=Float) = pet::NO_HUNGER (=Float) (=Unit) \
 } (=Unit)"
+    )
+    assert_symbol(t, c,
+        "test::test", List::empty(),
+        ""
     )
 }

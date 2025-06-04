@@ -155,8 +155,8 @@ pub fun Type::join(a: Type, b: Type) -> Option[Type] {
             return Type::join(a_elem, b_elem)
                 |> map(|elem| Type(Variant::List(elem), mutable, a.source))
         }
-        Pair(Variant::Invalid, _) { return Option::Some(a) }
-        Pair(_, Variant::Invalid) { return Option::Some(b) }
+        Pair(Variant::Invalid, _) { return Option::Some(b) }
+        Pair(_, Variant::Invalid) { return Option::Some(a) }
         _ {}
     }
     return Option::None
@@ -239,8 +239,8 @@ pub fun Type::meet(a: Type, b: Type) -> Option[Type] {
             return Type::meet(a_elem, b_elem)
                 |> map(|elem| Type(Variant::List(elem), mutable, a.source))
         }
-        Pair(Variant::Invalid, _) { return Option::Some(a) }
-        Pair(_, Variant::Invalid) { return Option::Some(b) }
+        Pair(Variant::Invalid, _) { return Option::Some(b) }
+        Pair(_, Variant::Invalid) { return Option::Some(a) }
         _ {}
     }
     return Option::None
