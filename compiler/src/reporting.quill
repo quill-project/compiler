@@ -398,6 +398,23 @@ pub fun Message::missing_member(path: List[String], member: String, at: Source, 
         Message::Section::Code(at),
         Message::Section::Error(
             "'_' is declared here:"
-                |> fmt()
-        )
+                |> fmt(path |> values() |> join("::"))
+        ),
+        Message::Section::Code(def_at)
+    ))
+
+pub fun Message::unexpected_t_args(thing: String, at: Source) -> Message
+    = Message(List::of(
+        Message::Section::Error(
+            "'_' does not allow specifying type arguments" |> fmt(thing)
+        ),
+        Message::Section::Code(at)
+    ))
+
+pub fun Message::unknown_path(path: List[String], at: Source) -> Message
+    = Message(List::of(
+        Message::Section::Error(
+            "'_' is not a known variable or function"
+        ),
+        Message::Section::Code(at)
     ))

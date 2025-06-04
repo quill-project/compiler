@@ -141,3 +141,26 @@ return (2.5 (=Float) + ((2 (=Float) / 0.5 (=Float)) (=Float) % 3 (=Float)) (=Flo
 } (=Unit)"
     )
 }
+
+pub fun structs() {
+    val c = "
+mod pet
+pub struct Cat(name: String, hunger: Float)
+pub val NO_HUNGER: Float = 0.0
+
+mod test
+fun feed(c: mut pet::Cat) {
+    c.hunger = pet::NO_HUNGER
+}
+    "
+    val t = check_symbols(c)
+    val s = Source("test.quill", 0, 0)
+    assert_symbol(t, c, 
+        "pet::Cat", List::empty(), 
+        "pub struct Cat[](name: type@String (=String), hunger: type@Float (=Float)) (=Unit)"
+    )
+    assert_symbol(t, c,
+        "test::feed", List::empty(),
+        "fun feed[](c: type+mut@pet::Cat (=mut pet::Cat)) { (var@c (=mut pet::Cat) .hunger) (=Float) = 0 (=Float) (=Unit) } (=Unit)"
+    )
+}

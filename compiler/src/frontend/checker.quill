@@ -459,8 +459,10 @@ pub fun Checker::is_assignable(
                 Some(variable) { return variable.mutable }
             }
         }
-        // public / private check handled elsewhere
-        Member(_) { return IS_MUTABLE } 
+        Member(Pair(accessed, _)) {
+            // public / private check handled elsewhere
+            return accessed.type.mutable
+        } 
 
         Invalid { return IS_MUTABLE }
         _ { return !IS_MUTABLE }
@@ -708,6 +710,16 @@ pub fun Checker::check_closure(
     )
 }
 
+fun make_full_t_args(types: List[Type], names: List[String], at: Source) -> mut Map[String, Type]
+    = range(0, names |> length())
+    |> map[Int, Pair[String, Type]](|i| Pair(
+        names |> at(i),
+        types |> get(i) |> unwrap_or_else(
+            || Type(Variant::Invalid, !IS_MUTABLE, at)
+        )
+    ))
+    |> Map::collect()
+
 pub fun Checker::check_member(
     self: mut Checker, node: UntypedNode, 
     accessed: UntypedNode, member_name: String
@@ -726,21 +738,9 @@ pub fun Checker::check_member(
                                 path, node.source, s.node.source
                             ))
                         }
-                        val t_arg_vals: mut Map[String, Type]
-                            = range(0, t_args |> length())
-                            |> map[Int, Pair[String, Type]](|i| Pair(
-                                t_args |> at(i),
-                                g_t_args |> get(i) |> unwrap_or_else(
-                                    || Type(
-                                        Variant::Invalid, !IS_MUTABLE, 
-                                        node.source
-                                    )
-                                )
-                            ))
-                            |> Map::collect()
                         val member_c = Checker(
                             List::empty(),
-                            t_arg_vals,
+                            make_full_t_args(g_t_args, t_args, node.source),
                             self.symbols, s.context, 
                             self.dependencies, self.messages
                         )
@@ -748,11 +748,13 @@ pub fun Checker::check_member(
                             |> values()
                             |> find(|m| m.first == member_name)
                             |> map[Pair[String, UntypedNode], TypedNode](
-                                |m| self |> check_annotation(m.second)
+                                |m| member_c |> check_annotation(m.second)
                             )
                             |> map[TypedNode, Type](|t| t.type)
                         if mem_t |> is_none() {
-                            // TODO!
+                            self.messages |> push(Message::missing_member(
+                                path, member_name, node.source, s.node.source
+                            ))
                         }
                         return mem_t
                     }
@@ -770,6 +772,131 @@ pub fun Checker::check_member(
     return TypedNode(
         ast::Variant::Member(Pair(accessed_t, member_name)),
         node.source, r
+    )
+}
+
+pub fun Checker::check_path_ref(
+    self: mut Checker, node: UntypedNode, 
+    path: List[String], t_args: Option[List[UntypedNode]]
+) -> TypedNode {
+    if path |> length() |> is(1) {
+        val local_name: String = path |> at(0)
+        match self |> find_variable(local_name) {
+            Some(local) {
+                if t_args |> is_some() {
+                    self.messages |> push(Message::unexpected_t_args(
+                        local_name, node.source
+                    ))
+                }
+                local.used = true
+                return TypedNode(
+                    ast::Variant::VariableRef(local_name),
+                    node.source,
+                    local.type
+                )
+            }
+            None {}
+        }
+    }
+    val t_args_t: Option[List[TypedNode]] = t_args
+        |> map[List[UntypedNode], List[TypedNode]](|args| args
+            |> values()
+            |> map[UntypedNode, TypedNode](
+                |t| self |> check_annotation(t)
+            )
+            |> List::collect()
+        )
+    val type_args: List[Type] = t_args_t
+        |> map[List[TypedNode], List[Type]](|args| args
+            |> values()
+            |> map[TypedNode, Type](|t| t.type)
+            |> List::collect()    
+        )
+        |> unwrap_or(List::empty())
+    match self.symbols.symbols |> get(path) {
+        Some(s) { 
+            val check_public: Fun(Bool) = |public| {
+                if public || s.context.module == self.context.module {
+                    return unit
+                }
+                self.messages |> push(Message::symbol_private(
+                    path, node.source, s.node.source
+                ))
+            }
+            match s.node.value {
+                GlobalVariable(ast::GlobalVariable(
+                    _, public, _, type, _
+                )) {
+                    check_public(public)
+                    if t_args |> is_some() {
+                        self.messages |> push(Message::unexpected_t_args(
+                            path |> values() |> join("::"), node.source
+                        ))
+                    }
+                    val var_c = Checker(
+                        List::empty(), Map::empty(),
+                        self.symbols, s.context, 
+                        self.dependencies, self.messages
+                    )
+                    val type_t: TypedNode = var_c |> check_annotation(type)
+                    val instance: SymbolInstance 
+                        = SymbolInstance(path, List::empty())
+                    self.dependencies |> push(instance)
+                    return TypedNode(
+                        ast::Variant::PathRef(ast::PathRef(path, Option::None)),
+                        node.source, type_t.type
+                    )
+                }
+                ast::Variant::Function(ast::Function(
+                    _, public, f_t_args, f_args, f_ret_t, _
+                )) | ast::Variant::ExternalFunction(ast::ExternalFunction(
+                    _, public, f_t_args, f_args, f_ret_t, _
+                )) {
+                    check_public(public)
+                    val exp_tac: Int = f_t_args |> length()
+                    val got_tac: Int = type_args |> length()
+                    if exp_tac != got_tac {
+                        self.messages |> push(Message::wrong_type_arg_c(
+                            path, exp_tac, got_tac, node.source
+                        ))
+                    }
+                    val func_c = Checker(
+                        List::empty(),
+                        make_full_t_args(type_args, f_t_args, node.source),
+                        self.symbols, s.context,
+                        self.dependencies, self.messages 
+                    )
+                    val f_arg_types: List[Type] = f_args
+                        |> values()
+                        |> map[Pair[String, UntypedNode], Type](
+                            |a| (func_c |> check_annotation(a.second)).type
+                        )
+                        |> List::collect()
+                    val f_ret_type: Type = f_ret_t
+                        |> map[UntypedNode, Type](
+                            |r| (func_c |> check_annotation(r)).type
+                        )
+                        |> unwrap_or_else(
+                            || Type(Variant::Unit, !IS_MUTABLE, node.source)
+                        )
+                    val r = Type(
+                        Variant::Function(Pair(f_arg_types, f_ret_type)),
+                        !IS_MUTABLE, node.source
+                    )
+                    return TypedNode(
+                        ast::Variant::FunctionRef(ast::PathRef(path, t_args_t)),
+                        node.source, r
+                    )
+                }
+                _ {}
+            } 
+        }
+        None {}
+    }
+    self.messages |> push(Message::unknown_path(path, node.source))
+    return TypedNode(
+        ast::Variant::Invalid, node.source,
+        Type(Variant::Invalid, !IS_MUTABLE, node.source)
     )
 }
 
@@ -832,11 +959,17 @@ pub fun Checker::check(
     }
     match node.value {
         PathRef(ast::PathRef(path, t_args)) {
-            // -> PathRef (global variable)
-            // -> VariableRef (local variable) (MARK AS USED!)
-            // -> FunctionRef (function)
-            // TODO!
-            return panic("not yet implemented")
+            val checked: TypedNode = self |> check_path_ref(node, path, t_args)
+            if !Type::matches(exp, checked.type) {
+                self.messages |> push(
+                    Message::unexpected_type(exp, checked.type)
+                )
+                return TypedNode(
+                    checked.value, checked.source, 
+                    Type(Variant::Invalid, !IS_MUTABLE, checked.source)
+                )
+            }
+            return checked
         }
         Int(value) {
             return make_literal(Variant::Integer, ast::Variant::Int(value))
@@ -861,6 +994,10 @@ pub fun Checker::check(
                     if !Type::matches(exp, checked.type) {
                         self.messages |> push(
                             Message::unexpected_type(exp, checked.type)
+                        )
+                        return TypedNode(
+                            checked.value, checked.source, 
+                            Type(Variant::Invalid, !IS_MUTABLE, checked.source)
                         )
                     }
                     return checked
@@ -998,11 +1135,7 @@ pub fun Checker::infer(
     }
     match node.value {
         PathRef(ast::PathRef(path, t_args)) {
-            // -> PathRef (global variable)
-            // -> VariableRef (local variable) (MARK AS USED!)
-            // -> FunctionRef (function)
-            // TODO!
-            return panic("not yet implemented")
+            return self |> check_path_ref(node, path, t_args)
         }
         Int(value) { return TypedNode(
             ast::Variant::Int(value),
