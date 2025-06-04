@@ -360,3 +360,44 @@ pub fun Message::unexpected_closure(exp: Type, at: Source) -> Message
         ),
         Message::Section::Code(exp.source)
     ))
+
+pub fun Message::expected_struct(got: Type, at: Source) -> Message
+    = Message(List::of(
+        Message::Section::Error(
+            "Expected a 'struct'-type, but got '_'" 
+                |> fmt(got |> as_string())
+        ),
+        Message::Section::Code(at),
+        Message::Section::Info(
+            "'_' originates from here:" 
+                |> fmt(got |> as_string())
+        ),
+        Message::Section::Code(got.source)
+    ))
+
+pub fun Message::symbol_private(path: List[String], at: Source, def_at: Source) -> Message
+    = Message(List::of(
+        Message::Section::Error(
+            "'_' is declared as private but accessed from another module"
+                |> fmt(path |> values() |> join("::"))
+        ),
+        Message::Section::Code(at),
+        Message::Section::Error(
+            "'_' is declared here:"
+                |> fmt(path |> values() |> join("::"))
+        ),
+        Message::Section::Code(def_at)
+    ))
+
+pub fun Message::missing_member(path: List[String], member: String, at: Source, def_at: Source) -> Message
+    = Message(List::of(
+        Message::Section::Error(
+            "The type '_' has no member '_'"
+                |> fmt(path |> values() |> join("::"), member)
+        ),
+        Message::Section::Code(at),
+        Message::Section::Error(
+            "'_' is declared here:"
+                |> fmt()
+        )
+    ))

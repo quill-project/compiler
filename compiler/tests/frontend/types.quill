@@ -93,7 +93,10 @@ val PI: Float = 3.1415
         apply.context.aliases |> get("Option"), 
         Option::Some(List::of("std", "Option"))
     )
-    assert_eq(apply.context.aliases |> get("greet"), Option::None)
+    assert_eq[Option[List[String]]](
+        apply.context.aliases |> get("greet"),
+        Option::Some(List::of("foo", "greet"))    
+    )
     assert_eq(apply.context.aliases |> get("multiply"), Option::None)
     val pi =    t |> table_get("bar::baz::PI")
     assert_eq[Option[List[String]]](
@@ -104,7 +107,10 @@ val PI: Float = 3.1415
         pi.context.aliases |> get("greet"), 
         Option::Some(List::of("foo", "greet"))
     )
-    assert_eq(pi.context.aliases |> get("multiply"), Option::None)
+    assert_eq[Option[List[String]]](
+        pi.context.aliases |> get("multiply"), 
+        Option::Some(List::of("bar", "baz", "multiply"))
+    )
 }
 
 pub fun hoisting() {

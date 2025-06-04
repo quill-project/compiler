@@ -16,8 +16,7 @@ pub enum Variant(
     Function: Pair[List[Type], Type],
     List: Type,
 
-    Invalid,
-    Unknown
+    Invalid
 )
 
 pub fun Variant::as_hash(self: Variant) -> Int {
@@ -33,7 +32,6 @@ pub fun Variant::as_hash(self: Variant) -> Int {
         List(elem_t) { return elem_t |> as_hash() |> hash::combine_ord(8) }
 
         Invalid { return 9 }
-        Unknown { return 10 }
     }
 }
 
@@ -59,8 +57,7 @@ pub fun Variant::as_string(self: Variant) -> String {
         }
         List(elem_t) { return "List[_]" |> fmt(elem_t |> as_string()) }
 
-        Invalid { return "<invalid>" }
-        Unknown { return "<unknown>" }
+        Invalid { return "<unknown>" }
     }
 }
 
@@ -140,8 +137,6 @@ pub fun Type::join(a: Type, b: Type) -> Option[Type] {
             return Type::join(a_elem, b_elem)
                 |> map(|elem| Type(Variant::List(elem), mutable, a.source))
         }
-        Pair(Variant::Unknown, _) { return Option::Some(b) }
-        Pair(_, Variant::Unknown) { return Option::Some(a) }
         Pair(Variant::Invalid, _) { return Option::Some(a) }
         Pair(_, Variant::Invalid) { return Option::Some(b) }
         _ {}
@@ -186,8 +181,6 @@ pub fun Type::matches(exp: Type, got: Type) -> Bool {
             if !mut_match { return false }
             return Type::matches(exp_elem, got_elem)
         }
-        Pair(Variant::Unknown, _) |
-        Pair(_, Variant::Unknown) |
         Pair(Variant::Invalid, _) |
         Pair(_, Variant::Invalid) { return true }
         _ { return false }
@@ -301,6 +294,10 @@ fun SymbolTable::collect_symbols(
             Module(path) {
                 aliases = Map::empty()
                 context = ModuleContext(path, aliases)
+                SymbolTable::process_alias(
+                    Pair("*", List::concat(path, List::of("*"))), 
+                    aliases, names
+                )
                 SymbolTable::process_alias(std_alias, aliases, names)
             }
             Usages(usages) { usages 
@@ -342,16 +339,12 @@ pub fun SymbolTable::from(
 }
 
 // Given a context and a short path, attempts to expand the path to an absolute path.
-// For example, if in a module 'example' with a function 'add' you pass 'add',
-// this function will expand it to 'example::add'.
-// If in the same module you have written `use foo::bar` and you pass 'bar',
+// If in a module you have written `use foo::bar` and you pass 'bar',
 // this function will expand it to 'foo::bar'.
 // If there is no way to expand it, the original path will be returned.
 pub fun ModuleContext::expand(
     self: SymbolTable, context: ModuleContext, short: List[String]
 ) -> List[String] {
-    val local: List[String] = List::concat(context.module, short)
-    if self.symbols |> has(local) { return local }
     return context.aliases 
         |> get(short |> at(-1)) 
         |> map[List[String], List[String]](

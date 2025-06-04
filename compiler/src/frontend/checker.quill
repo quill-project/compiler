@@ -43,7 +43,7 @@ pub struct Scope(
 
 pub struct Function(
     scopes: mut List[Scope],
-    return_type: Type
+    return_type: Option[Type]
 )
 
 pub struct Checker(
@@ -239,7 +239,7 @@ pub fun Checker::check_annotation(self: Checker, node: UntypedNode) -> TypedNode
                         val instance: SymbolInstance 
                             = SymbolInstance(path, args)
                         self.dependencies |> push(instance)
-                        mut t: Variant = Variant::Unknown
+                        mut t: Variant = Variant::Invalid
                         match symbol.node.value {
                             Structure(_) { 
                                 t = Variant::Struct(Pair(path, args)) 
@@ -345,7 +345,7 @@ pub fun Checker::check_declaration(
                 |> unwrap_or_else(
                     || Type(Variant::Unit, !IS_MUTABLE, node.source)
                 ) 
-            val func = Function(List::of(scope), full_ret_t)
+            val func = Function(List::of(scope), Option::Some(full_ret_t))
             self.functions |> push(func)
             val body_t: Pair[List[TypedNode], ScopeExit] 
                 = self |> check_statement_list(body, !IN_LOOP)
@@ -518,13 +518,27 @@ pub fun Checker::check_statement(
         }
         Return(value) {
             val func: mut Function = self.functions |> at(-1)
-            val value_t: TypedNode = self |> infer(value)
-            func.return_type = self 
-                |> join_types(func.return_type, value_t.type, node.source)
-            return Pair(
-                make_node(ast::Variant::Return(value_t)),
-                ScopeExit::Function
-            )
+            match func.return_type {
+                Some(pre_ret_t) {
+                    val value_t: TypedNode = self |> check(value, pre_ret_t)
+                    func.return_type = Option::Some(self |> join_types(
+                        pre_ret_t, value_t.type, node.source
+                    ))
+                    return Pair(
+                        make_node(ast::Variant::Return(value_t)),
+                        ScopeExit::Function
+                    )
+                }
+                None {
+                    val value_t: TypedNode = self |> infer(value)
+                    func.return_type = Option::Some(value_t.type)
+                    return Pair(
+                        make_node(ast::Variant::Return(value_t)),
+                        ScopeExit::Function
+                    )
+                }
+            }
+            
         }
         Continue {
             if !in_loop {
@@ -664,7 +678,7 @@ pub fun Checker::check_closure(
         |> Map::collect()
     val func = Function(
         List::of(Scope(scope_vars)), 
-        Type(Variant::Unknown, !IS_MUTABLE, node.source)
+        Option::None
     )
     self.functions |> push(func)
     self |> enter_scope()
@@ -672,20 +686,90 @@ pub fun Checker::check_closure(
         = self |> check_statement_list(c.body, !IN_LOOP)
     self |> exit_scope()
     self.functions |> pop()
-    val always_returns = body_t.second == ScopeExit::Function
-        || func.return_type.value == Variant::Unit
+    val return_type = func.return_type 
+        |> unwrap_or_else(|| Type(Variant::Unit, !IS_MUTABLE, node.source))
+    val always_returns = body_t.second == ScopeExit::Function 
+        || return_type.value == Variant::Unit
     if !always_returns {
         self.messages |> push(
-            Message::missing_return(func.return_type, node.source)
+            Message::missing_return(
+                func.return_type |> expect(""), 
+                node.source
+            )
         )
     }
     return TypedNode(
         ast::Variant::Closure(ast::Closure(List::empty(), body_t.first)),
         node.source,
         Type(
-            Variant::Function(Pair(List::empty(), func.return_type)),
+            Variant::Function(Pair(List::empty(), return_type)),
             !IS_MUTABLE, node.source    
         )
+    )
+}
+
+pub fun Checker::check_member(
+    self: mut Checker, node: UntypedNode, 
+    accessed: UntypedNode, member_name: String
+) -> TypedNode {
+    val accessed_t: TypedNode = self |> infer(accessed)
+    mut r: Type = Type(Variant::Invalid, !IS_MUTABLE, node.source)
+    match accessed_t.type.value {
+        Variant::Struct(Pair(path, g_t_args)) {
+            r = self.symbols.symbols |> get(path) |> and_then[Symbol, Type](|s| {
+                match s.node.value {
+                    Structure(ast::CustomType(_, public, t_args, members)) {
+                        val hidden: Bool = !public
+                            && s.context.module != self.context.module
+                        if hidden {
+                            self.messages |> push(Message::symbol_private(
+                                path, node.source, s.node.source
+                            ))
+                        }
+                        val t_arg_vals: mut Map[String, Type]
+                            = range(0, t_args |> length())
+                            |> map[Int, Pair[String, Type]](|i| Pair(
+                                t_args |> at(i),
+                                g_t_args |> get(i) |> unwrap_or_else(
+                                    || Type(
+                                        Variant::Invalid, !IS_MUTABLE, 
+                                        node.source
+                                    )
+                                )
+                            ))
+                            |> Map::collect()
+                        val member_c = Checker(
+                            List::empty(),
+                            t_arg_vals,
+                            self.symbols, s.context, 
+                            self.dependencies, self.messages
+                        )
+                        val mem_t: Option[Type] = members
+                            |> values()
+                            |> find(|m| m.first == member_name)
+                            |> map[Pair[String, UntypedNode], TypedNode](
+                                |m| self |> check_annotation(m.second)
+                            )
+                            |> map[TypedNode, Type](|t| t.type)
+                        if mem_t |> is_none() {
+                            // TODO!
+                        }
+                        return mem_t
+                    }
+                    _ { return Option::None }
+                }
+            }) |> unwrap_or(r)
+        }
+        Variant::Invalid {}
+        _ {
+            self.messages |> push(
+                Message::expected_struct(accessed_t.type, node.source)
+            )
+        }
+    }
+    return TypedNode(
+        ast::Variant::Member(Pair(accessed_t, member_name)),
+        node.source, r
     )
 }
 
@@ -833,8 +917,14 @@ pub fun Checker::check(
             return TypedNode(ast::Variant::Not(v), node.source, r)
         }
         Member(Pair(accessed, mem_name)) {
-            // TODO!
-            return panic("not yet implemented")
+            val checked: TypedNode = self 
+                |> check_member(node, accessed, mem_name)
+            if !Type::matches(exp, checked.type) {
+                self.messages |> push(
+                    Message::unexpected_type(exp, checked.type)
+                )
+            }
+            return checked
         }
         Call(ast::Invocation(invoked, args)) {
             // -> Call (arbitrary)
@@ -994,8 +1084,7 @@ pub fun Checker::infer(
             return TypedNode(ast::Variant::Not(v), node.source, r)
         }
         Member(Pair(accessed, mem_name)) {
-            // TODO!
-            return panic("not yet implemented")
+            return self |> check_member(node, accessed, mem_name)
         }
         Call(ast::Invocation(invoked, args)) {
             // -> Call (arbitrary)
