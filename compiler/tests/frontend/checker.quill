@@ -152,6 +152,11 @@ mod test
 fun feed(c: mut pet::Cat) {
     c.hunger = pet::NO_HUNGER
 }
+
+fun rebirth(c: mut pet::Cat, name: String) {
+    c.name = name
+    val f: Fun(mut pet::Cat) = feed
+}
     "
     val t = check_symbols(c)
     val s = Source("test.quill", 0, 0)
@@ -161,6 +166,13 @@ fun feed(c: mut pet::Cat) {
     )
     assert_symbol(t, c,
         "test::feed", List::empty(),
-        "fun feed[](c: type+mut@pet::Cat (=mut pet::Cat)) { (var@c (=mut pet::Cat) .hunger) (=Float) = 0 (=Float) (=Unit) } (=Unit)"
+        "fun feed[](c: type+mut@pet::Cat (=mut pet::Cat)) { (var@c (=mut pet::Cat) .hunger) (=Float) = pet::NO_HUNGER (=Float) (=Unit) } (=Unit)"
+    )
+    assert_symbol(t, c,
+        "test::rebirth", List::empty(),
+        "fun rebirth[](c: type+mut@pet::Cat (=mut pet::Cat), name: type@String (=String)) { \
+(var@c (=mut pet::Cat) .name) (=String) = var@name (=String) (=Unit); \
+val f = test::feed (=Fun(mut pet::Cat) -> Unit) (=Unit) \
+} (=Unit)"
     )
 }

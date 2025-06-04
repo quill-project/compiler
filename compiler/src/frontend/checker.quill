@@ -777,10 +777,10 @@ pub fun Checker::check_member(
 
 pub fun Checker::check_path_ref(
     self: mut Checker, node: UntypedNode, 
-    path: List[String], t_args: Option[List[UntypedNode]]
+    raw_path: List[String], t_args: Option[List[UntypedNode]]
 ) -> TypedNode {
-    if path |> length() |> is(1) {
-        val local_name: String = path |> at(0)
+    if raw_path |> length() |> is(1) {
+        val local_name: String = raw_path |> at(0)
         match self |> find_variable(local_name) {
             Some(local) {
                 if t_args |> is_some() {
@@ -798,6 +798,7 @@ pub fun Checker::check_path_ref(
             None {}
         }
     }
+    val path: List[String] = self.symbols |> expand(self.context, raw_path)
     val t_args_t: Option[List[TypedNode]] = t_args
         |> map[List[UntypedNode], List[TypedNode]](|args| args
             |> values()

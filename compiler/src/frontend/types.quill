@@ -77,10 +77,27 @@ pub fun Type::as_string(self: Type) -> String
     = (if self.mutable { "mut " } else { "" })
     |> concat(self.value |> as_string())
 
+// Computes the least upper bound of the two given types.
+// The function returns the most specific type that can safely represent
+// 'a' and 'b'.
+// For example, if 'a = Cat' and 'b = mut Cat', then the function shall
+// return 'Cat', since the cat may not always be mutable.
+// However, if 'a = Fun(Cat)' and 'b = Fun(mut Cat)', then the function
+// shall return 'Fun(mut Cat)', since the function may or may not mutate
+// the given cat.
 pub fun Type::join(a: Type, b: Type) -> Option[Type] {
     val join_rlist: Fun(List[Type], List[Type]) -> Option[mut List[Type]] 
         = |args_a, args_b| args_a |> values()
         |> zip(args_b |> values(), Type::join)
+        |> fold(Option::Some(List::empty[Type]()), |a, t| a |> and_then(
+            |r| t |> map(|n| {
+                r |> push(n)
+                return r
+            })
+        ))
+    val meet_rlist: Fun(List[Type], List[Type]) -> Option[mut List[Type]] 
+        = |args_a, args_b| args_a |> values()
+        |> zip(args_b |> values(), Type::meet)
         |> fold(Option::Some(List::empty[Type]()), |a, t| a |> and_then(
             |r| t |> map(|n| {
                 r |> push(n)
@@ -124,7 +141,8 @@ pub fun Type::join(a: Type, b: Type) -> Option[Type] {
             Variant::Function(Pair(b_args, b_ret))
         ) {
             if (a_args |> length()) == (b_args |> length()) {
-                return join_rlist(a_args, b_args)
+                // covariance - needs to use 'meet' for args instead
+                return meet_rlist(a_args, b_args)
                     |> and_then(|args| Type::join(a_ret, b_ret) 
                         |> map(|ret| Type(
                             Variant::Function(Pair(args, ret)), 
@@ -144,6 +162,97 @@ pub fun Type::join(a: Type, b: Type) -> Option[Type] {
     return Option::None
 }
 
+// Computes the greatest lower bound of the two given types.
+// The function returns the most specific type that is safe to be used in place
+// of 'a' and 'b'.
+// For example, if 'a = Cat' and 'b = mut Cat', then the function shall
+// return 'mut Cat', since it can be used for both.
+// However, if 'a = Fun(Cat)' and 'b = Fun(mut Cat)', then the function
+// shall return 'Fun(Cat)', since the function may or may receive a mutable cat.
+pub fun Type::meet(a: Type, b: Type) -> Option[Type] {
+    val meet_rlist: Fun(List[Type], List[Type]) -> Option[mut List[Type]] 
+        = |args_a, args_b| args_a |> values()
+        |> zip(args_b |> values(), Type::meet)
+        |> fold(Option::Some(List::empty[Type]()), |a, t| a |> and_then(
+            |r| t |> map(|n| {
+                r |> push(n)
+                return r
+            })
+        ))
+    val join_rlist: Fun(List[Type], List[Type]) -> Option[mut List[Type]] 
+        = |args_a, args_b| args_a |> values()
+        |> zip(args_b |> values(), Type::join)
+        |> fold(Option::Some(List::empty[Type]()), |a, t| a |> and_then(
+            |r| t |> map(|n| {
+                r |> push(n)
+                return r
+            })
+        ))
+    val mutable: Bool = a.mutable || b.mutable
+    match Pair(a.value, b.value) {
+        Pair(Variant::Unit, Variant::Unit) |
+        Pair(Variant::Integer, Variant::Integer) |
+        Pair(Variant::Float, Variant::Float) |
+        Pair(Variant::Boolean, Variant::Boolean) |
+        Pair(Variant::String, Variant::String) { return Option::Some(a) }
+        Pair(
+            Variant::Struct(Pair(a_path, a_args)), 
+            Variant::Struct(Pair(b_path, b_args))
+        ) {
+            val len_match: Bool = (a_args |> length()) == (b_args |> length())
+            if a_path == b_path && len_match {
+                return meet_rlist(a_args, b_args)
+                    |> map(|args| Type(
+                        Variant::Struct(Pair(a_path, args)), mutable, a.source
+                    ))
+            }
+        }
+        Pair(
+            Variant::Enum(Pair(a_path, a_args)),
+            Variant::Enum(Pair(b_path, b_args))
+        ) {
+            val len_match: Bool = (a_args |> length()) == (b_args |> length())
+            if a_path == b_path && len_match {
+                return meet_rlist(a_args, b_args)
+                    |> map(|args| Type(
+                        Variant::Enum(Pair(a_path, args)), 
+                        !IS_MUTABLE, a.source
+                    ))
+            }
+        }
+        Pair(
+            Variant::Function(Pair(a_args, a_ret)), 
+            Variant::Function(Pair(b_args, b_ret))
+        ) {
+            if (a_args |> length()) == (b_args |> length()) {
+                // covariance - needs to use 'join' for args instead
+                return join_rlist(a_args, b_args)
+                    |> and_then(|args| Type::meet(a_ret, b_ret) 
+                        |> map(|ret| Type(
+                            Variant::Function(Pair(args, ret)), 
+                            !IS_MUTABLE, a.source
+                        ))
+                    )
+            }
+        }
+        Pair(Variant::List(a_elem), Variant::List(b_elem)) {
+            return Type::meet(a_elem, b_elem)
+                |> map(|elem| Type(Variant::List(elem), mutable, a.source))
+        }
+        Pair(Variant::Invalid, _) { return Option::Some(a) }
+        Pair(_, Variant::Invalid) { return Option::Some(b) }
+        _ {}
+    }
+    return Option::None
+}
+
+// Returns a boolean representing if the type passed for 'got' can be used
+// in place of the type passed for 'exp'.
+// For example, if 'exp = mut Cat', and `got = Cat`, then the function will
+// return false, since a cat that can be mutated was expected.
+// However, if `exp = Fun(mut Cat)`, and `got = Fun(Cat)`, then the function
+// returns true, since the function accepts an immutable cat, meaning a mutable
+// one is fine too.
 pub fun Type::matches(exp: Type, got: Type) -> Bool {
     match Pair(exp.value, got.value) {
         Pair(Variant::Unit, Variant::Unit) |
@@ -172,8 +281,9 @@ pub fun Type::matches(exp: Type, got: Type) -> Bool {
         ) {
             val len_match = (exp_args |> length()) == (got_args |> length())
             if !Type::matches(exp_ret, got_ret) || !len_match { return false }
-            return exp_args |> values()
-                |> zip(got_args |> values(), Type::matches)
+            // covariance! order for function args needs to be flipped
+            return got_args |> values()
+                |> zip(exp_args |> values(), Type::matches)
                 |> all(|m| m)
         }
         Pair(Variant::List(exp_elem), Variant::List(got_elem)) {

@@ -147,7 +147,8 @@ pub fun Variant::as_string[N](self: Variant[N]) -> String {
                 |> concat(")")
         }
 
-        Variant::PathRef(ref) { return PathRef::as_string(ref) }
+        Variant::PathRef(ref) |
+        Variant::FunctionRef(ref) { return PathRef::as_string(ref) }
         Variant::VariableRef(name) { return "var@" |> concat(name) }
         Variant::Int(i) { return Int::as_string(i) }
         Variant::Float(f) { return Float::as_string(f) }
@@ -330,5 +331,6 @@ pub fun Variant::as_string[N](self: Variant[N]) -> String {
         }
 
         Variant::Invalid { return "!INVALID!" }
+        _ { return panic("ast variant not yet implemented") }
     }
 }
