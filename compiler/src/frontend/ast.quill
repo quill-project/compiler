@@ -109,8 +109,7 @@ pub fun PathRef::as_string[N](self: PathRef[N]) -> String {
 
 pub fun PathInvocation::as_string[N](self: PathInvocation[N]) -> String {
     val path_s = self.path |> values() |> join("::")
-    val args_s = self.args |> values() |> skip(1) 
-        |> map(N::as_string) |> join(", ")
+    val args_s = self.args |> values() |> map(N::as_string) |> join(", ")
     val t_args_s = self.t_args
         |> map[List[N], String](|t| {
             val a = t |> values() |> map(N::as_string) |> join(", ")

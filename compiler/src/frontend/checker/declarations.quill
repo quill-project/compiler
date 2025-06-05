@@ -1,0 +1,299 @@
+
+mod quill::checker
+
+use quill::*
+use quill::types::*
+use quill::ast::UntypedNode
+
+// Checks the given annotation node and determines its type according to the
+// context provided by the given checker state.
+pub fun Checker::check_annotation(self: mut Checker, node: UntypedNode) -> TypedNode {
+    match node.value {
+        TypeRef(Pair(mutable, ast::PathRef(short_path, t_args))) {
+            val path: List[String] = self.symbols 
+                |> expand(self.context, short_path)
+            val g_t_args: List[TypedNode] = t_args
+                |> map[List[UntypedNode], List[TypedNode]](|a| a
+                    |> values()
+                    |> map(|n| self |> check_annotation(n))
+                    |> List::collect()
+                )
+                |> unwrap_or(List::empty())
+            val o_g_t_args: Option[List[TypedNode]] 
+                = if t_args |> is_some() { Option::Some(g_t_args) } 
+                else { Option::None[List[TypedNode]] }
+            // generic type argument (e.g. 'T')
+            if path |> length() |> is(1) {
+                match self.type_args |> get(path |> at(0)) {
+                    Some(t) {
+                        if mutable {
+                            self.messages |> push(Message::immutable_generic(
+                                node.source, path |> at(0)
+                            ))
+                        }
+                        if t_args |> is_some() {
+                            self.messages |> push(Message::args_on_generic(
+                                node.source, path |> at(0)
+                            ))
+                        }
+                        return TypedNode(
+                            ast::Variant::TypeRef(Pair(
+                                !IS_MUTABLE, 
+                                ast::PathRef(path, Option::None)
+                            )),
+                            node.source,
+                            t
+                        )
+                    }
+                    _ {}
+                }
+            }
+            // built-in types
+            val make_builtin: Fun(Variant) -> TypedNode = |t| {
+                if mutable {
+                    self.messages |> push(Message::immutable_builtin(
+                        path |> at(-1), node.source
+                    ))
+                }
+                if t_args |> is_some() {
+                    self.messages |> push(Message::type_args_builtin(
+                        path |> at(-1), node.source
+                    ))
+                }
+                return TypedNode(
+                    ast::Variant::TypeRef(Pair(
+                        !IS_MUTABLE, ast::PathRef(path, Option::None)
+                    )),
+                    node.source, 
+                    Type(t, !IS_MUTABLE, node.source)
+                )
+            }
+            match path {
+                List::of("Unit") | List::of("std", "Unit") { 
+                    return make_builtin(Variant::Unit) 
+                }
+                List::of("Int") | List::of("std", "Int") { 
+                    return make_builtin(Variant::Integer) 
+                }
+                List::of("Float") | List::of("std", "Float") { 
+                    return make_builtin(Variant::Float) 
+                }
+                List::of("Bool") | List::of("std", "Bool") { 
+                    return make_builtin(Variant::Boolean) 
+                }
+                List::of("String") | List::of("std", "String") { 
+                    return make_builtin(Variant::String) 
+                }
+                List::of("List") | List::of("std", "List") {
+                    if t_args |> is_none() {
+                        self.messages |> push(Message::no_type_args_builtin(
+                            path |> at(-1), node.source
+                        ))
+                    }
+                    if g_t_args |> length() |> is_not(1) {
+                        self.messages |> push(Message::wrong_type_arg_c(
+                            List::of("std", "List"), 1, 
+                            g_t_args |> length(), node.source
+                        ))
+                    }
+                    return TypedNode(
+                        ast::Variant::TypeRef(Pair(
+                            mutable, 
+                            ast::PathRef(path, Option::Some(g_t_args))
+                        )),
+                        node.source, 
+                        Type(
+                            Variant::List((g_t_args |> at(0)).type), 
+                            mutable, node.source
+                        )
+                    )
+                }
+                _ {}
+            }
+            // references to custom structs and enums
+            match self.symbols.symbols |> get(path) {
+                Some(symbol) { match symbol.node.value {
+                    Structure(ast::CustomType(_, _, t_args_names, _)) | 
+                    Enumeration(ast::CustomType(_, _, t_args_names, _)) {
+                        val exp_c: Int = t_args_names |> length()
+                        val got_c: Int = g_t_args |> length()
+                        if exp_c != got_c {
+                            self.messages |> push(Message::wrong_type_arg_c(
+                                path, exp_c, got_c, node.source
+                            ))
+                        }
+                        val invalid = Type(
+                            Variant::Invalid, !IS_MUTABLE, node.source
+                        )
+                        val padding: Int = Int::max(exp_c - got_c, 0)
+                        val args: List[Type] = g_t_args
+                            |> values()
+                            |> take(exp_c)
+                            |> map[TypedNode, Type](|n| n.type)
+                            |> List::collect()
+                            |> concat(List::of_length(padding, invalid))
+                        val instance: SymbolInstance 
+                            = SymbolInstance(path, args)
+                        self.dependencies |> push(instance)
+                        mut t: Variant = Variant::Invalid
+                        match symbol.node.value {
+                            Structure(_) { 
+                                t = Variant::Struct(Pair(path, args)) 
+                            }
+                            Enumeration(_) {
+                                t = Variant::Enum(Pair(path, args))
+                            }
+                            _ {}
+                        }
+                        return TypedNode(
+                            ast::Variant::TypeRef(
+                                Pair(mutable, ast::PathRef(path, o_g_t_args))
+                            ),
+                            node.source,
+                            Type(t, mutable, node.source)
+                        )
+                    }
+                    _ {}
+                } }
+                _ {}
+            }
+            self.messages |> push(Message::unknown_type(path, node.source))
+            return TypedNode(
+                ast::Variant::TypeRef(
+                    Pair(mutable, ast::PathRef(path, o_g_t_args))
+                ),
+                node.source,
+                Type(Variant::Invalid, !IS_MUTABLE, node.source)
+            )
+        }
+        FunctionType(ast::FunctionType(u_arg_t, u_ret_t)) {
+            val t_arg_t: List[TypedNode] = u_arg_t
+                |> values()
+                |> map[UntypedNode, TypedNode](|n| self |> check_annotation(n))
+                |> List::collect()
+            val arg_t: List[Type] = t_arg_t
+                |> values()
+                |> map[TypedNode, Type](|n| n.type)
+                |> List::collect()
+            val t_ret_t: Option[TypedNode] = u_ret_t
+                |> map[UntypedNode, TypedNode](|n| self |> check_annotation(n))
+            val ret_t: Type = t_ret_t
+                |> map[TypedNode, Type](|n| n.type)
+                |> unwrap_or_else(
+                    || Type(Variant::Unit, !IS_MUTABLE, node.source)
+                )
+            return TypedNode(
+                ast::Variant::FunctionType(ast::FunctionType(t_arg_t, t_ret_t)),
+                node.source,
+                Type(Variant::Function(
+                    Pair(arg_t, ret_t)), !IS_MUTABLE, node.source
+                )
+            )
+        }
+        _ {
+            return TypedNode(
+                ast::Variant::Invalid,
+                node.source,
+                Type(Variant::Invalid, !IS_MUTABLE, node.source)
+            )
+        }
+    }
+}
+
+// Checks the given top-level declaration node using the context provided
+// by the given checker state.
+pub fun Checker::check_declaration(
+    self: mut Checker, node: UntypedNode
+) -> TypedNode {
+    val make_node: Fun(ast::Variant[TypedNode]) -> TypedNode
+        = |v| TypedNode(
+            v, node.source, Type(Variant::Unit, !IS_MUTABLE, node.source)
+        )
+    match node.value {
+        Module(path) { return make_node(ast::Variant::Module(path)) }
+        Usages(aliases) { return make_node(ast::Variant::Usages(aliases)) }
+        GlobalVariable(ast::GlobalVariable(
+            path, public, mutable, type, value
+        )) {
+            val t_type: TypedNode = self |> check_annotation(type)
+            val t_value: TypedNode = self |> check(value, t_type.type)
+            return make_node(ast::Variant::GlobalVariable(ast::GlobalVariable(
+                path, public, mutable, t_type, t_value
+            )))
+        }
+        ast::Variant::Function(ast::Function(
+            path, public, t_args, args, return_type, body
+        )) {
+            val args_t: List[Pair[String, TypedNode]] = args
+                |> values()
+                |> map(|a| Pair(a.first, self |> check_annotation(a.second)))
+                |> List::collect()
+            val return_type_t: Option[TypedNode] = return_type
+                |> map(|n| self |> check_annotation(n))
+            val scope_vars: mut Map[String, mut Variable] = args_t
+                |> values()
+                |> map(|a| Pair(
+                    a.first, 
+                    Variable(node.source, !IS_MUTABLE, !IS_USED, a.second.type)
+                ))
+                |> Map::collect()
+            val scope = Scope(scope_vars)
+            val full_ret_t = return_type_t 
+                |> map[TypedNode, Type](|n| n.type)
+                |> unwrap_or_else(
+                    || Type(Variant::Unit, !IS_MUTABLE, node.source)
+                ) 
+            val func = Function(List::of(scope), Option::Some(full_ret_t))
+            self.functions |> push(func)
+            val body_t: Pair[List[TypedNode], ScopeExit] 
+                = self |> check_statement_list(body, !IN_LOOP)
+            self |> exit_scope()
+            self.functions |> pop()
+            val always_returns = body_t.second == ScopeExit::Function
+                || full_ret_t.value == Variant::Unit
+            if !always_returns {
+                self.messages |> push(
+                    Message::missing_return(full_ret_t, node.source)
+                )
+            }
+            return make_node(ast::Variant::Function(ast::Function(
+                path, public, t_args, args_t, return_type_t, body_t.first
+            )))
+        }
+        ExternalFunction(ast::ExternalFunction(
+            path, public, t_args, args, return_type, body
+        )) {
+            val args_t: List[Pair[String, TypedNode]] = args
+                |> values()
+                |> map(|a| Pair(a.first, self |> check_annotation(a.second)))
+                |> List::collect()
+            val return_type_t: Option[TypedNode] = return_type
+                |> map(|n| self |> check_annotation(n))
+            return make_node(ast::Variant::ExternalFunction(
+                ast::ExternalFunction(
+                    path, public, t_args, args_t, return_type_t, body
+                )
+            ))
+        }
+        Structure(ast::CustomType(path, public, t_args, members)) {
+            val members_t: List[Pair[String, TypedNode]] = members
+                |> values()
+                |> map(|m| Pair(m.first, self |> check_annotation(m.second)))
+                |> List::collect()
+            return make_node(ast::Variant::Structure(ast::CustomType(
+                path, public, t_args, members_t
+            )))
+        }
+        Enumeration(ast::CustomType(path, public, t_args, members)) {
+            val members_t: List[Pair[String, TypedNode]] = members
+                |> values()
+                |> map(|m| Pair(m.first, self |> check_annotation(m.second)))
+                |> List::collect()
+            return make_node(ast::Variant::Enumeration(ast::CustomType(
+                path, public, t_args, members_t
+            )))
+        }
+
+        _ { return make_node(ast::Variant::Invalid) }
+    }
+}

@@ -420,8 +420,38 @@ pub fun Message::unknown_path(path: List[String], at: Source) -> Message
         Message::Section::Code(at)
     ))
 
-pub fun Message::failed_t_arg_inference(at: Source) -> Message
+pub fun Message::failed_t_arg_inference(at: Source, name: String) -> Message
     = Message(List::of(
-        Message::Section::Error("Failed to infer generic type arguments"),
+        Message::Section::Error(
+            "Failed to infer generic type argument '_'" |> fmt(name)
+        ),
+        Message::Section::Code(at)
+    ))
+
+pub fun Message::expected_function(got: Type, at: Source) -> Message
+    = Message(List::of(
+        Message::Section::Error(
+            "Expected a function, enum or struct, but got '_'" 
+                |> fmt(got |> as_string())
+        ),
+        Message::Section::Code(at),
+        Message::Section::Info(
+            "'_' originates from here:" 
+                |> fmt(got |> as_string())
+        ),
+        Message::Section::Code(got.source)
+    ))
+
+pub fun Message::unexpected_argc(invoked: String, exp_c: Int, got_c: Int, at: Source) -> Message
+    = Message(List::of(
+        Message::Section::Error(
+            "'_' expects _ argument_, but got _ argument_"  |> fmt(
+                invoked,
+                Int::as_string(exp_c),
+                if exp_c != 1 { "s" } else { "" },
+                Int::as_string(got_c),
+                if got_c != 1 { "s" } else { "" }
+            )
+        ),
         Message::Section::Code(at)
     ))

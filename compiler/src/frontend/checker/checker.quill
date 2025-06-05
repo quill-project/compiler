@@ -1,0 +1,128 @@
+
+mod quill::checker
+
+use quill::*
+use quill::types::*
+use quill::ast::UntypedNode
+
+pub enum ScopeExit(
+    None,
+    Loop,
+    Function
+)
+
+// Returns a score that represents the level of the given scope, representing
+// a hierarchy.
+pub fun ScopeExit::level(self: ScopeExit) -> Int {
+    match self {
+        None { return 0 }
+        Loop { return 1 }
+        Function { return 2 }
+    }
+}
+
+// Returns the largest scope that includes both of the given scopes.
+pub fun ScopeExit::combine(a: ScopeExit, b: ScopeExit) -> ScopeExit {
+    match Int::min(a |> level(), b |> level()) {
+        2 { return ScopeExit::Function }
+        1 { return ScopeExit::Loop }
+        0 { return ScopeExit::None }
+        _ { return panic("Unhandled level!") }
+    }
+}
+
+pub struct Variable(
+    source: Source,
+    mutable: Bool,
+    used: Bool,
+    type: Type
+)
+
+pub val IS_USED: Bool = true
+
+pub struct Scope(
+    locals: mut Map[String, mut Variable]
+)
+
+pub struct Function(
+    scopes: mut List[Scope],
+    return_type: Option[Type]
+)
+
+pub struct Checker(
+    functions: mut List[mut Function],
+    type_args: mut Map[String, Type],
+    symbols: SymbolTable,
+    context: ModuleContext,
+    dependencies: mut List[SymbolInstance],
+    messages: mut List[Message]
+)
+
+// Modifies the checker state to enter a new, empty scope 
+// in the current function.
+pub fun Checker::enter_scope(self: mut Checker) {
+    val function: mut Function = self.functions |> at(-1)
+    val scope: Scope = Scope(Map::empty())
+    function.scopes |> push(scope)
+}
+
+// Returns a reference to the current scope of the given checker state.
+pub fun Checker::scope(self: mut Checker) -> Scope {
+    val function: mut Function = self.functions |> at(-1)
+    return function.scopes |> at(-1)
+}
+
+// Returns the most recently defined local variable with the given name
+// available to the current scopes in the given checker state.
+// For every function on the stack (from most inner to outer), it attempts
+// to find the variable in the most inner scope to the most outer scope.
+pub fun Checker::find_variable(
+    self: mut Checker, name: String
+) -> Option[mut Variable] {
+    val scopes: mut Sequence[Scope] 
+        = self.functions 
+        |> reversed()
+        |> map[mut Function, mut Sequence[Scope]](
+            |func| func.scopes |> reversed()
+        )
+        |> flatten()
+    return scopes
+        |> map[Scope, Option[mut Variable]](
+            |scope| scope.locals |> get(name)
+        )
+        |> find(Option::is_some)
+        |> flatten()
+}
+
+// Pops the most recent scope of the current function from the checker state.
+// Additionally, warning messages are generated for any local variables in the
+// popped scope which have not been marked as used.
+pub fun Checker::exit_scope(self: mut Checker) {
+    val function: mut Function = self.functions |> at(-1)
+    val scope: Scope = function.scopes 
+        |> pop() 
+        |> expect("caller should ensure checker is in scope")
+    scope.locals 
+        |> entries()
+        |> filter(|local| !local.second.used)
+        |> for_each(|local| {
+            self.messages |> push(
+                Message::dead_local(local.first, local.second.source)
+            )
+        })
+}
+
+// Attempts to combine the given types using 'Type::join'.
+// If successful, the resulting type is returned.
+// Otherwise an error message is generated and an invalid type is returned.
+pub fun Checker::join_types(
+    self: mut Checker, a: Type, b: Type, at: Source
+) -> Type {
+    match Type::join(a, b) {
+        Some(t) { return t }
+        None {
+            self.messages |> push(Message::incompatible_types(a, b, at))
+            return Type(Variant::Invalid, !IS_MUTABLE, at)
+        }
+    }
+}

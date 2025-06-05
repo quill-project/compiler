@@ -148,21 +148,17 @@ mod pet
 pub struct Cat(name: String, hunger: Float)
 pub val NO_HUNGER: Float = 0.0
 
-mod test
-fun feed(c: mut pet::Cat) {
-    c.hunger = pet::NO_HUNGER
+pub fun feed(c: mut Cat) {
+    c.hunger = NO_HUNGER
 }
 
-fun rebirth(c: mut pet::Cat, name: String) {
+pub fun rebirth(c: mut Cat, name: String) {
     c.name = name
-    c.hunger = pet::NO_HUNGER
+    c.hunger = NO_HUNGER
 }
 
-pub enum Option[T](Some: T, Nope: Int)
-
-fun test() {
-    val a: Option[Int] = Option::None
-}
+pub fun mate(a: Cat, b: Cat) -> mut Cat
+    = Cat(\"unnamed\", (a.hunger + b.hunger) / 2.0)
     "
     val t = check_symbols(c)
     val s = Source("test.quill", 0, 0)
@@ -171,18 +167,89 @@ fun test() {
         "pub struct Cat[](name: type@String (=String), hunger: type@Float (=Float)) (=Unit)"
     )
     assert_symbol(t, c,
-        "test::feed", List::empty(),
-        "fun feed[](c: type+mut@pet::Cat (=mut pet::Cat)) { (var@c (=mut pet::Cat) .hunger) (=Float) = pet::NO_HUNGER (=Float) (=Unit) } (=Unit)"
+        "pet::feed", List::empty(),
+        "pub fun feed[](c: type+mut@pet::Cat (=mut pet::Cat)) { (var@c (=mut pet::Cat) .hunger) (=Float) = pet::NO_HUNGER (=Float) (=Unit) } (=Unit)"
     )
     assert_symbol(t, c,
-        "test::rebirth", List::empty(),
-        "fun rebirth[](c: type+mut@pet::Cat (=mut pet::Cat), name: type@String (=String)) { \
+        "pet::rebirth", List::empty(),
+        "pub fun rebirth[](c: type+mut@pet::Cat (=mut pet::Cat), name: type@String (=String)) { \
 (var@c (=mut pet::Cat) .name) (=String) = var@name (=String) (=Unit); \
 (var@c (=mut pet::Cat) .hunger) (=Float) = pet::NO_HUNGER (=Float) (=Unit) \
 } (=Unit)"
     )
     assert_symbol(t, c,
-        "test::test", List::empty(),
-        ""
+        "pet::mate", List::empty(),
+        "pub fun mate[](a: type@pet::Cat (=pet::Cat), b: type@pet::Cat (=pet::Cat)) -> type+mut@pet::Cat (=mut pet::Cat) { \
+return (struct@pet::Cat(\"unnamed\" (=String), (((var@a (=pet::Cat) .hunger) (=Float) + (var@b (=pet::Cat) .hunger) (=Float)) (=Float) / 2 (=Float)) (=Float))) (=mut pet::Cat) (=Unit) \
+} (=Unit)"
+    )
+}
+
+pub fun generics() {
+    val c = "
+mod std
+pub ext fun Int::as_float(self: Int) -> Float = \"\"
+pub ext fun Float::as_string(self: Float) -> String = \"\"
+
+pub struct Box[T](value: T)
+pub enum Option[T](Some: T, None)
+pub fun pipeline[A, B, C](
+    start: A,
+    f_a_b: Fun(A) -> B,
+    f_b_c: Fun(B) -> C
+) -> C = f_b_c(f_a_b(start))
+
+mod test
+fun boxing() {
+    val a = Box(5)
+    val b: Box[Float] = Box(10.0)
+    val c = Box[Bool](true)
+}
+
+fun options() {
+    val a = Option::Some(25)
+    val b: Option[Float] = Option::Some(13.1)
+    val c = Option::Some[Bool](false)
+    val d: Option[String] = Option::None
+    val e = Option::None[Unit]
+}
+
+fun fun_stuff() {
+    val r = pipeline(
+        5,
+        |n| Int::as_float(n),
+        |x| Float::as_string(x)
+    )
+}
+    "
+    val t = check_symbols(c)
+    val s = Source("test.quill", 0, 0)
+    assert_symbol(t, c,
+        "test::boxing", List::empty(),
+        "fun boxing[]() { \
+val a = (struct@std::Box(5 (=Int))) (=mut std::Box[Int]) (=Unit); \
+val b: type@std::Box[type@std::Float (=Float)] (=std::Box[Float]) = (struct@std::Box(10 (=Float))) (=mut std::Box[Float]) (=Unit); \
+val c = (struct@std::Box[type@Bool (=Bool)](true (=Bool))) (=mut std::Box[Bool]) (=Unit) \
+} (=Unit)"
+    )
+    assert_symbol(t, c,
+        "test::options", List::empty(),
+        "fun options[]() { \
+val a = (enum@std::Option::Some(25 (=Int))) (=std::Option[Int]) (=Unit); \
+val b: type@std::Option[type@std::Float (=Float)] (=std::Option[Float]) = (enum@std::Option::Some(13.1 (=Float))) (=std::Option[Float]) (=Unit); \
+val c = (enum@std::Option::Some[type@Bool (=Bool)](false (=Bool))) (=std::Option[Bool]) (=Unit); \
+val d: type@std::Option[type@String (=String)] (=std::Option[String]) = (enum@std::Option::None(unit (=Unit))) (=std::Option[String]) (=Unit); \
+val e = (enum@std::Option::None[type@Unit (=Unit)](unit (=Unit))) (=std::Option[Unit]) (=Unit) \
+} (=Unit)"
+    )
+    assert_symbol(t, c,
+        "test::fun_stuff", List::empty(),
+        "fun fun_stuff[]() { \
+val r = (fun@std::pipeline(\
+5 (=Int), \
+|n| { return (fun@std::Int::as_float(var@n (=Int))) (=Float) (=Unit) } (=Fun(Int) -> Float), \
+|x| { return (fun@std::Float::as_string(var@x (=Float))) (=String) (=Unit) \
+} (=Fun(Float) -> String))) (=String) (=Unit) \
+} (=Unit)"
     )
 }

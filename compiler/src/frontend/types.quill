@@ -368,16 +368,17 @@ fun SymbolTable::process_alias(
         return unit
     }
     val repl: List[String] = alias.second
-    names |> values()
-        |> filter(|p| {
-            val rpl_l: Int = repl |> length()
-            if rpl_l < 2 { return false }
-            if p |> length() |> is_not(rpl_l) { return false }
-            return (repl |> slice_to(-1)) == (p |> slice_to(-1))
-        })
-        |> for_each(|p| {
-            aliases |> set(p |> at(-1), p)
-        })
+    val in_mod: List[String] = repl |> slice_to(-1)
+    names |> values() |> for_each(|p| {
+        val mod_l: Int = in_mod |> length()
+        val p_l: Int = p |> length()
+        if p_l <= mod_l { return unit }
+        val p_mod: List[String] = p |> slice_to(mod_l)
+        if in_mod != p_mod { return unit }
+        val pat: String = p |> at(mod_l)
+        val exp: List[String] = p |> slice_to(mod_l + 1)
+        aliases |> set(pat, exp)
+    })
 }
 
 // Builds a map of all symbols declared by the provided 'nodes'.
@@ -455,11 +456,11 @@ pub fun SymbolTable::from(
 pub fun ModuleContext::expand(
     self: SymbolTable, context: ModuleContext, short: List[String]
 ) -> List[String] {
+    if short |> length() |> is(0) { return short }
+    val after: List[String] = short |> slice_from(1)
     return context.aliases 
-        |> get(short |> at(-1)) 
-        |> map[List[String], List[String]](
-            |repl| List::concat(repl, short |> slice_from(1))
-        )
+        |> get(short |> at(0)) 
+        |> map[List[String], List[String]](|repl| List::concat(repl, after))
         |> unwrap_or(short)
 }
 
