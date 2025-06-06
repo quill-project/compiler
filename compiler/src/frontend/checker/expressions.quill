@@ -105,12 +105,22 @@ fun infer_call_t_args(
 
     decl_c: mut Checker,
     exp_arg_types: List[UntypedNode],
+    exp_varargs: Bool,
     given_ret_type: UntypedNode
 ) -> List[TypedNode] {
+    val get_va_list_type: Fun(UntypedNode) -> UntypedNode = |n| { match n.value {
+        TypeRef(Pair(_, ast::PathRef(List::of("std", "List"), o_e))) |
+        TypeRef(Pair(_, ast::PathRef(List::of("List"), o_e))) { return o_e
+            |> and_then[List[UntypedNode], UntypedNode](|l_e| l_e |> get(0))
+            |> unwrap_or_else(|| UntypedNode(ast::Variant::Invalid, n.source))
+        }
+        _ { return UntypedNode(ast::Variant::Invalid, n.source) }
+    } }
     val old_call_msgs: mut List[Message] = call_c.messages
     exp_ret_type |> map[Type, Unit](|ret_t| {
         infer_anno_t_args(decl_c, given_ret_type, ret_t)
     })
+    val exp_arg_c: Int = exp_arg_types |> length()
     val checked_args: mut List[Option[TypedNode]] = given_args 
         |> indices()
         |> map[Int, Option[TypedNode]](|_| Option::None)
@@ -126,12 +136,17 @@ fun infer_call_t_args(
                 |> filter(|i| checked_args |> at(i) |> is_none())
                 |> for_each(|i| {
                     val arg_val: UntypedNode = given_args |> at(i)
+                    val ei = Int::min(exp_arg_c - 1, i)
+                    val is_varargs = exp_varargs && i >= exp_arg_c - 1
+                    val raw_exp_arg_type: UntypedNode = exp_arg_types |> at(ei)
+                    val exp_arg_type = if is_varargs { raw_exp_arg_type }
+                        else { get_va_list_type(raw_exp_arg_type) }
                     val exp_t: TypedNode = decl_c 
-                        |> check_annotation(exp_arg_types |> at(i))
-                    val given_t: TypedNode = call_c
+                        |> check_annotation(exp_arg_type)
+                    val given_t: TypedNode = call_c 
                         |> check(arg_val, exp_t.type)
                     val success: Bool = infer_anno_t_args(
-                        decl_c, exp_arg_types |> at(i), given_t.type
+                        decl_c, exp_arg_type, given_t.type
                     )
                     if !success { return unit }
                     checked_args |> set(i, Option::Some(given_t))
@@ -402,9 +417,9 @@ pub fun Checker::check_path_ref(
                 )
             }
             ast::Variant::Function(ast::Function(
-                _, public, f_t_args, f_args, f_ret_t, _
+                _, public, f_t_args, f_args, false, f_ret_t, _
             )) | ast::Variant::ExternalFunction(ast::ExternalFunction(
-                _, public, f_t_args, f_args, f_ret_t, _
+                _, public, f_t_args, f_args, false, f_ret_t, _
             )) {
                 check_public(public, s)
                 val func_c = Checker(
@@ -427,7 +442,7 @@ pub fun Checker::check_path_ref(
                         )
                         infer_call_t_args(
                             self, List::empty(), exp, node.source,
-                            func_c, List::empty(), got
+                            func_c, List::empty(), false, got
                         )
                     }
                     _ {
@@ -517,7 +532,7 @@ pub fun Checker::check_path_ref(
                 )
                 val values_t: List[TypedNode] = infer_call_t_args(
                     self, List::of(value), exp, node.source,
-                    enum_c, List::of(member), result
+                    enum_c, List::of(member), false, result
                 )
                 val final_type_args: List[Type] = t_t_args |> values()
                     |> map[String, Type](|t| enum_c.type_args 
@@ -586,28 +601,40 @@ pub fun Checker::check_invocation(
                     |> List::collect()    
                 )
                 |> unwrap_or(List::empty())
-            val check_named: Fun(List[String], Symbol, Bool, List[String], List[UntypedNode], UntypedNode) -> Pair[List[TypedNode], Type]
-            = |path, symbol, public, decl_t_args, exp_arg_t, got_ret_t| {
+            val check_named: Fun(List[String], Symbol, Bool, List[String], List[UntypedNode], Bool, UntypedNode) -> Pair[List[TypedNode], Type]
+            = |path, symbol, public, decl_t_args, exp_arg_t, exp_varargs, got_ret_t| {
                 if !public && symbol.context.module != self.context.module {
                     self.messages |> push(Message::symbol_private(
                         path, node.source, symbol.node.source
                     ))
                 }
-                if exp_arg_t |> length() |> is_not(args |> length()) {
+                val exp_arg_c: Int = if !exp_varargs { exp_arg_t |> length() }
+                    else { exp_arg_t |> length() |> subtract(1) }
+                val got_arg_c: Int = args |> length()
+                if !exp_varargs && got_arg_c != exp_arg_c {
                     self.messages |> push(Message::unexpected_argc(
                         path |> values() |> join("::"),
                         exp_arg_t |> length(), args |> length(),
                         node.source
                     ))
                 }
-                val pad_args: List[UntypedNode] = exp_arg_t |> indices()
-                    |> map[Int, UntypedNode](|i| args 
-                        |> get(i) 
-                        |> unwrap_or_else(
-                            || UntypedNode(ast::Variant::Invalid, node.source)
-                        )
+                if exp_varargs && got_arg_c < exp_arg_c {
+                    self.messages |> push(Message::unexpected_argc_varargs(
+                        path |> values() |> join("::"),
+                        exp_arg_t |> length(), args |> length(),
+                        node.source
+                    ))
+                }
+                val pad_args: List[UntypedNode] 
+                    = Int::max(exp_arg_c - got_arg_c, 0)
+                    |> List::of_length(
+                        UntypedNode(ast::Variant::Invalid, node.source)
                     )
-                    |> List::collect()
+                val final_args: List[UntypedNode] = List::concat(args, pad_args)
+                    |> slice_to(
+                        if exp_varargs { Int::max(exp_arg_c, got_arg_c) } 
+                        else { exp_arg_c }
+                    )
                 val exp_tac: Int = decl_t_args |> length()
                 val got_tac: Int = type_args |> length()
                 if (t_args |> is_some()) && exp_tac != got_tac {
@@ -622,8 +649,8 @@ pub fun Checker::check_invocation(
                     self.dependencies, List::empty() 
                 )
                 val args_t: List[TypedNode] = infer_call_t_args(
-                    self, pad_args, exp, node.source,
-                    symbol_c, exp_arg_t, got_ret_t
+                    self, final_args, exp, node.source,
+                    symbol_c, exp_arg_t, exp_varargs, got_ret_t
                 )
                 val final_type_args: List[Type] = decl_t_args |> values()
                     |> map[String, Type](|t| symbol_c.type_args
@@ -642,9 +669,9 @@ pub fun Checker::check_invocation(
             match self.symbols.symbols |> get(path) {
                 Some(s) { match s.node.value {
                     ast::Variant::Function(ast::Function(
-                        _, public, f_t_args, f_args, f_ret_t, _
+                        _, public, f_t_args, f_args, f_varargs, f_ret_t, _
                     )) | ast::Variant::ExternalFunction(ast::ExternalFunction(
-                        _, public, f_t_args, f_args, f_ret_t, _
+                        _, public, f_t_args, f_args, f_varargs, f_ret_t, _
                     )) {
                         val arg_nodes: List[UntypedNode] = f_args
                             |> values()
@@ -657,7 +684,8 @@ pub fun Checker::check_invocation(
                                 || UntypedNode(ast::Variant::Unit, node.source)
                             )
                         val checked = check_named(
-                            path, s, public, f_t_args, arg_nodes, ret_node
+                            path, s, public, f_t_args, arg_nodes, f_varargs, 
+                            ret_node
                         )
                         return TypedNode(
                             ast::Variant::NamedCall(ast::PathInvocation(
@@ -692,7 +720,8 @@ pub fun Checker::check_invocation(
                             node.source
                         )
                         val checked = check_named(
-                            path, s, public, t_t_args, member_nodes, ret_node
+                            path, s, public, t_t_args, member_nodes, false, 
+                            ret_node
                         )
                         return TypedNode(
                             ast::Variant::StructInit(ast::PathInvocation(
@@ -750,7 +779,7 @@ pub fun Checker::check_invocation(
                         )
                         val checked = check_named(
                             enum_path, s, public, t_t_args, 
-                            List::of(member_node), ret_node
+                            List::of(member_node), false, ret_node
                         )
                         return TypedNode(
                             ast::Variant::EnumInit(ast::PathInvocation(
@@ -853,10 +882,10 @@ pub fun Checker::check_piped_invocation(
             = |p| { match self.symbols.symbols |> get(p) {
                 Some(s) { match s.node.value {
                     ast::Variant::Function(ast::Function(
-                        _, _, s_t_args, s_args, _, _
+                        _, _, s_t_args, s_args, false, _, _
                     )) |
                     ExternalFunction(ast::ExternalFunction(
-                        _, _, s_t_args, s_args, _, _
+                        _, _, s_t_args, s_args, false, _, _
                     )) |
                     Structure(ast::CustomType(
                         _, _, s_t_args, s_args

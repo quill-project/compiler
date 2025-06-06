@@ -456,6 +456,19 @@ pub fun Message::unexpected_argc(invoked: String, exp_c: Int, got_c: Int, at: So
         Message::Section::Code(at)
     ))
 
+pub fun Message::unexpected_argc_varargs(invoked: String, exp_c: Int, got_c: Int, at: Source) -> Message
+    = Message(List::of(
+        Message::Section::Error(
+            "'_' expects at least _ argument_, but got _ argument_" |> fmt(
+                invoked,
+                Int::as_string(exp_c),
+                if exp_c != 1 { "s" } else { "" },
+                Int::as_string(got_c),
+                if got_c != 1 { "s" } else { "" }
+            )
+        )
+    ))
+
 pub fun Message::ambiguous_pipe(receiver: Type, candidates: Set[List[String]], at: Source) -> Message
     = Message(List::of(
         Message::Section::Error(
@@ -475,5 +488,16 @@ pub fun Message::ambiguous_pipe(receiver: Type, candidates: Set[List[String]], a
                     |> map[String, String](|p| "- '_'" |> fmt(p))
                     |> join("\n")
             )
+        )
+    ))
+
+pub fun Message::va_into_non_list(got: Type, at: Source) -> Message
+    = Message(List::of(
+        Message::Section::Error(
+            "Varargs expected list, but got '_'"
+        ),
+        Message::Section::Code(at),
+        Message::Section::Info(
+            "Varargs require their types to be lists. The passed arguments are then collected into the list."
         )
     ))

@@ -222,12 +222,21 @@ pub fun Checker::check_declaration(
             )))
         }
         ast::Variant::Function(ast::Function(
-            path, public, t_args, args, return_type, body
+            path, public, t_args, args, varargs, return_type, body
         )) {
             val args_t: List[Pair[String, TypedNode]] = args
                 |> values()
                 |> map(|a| Pair(a.first, self |> check_annotation(a.second)))
                 |> List::collect()
+            if varargs {
+                val last_arg_t: TypedNode = (args_t |> at(-1)).second
+                match last_arg_t.type.value {
+                    List(_) {}
+                    _ { self.messages |> push(Message::va_into_non_list(
+                        last_arg_t.type, last_arg_t.source
+                    )) }
+                }
+            }
             val return_type_t: Option[TypedNode] = return_type
                 |> map(|n| self |> check_annotation(n))
             val scope_vars: mut Map[String, mut Variable] = args_t
@@ -257,11 +266,12 @@ pub fun Checker::check_declaration(
                 )
             }
             return make_node(ast::Variant::Function(ast::Function(
-                path, public, t_args, args_t, return_type_t, body_t.first
+                path, public, t_args, args_t, varargs,
+                return_type_t, body_t.first
             )))
         }
         ExternalFunction(ast::ExternalFunction(
-            path, public, t_args, args, return_type, body
+            path, public, t_args, args, varargs, return_type, body
         )) {
             val args_t: List[Pair[String, TypedNode]] = args
                 |> values()
@@ -271,7 +281,8 @@ pub fun Checker::check_declaration(
                 |> map(|n| self |> check_annotation(n))
             return make_node(ast::Variant::ExternalFunction(
                 ast::ExternalFunction(
-                    path, public, t_args, args_t, return_type_t, body
+                    path, public, t_args, args_t, varargs,
+                    return_type_t, body
                 )
             ))
         }

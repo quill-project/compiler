@@ -190,6 +190,7 @@ pub fun generics() {
 mod std
 pub ext fun Int::as_float(self: Int) -> Float = \"\"
 pub ext fun Float::as_string(self: Float) -> String = \"\"
+pub fun Float::sum_of(...values: Float) -> Float = \"\"
 
 pub struct Box[T](value: T)
 pub enum Option[T](Some: T, None)
@@ -220,6 +221,10 @@ fun fun_stuff() {
         |n| n |> as_float(),
         |x| x |> as_string()
     )
+}
+
+fun varargs() {
+    val r = Float::sum_of(1.0, 2.0, 3.0, 4, 5.0)
 }
     "
     val t = check_symbols(c)

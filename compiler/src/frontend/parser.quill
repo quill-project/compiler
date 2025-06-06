@@ -438,13 +438,29 @@ pub fun parse_type(s: mut Parser) -> UntypedNode {
 
 
 // Parses a list of argument / member names and their types, such as
-// 'a: Int, b: Float, c: String'
-pub fun parse_name_type_list(s: mut Parser, end: TokenType, types_opt: Bool) -> Option[List[Pair[String, UntypedNode]]]
-    = Stream::new[Token](|| s.current)
+// 'a: Int, b: Float, c: String'.
+// The starting value in the box 'varargs' determines if usage of varargs
+// is allowed. At the end of the call, the box will contain whether vargargs
+// was used.
+pub fun parse_name_type_list(
+    s: mut Parser, end: TokenType, types_opt: Bool, varargs: mut Box[Bool]
+) -> Option[List[Pair[String, UntypedNode]]] {
+    val varargs_allowed: Bool = varargs.value
+    varargs.value = false
+    return Stream::new[Token](|| s.current)
     |> take_until(|t| t.type == end || s.broken)
     |> fold[Token, Option[mut List[Pair[String, UntypedNode]]]](
         Option::Some(List::empty[Pair[String, UntypedNode]]()),
         |acc, _| acc |> and_then(|args| {
+            if varargs_allowed {
+                if s |> expect(TokenType::Identifier, TokenType::TripleDots) {
+                    return Option::None
+                }
+                if s.current.type == TokenType::TripleDots {
+                    varargs.value = true
+                    s |> advance()
+                }
+            }
             if s |> expect(TokenType::Identifier) { return Option::None }
             val name: Token = s.current
             s |> advance()
@@ -458,13 +474,14 @@ pub fun parse_name_type_list(s: mut Parser, end: TokenType, types_opt: Bool) -> 
                 )
                 val arg: Pair[String, UntypedNode] = Pair(name.content, t)
                 args |> push(arg)
-                return Option::Some(args)
+            } else {
+                if s |> expect(TokenType::Colon) { return Option::None }
+                s |> advance()
+                val type: UntypedNode = parse_type(s)
+                val arg: Pair[String, UntypedNode] = Pair(name.content, type)
+                args |> push(arg)    
             }
-            if s |> expect(TokenType::Colon) { return Option::None }
-            s |> advance()
-            val type: UntypedNode = parse_type(s)
-            val arg: Pair[String, UntypedNode] = Pair(name.content, type)
-            args |> push(arg)
+            if varargs.value && (s |> expect(end)) { return Option::None } 
             if s |> expect(TokenType::Comma, end) { return Option::None }
             if s.current.type == TokenType::Comma {
                 s |> advance()
@@ -472,6 +489,7 @@ pub fun parse_name_type_list(s: mut Parser, end: TokenType, types_opt: Bool) -> 
             return Option::Some(args)
         })
     )
+}
 
 
 // A set containing all tokens that are ONLY used to start local statements.
@@ -866,7 +884,10 @@ pub fun parse_declaration(s: mut Parser) -> UntypedNode {
             if s |> expect(TokenType::ParenOpen) { return make_inv(s) }
             s |> advance()
             mut args: List[Pair[String, UntypedNode]] = List::empty()
-            match parse_name_type_list(s, TokenType::ParenClose, false) {
+            val varargs = Box(true)
+            match parse_name_type_list(
+                s, TokenType::ParenClose, false, varargs
+            ) {
                 Some(a) { args = a }
                 None { return make_inv(s) }
             }
@@ -891,7 +912,8 @@ pub fun parse_declaration(s: mut Parser) -> UntypedNode {
                 s |> advance()
                 return UntypedNode(
                     ast::Variant::Function(ast::Function(
-                        path, public, t_args, args, ret_t, body
+                        path, public, t_args, args, varargs.value, 
+                        ret_t, body
                     )),
                     Source::range(start.source, end)
                 )
@@ -903,7 +925,8 @@ pub fun parse_declaration(s: mut Parser) -> UntypedNode {
                 ))
                 return UntypedNode(
                     ast::Variant::Function(ast::Function(
-                        path, public, t_args, args, ret_t, body
+                        path, public, t_args, args, varargs.value, 
+                        ret_t, body
                     )),
                     Source::range(start.source, value.source)
                 )
@@ -915,7 +938,8 @@ pub fun parse_declaration(s: mut Parser) -> UntypedNode {
                 s |> advance()
                 return UntypedNode(
                     ast::Variant::ExternalFunction(ast::ExternalFunction(
-                        path, public, t_args, args, ret_t, body.content
+                        path, public, t_args, args, varargs.value,
+                        ret_t, body.content
                     )),
                     Source::range(start.source, body.source)
                 )
@@ -942,7 +966,9 @@ pub fun parse_declaration(s: mut Parser) -> UntypedNode {
             if s |> expect(TokenType::ParenOpen) { return make_inv(s) }
             s |> advance()
             mut args: List[Pair[String, UntypedNode]] = List::empty()
-            match parse_name_type_list(s, TokenType::ParenClose, !is_struct) {
+            match parse_name_type_list(
+                s, TokenType::ParenClose, !is_struct, Box(false)
+            ) {
                 Some(a) { args = a }
                 None { return make_inv(s) }
             }

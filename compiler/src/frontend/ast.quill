@@ -30,12 +30,14 @@ pub struct GlobalVariable[N](
 )
 pub struct Function[N](
     path: List[String], public: Bool,
-    t_args: List[String], args: List[Pair[String, N]], return_type: Option[N],
+    t_args: List[String], args: List[Pair[String, N]], varargs: Bool,
+    return_type: Option[N],
     body: List[N]    
 )
 pub struct ExternalFunction[N](
     path: List[String], public: Bool,
-    t_args: List[String], args: List[Pair[String, N]], return_type: Option[N],
+    t_args: List[String], args: List[Pair[String, N]], varargs: Bool,
+    return_type: Option[N],
     body: String
 )
 pub struct CustomType[N](
@@ -268,8 +270,8 @@ pub fun Variant::as_string[N](self: Variant[N]) -> String {
                 N::as_string(value)
             )
         }
-        Variant::Function(Function(path, public, t_args, args, ret_t, body)) {
-            return "_fun _[_](_)_ { _ }" |> fmt(
+        Variant::Function(Function(path, public, t_args, args, varargs, ret_t, body)) {
+            return "_fun _[_](__)_ { _ }" |> fmt(
                 if public { "pub " } else { "" },
                 path |> values() |> join("::"),
                 t_args |> values() |> join(", "),
@@ -278,6 +280,7 @@ pub fun Variant::as_string[N](self: Variant[N]) -> String {
                         |a| "_: _" |> fmt(a.first, N::as_string(a.second))
                     )
                     |> join(", "),
+                if varargs { "..." } else { "" },
                 ret_t 
                     |> map[N, String](
                         |t| " -> " |> concat(N::as_string(t))
@@ -286,7 +289,7 @@ pub fun Variant::as_string[N](self: Variant[N]) -> String {
                 body |> values() |> map(N::as_string) |> join("; ")
             )
         }
-        Variant::ExternalFunction(ExternalFunction(path, public, t_args, args, ret_t, body)) {
+        Variant::ExternalFunction(ExternalFunction(path, public, t_args, args, varargs, ret_t, body)) {
             return "_ext fun _[_](_)_ = \"_\"" |> fmt(
                 if public { "pub " } else { "" },
                 path |> values() |> join("::"),
@@ -296,6 +299,7 @@ pub fun Variant::as_string[N](self: Variant[N]) -> String {
                         |a| "_: _" |> fmt(a.first, N::as_string(a.second))
                     )
                     |> join(", "),
+                if varargs { "..." } else { "" },
                 ret_t 
                     |> map[N, String](
                         |t| " -> " |> concat(N::as_string(t))
