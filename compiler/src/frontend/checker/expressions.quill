@@ -796,6 +796,117 @@ pub fun Checker::check_invocation(
     )
 }
 
+// Checks a given piped call node using the given checker state and 
+// optionally using a concrete expected type and returns either:
+// - a call to a named function
+// - a structure initialization
+// - an enum initialization
+// - a call to an arbitrary expression
+pub fun Checker::check_piped_invocation(
+    self: mut Checker, node: UntypedNode,
+    invoked: UntypedNode, raw_args: List[UntypedNode],
+    exp: Option[Type]
+) -> TypedNode {
+    val receiver: UntypedNode = raw_args |> at(0)
+    match invoked.value {
+        PathRef(ast::PathRef(raw_path, t_args)) {
+            val t_args_t: Option[List[TypedNode]] = t_args
+                |> map[List[UntypedNode], List[TypedNode]](|args| args
+                    |> values()
+                    |> map[UntypedNode, TypedNode](
+                        |t| self |> check_annotation(t)
+                    )
+                    |> List::collect()
+                )
+            val type_args: List[Type] = t_args_t
+                |> map[List[TypedNode], List[Type]](|args| args
+                    |> values()
+                    |> map[TypedNode, Type](|t| t.type)
+                    |> List::collect()    
+                )
+                |> unwrap_or(List::empty())
+            val receiver_t: TypedNode = self |> infer(receiver)
+            val exp_path: List[String] = self.symbols 
+                |> expand(self.context, raw_path)
+            if self.symbols.symbols |> has(exp_path) {
+                return self |> check_invocation(node, invoked, raw_args, exp)
+            }
+            if raw_path |> length() |> is_not(1) {
+                return self |> check_invocation(node, invoked, raw_args, exp)
+            }
+            val is_receiver: Fun(Symbol, List[String], UntypedNode) -> Bool
+            = |symbol, decl_t_args, receiver_ann| {
+                val symbol_c = Checker(
+                    List::empty(),
+                    make_full_t_args(type_args, decl_t_args, node.source),
+                    self.symbols, symbol.context,
+                    self.dependencies, List::empty() 
+                )
+                infer_anno_t_args(
+                    symbol_c, receiver_ann, receiver_t.type
+                )
+                val receiver_ann_t: TypedNode = symbol_c
+                    |> check_annotation(receiver_ann)
+                return Type::matches(receiver_ann_t.type, receiver_t.type)
+            }
+            val is_candidate: Fun(List[String]) -> Bool 
+            = |p| { match self.symbols.symbols |> get(p) {
+                Some(s) { match s.node.value {
+                    ast::Variant::Function(ast::Function(
+                        _, _, s_t_args, s_args, _, _
+                    )) |
+                    ExternalFunction(ast::ExternalFunction(
+                        _, _, s_t_args, s_args, _, _
+                    )) |
+                    Structure(ast::CustomType(
+                        _, _, s_t_args, s_args
+                    )) |
+                    Enumeration(ast::CustomType(
+                        _, _, s_t_args, s_args
+                    )) {
+                        if s_args |> length() |> is(0) { return false }
+                        val receiver_ann: UntypedNode = (s_args |> at(0))
+                            .second
+                        return is_receiver(s, s_t_args, receiver_ann)
+                    }
+                    _ { return false }
+                } }
+                None { return false }
+            } }
+            val candidates: Set[List[String]] = self.context.aliases
+                |> values()
+                |> map[List[String], List[String]](
+                    |p| List::concat(p, raw_path)
+                )
+                |> filter(is_candidate)
+                |> Set::collect()
+            val candidate_c: Int = candidates |> size()
+            if candidate_c == 0 {
+                return self |> check_invocation(node, invoked, raw_args, exp)
+            }
+            if candidate_c > 1 {
+                self.messages |> push(Message::ambiguous_pipe(
+                    receiver_t.type, candidates, node.source
+                ))
+                return TypedNode(
+                    ast::Variant::Invalid, node.source,
+                    Type(Variant::Invalid, !IS_MUTABLE, node.source)
+                )
+            }
+            val invoked_path: List[String] = candidates
+                |> values() |> next() |> expect("confirmed count to be 1")
+            val exp_invoked = UntypedNode(
+                ast::Variant::PathRef(ast::PathRef(invoked_path, t_args)),
+                node.source
+            )
+            return self |> check_invocation(node, exp_invoked, raw_args, exp)
+        }
+        _ {
+            return self |> check_invocation(node, invoked, raw_args, exp)
+        }
+    }
+}
+
 // Checks a given node using the context provided by the given checker state
 // and by asserting that its result must be a given concrete type.
 // This function should be used whenever a specific type is expected as the result.
@@ -973,11 +1084,15 @@ pub fun Checker::check(
             return checked
         }
         PipedCall(ast::Invocation(invoked, args)) {
-            // 1. do required expansions
-            // 2. turn into 'Call'
-            // 3. return result of checking result of 2.
-            // TODO!
-            return panic("not yet implemented")
+            val checked: TypedNode = self |> check_piped_invocation(
+                node, invoked, args, Option::Some(exp)
+            )
+            if !Type::matches(exp, checked.type) {
+                self.messages |> push(
+                    Message::unexpected_type(exp, checked.type)
+                )
+            }
+            return checked
         }
         IfExpr(ast::IfExpr(cond, if_val, else_val)) {
             val c = Type(Variant::Boolean, !IS_MUTABLE, cond.source)
@@ -1128,11 +1243,8 @@ pub fun Checker::infer(
             return self |> check_invocation(node, invoked, args, Option::None)
         }
         PipedCall(ast::Invocation(invoked, args)) {
-            // 1. do required expansions
-            // 2. turn into 'Call'
-            // 3. return result of checking result of 2.
-            // TODO!
-            return panic("not yet implemented")
+            return self 
+                |> check_piped_invocation(node, invoked, args, Option::None)
         }
         IfExpr(ast::IfExpr(cond, if_val, else_val)) {
             val c = Type(Variant::Boolean, !IS_MUTABLE, node.source)

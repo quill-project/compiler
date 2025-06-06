@@ -217,8 +217,8 @@ fun options() {
 fun fun_stuff() {
     val r = pipeline(
         5,
-        |n| Int::as_float(n),
-        |x| Float::as_string(x)
+        |n| n |> as_float(),
+        |x| x |> as_string()
     )
 }
     "

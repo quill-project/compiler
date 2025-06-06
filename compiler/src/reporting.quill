@@ -455,3 +455,25 @@ pub fun Message::unexpected_argc(invoked: String, exp_c: Int, got_c: Int, at: So
         ),
         Message::Section::Code(at)
     ))
+
+pub fun Message::ambiguous_pipe(receiver: Type, candidates: Set[List[String]], at: Source) -> Message
+    = Message(List::of(
+        Message::Section::Error(
+            "Ambiguous piped call - more than one candidate accepting '_' available"
+                |> fmt(receiver |> as_string())
+        ),
+        Message::Section::Code(at),
+        Message::Section::Info(
+            "Available candidates accepting '_':\n_" |> fmt(
+                receiver |> as_string(),
+                candidates 
+                    |> values()
+                    |> map[List[String], String](|p| p
+                        |> values()
+                        |> join("::")
+                    )
+                    |> map[String, String](|p| "- '_'" |> fmt(p))
+                    |> join("\n")
+            )
+        )
+    ))
