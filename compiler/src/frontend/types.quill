@@ -453,7 +453,7 @@ pub fun SymbolTable::from(
 // If in a module you have written `use foo::bar` and you pass 'bar',
 // this function will expand it to 'foo::bar'.
 // If there is no way to expand it, the original path will be returned.
-pub fun ModuleContext::expand(
+pub fun SymbolTable::expand(
     self: SymbolTable, context: ModuleContext, short: List[String]
 ) -> List[String] {
     if short |> length() |> is(0) { return short }

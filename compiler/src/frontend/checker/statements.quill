@@ -84,6 +84,105 @@ pub fun Checker::is_assignable(
     }
 }
 
+pub enum PatternValue(
+    Unit, 
+    Bool: Bool, 
+    Enum: Pair[String, PatternValue], 
+    Struct: Map[String, PatternValue], 
+    Any
+)
+pub enum PatternLoc(
+    StructMember: String,
+    EnumMember: String
+)
+pub enum PatternCond(
+    EnumVariant: String,
+    Value: TypedNode
+)
+pub struct Pattern(
+    captures: mut List[Pair[List[PatternLoc], Option[String]]],
+    conditions: mut List[Pair[List[PatternLoc], PatternCond]]
+)
+
+// Checks a singular `match` branch pattern. This behaves the same as `check`,
+// but with a few special rules:
+// - unknown variables DO NOT error - they are captures
+// - if a path reference is a member of an expected enum type, instantiate that enum
+// - if a called path is a member of an expected enum type, instantiate that enum
+// These rules are applied to the given node, and to its children if the node is:
+// - a structure initialization
+// - an enum initialization
+// The function writes resulting conditions and captures into the given `pattern`.
+pub fun Checker::check_match_pattern(
+    self: mut Checker, node: UntypedNode, exp: Type,
+    pattern: mut Pattern, path: List[PatternLoc]
+) -> TypedNode {
+    val exp_enum_path: Fun() -> Option[List[String]] = || {
+        match exp.value { 
+            Enum(Pair(enum_path, _)) { return Option::Some(enum_path) } 
+            _ { return Option::None }
+        }
+    }
+    val enum_has_member: Fun(String) -> Bool = |name| exp_enum_path()
+        |> and_then[List[String], Symbol](|p| self.symbols.symbols |> get(p))
+        |> and_then[Symbol, Pair[String, UntypedNode]](|s| {
+            match s.node.value {
+                Enumeration(ast::CustomType(_, _, _, members)) {
+                    return members |> values() |> find(|m| m.first == name)
+                }
+                _ { return Option::None }
+            }
+        })
+        |> is_some()
+    val default_check: Fun() -> TypedNode = || {
+        val typed: TypedNode = self |> check(node, exp)
+        val cond: Pair[List[PatternLoc], PatternCond] 
+            = Pair(path, PatternCond::Value(typed))
+        pattern.conditions |> push(cond)
+        return typed
+    }
+    match node.value {
+        PathRef(ast::PathRef(ref_path, t_args)) {
+            if ref_path |> length() |> is_not(1) { return default_check() }
+            val name: String = ref_path |> at(0)
+            if enum_has_member(name) {
+                val repl = UntypedNode(
+                    ast::Variant::PathRef(ast::PathRef(
+                        exp_enum_path() 
+                            |> expect("required by 'enum_has_member'")
+                            |> concat(List::of(name)),
+                        t_args
+                    )),
+                    node.source
+                )
+                return self |> check_match_pattern(repl, exp, pattern, path)
+            }
+            val local: Option[Variable] = self |> find_variable(name)
+            if local |> is_none() {
+                val n: Option[String] = if name != "_" { Option::Some(name) } 
+                    else { Option::None[String] }
+                val capture: Pair[List[PatternLoc], Option[String]] 
+                    = Pair(path, n)
+                pattern.captures |> push(capture)
+                return TypedNode(
+                    ast::Variant::VariableRef(name), node.source, exp
+                )
+            }
+            return default_check()
+        }
+        Call(ast::Invocation(
+            UntypedNode(ast::Variant::PathRef(ast::PathRef(ref_path, _)), _),
+            args
+        )) {
+            // TODO!
+            return panic("not yet implemented")
+        }
+        _ {
+            return default_check()
+        }
+    }
+}
+
 // Checks a singular statement node using the context provided by the given
 // checker state. 'in_loop' may be used to specify if 'continue' and 'break'
 // may be used in the node (or any children).
