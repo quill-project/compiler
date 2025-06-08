@@ -139,7 +139,7 @@ fun infer_call_t_args(
                     val ei = Int::min(exp_arg_c - 1, i)
                     val is_varargs = exp_varargs && i >= exp_arg_c - 1
                     val raw_exp_arg_type: UntypedNode = exp_arg_types |> at(ei)
-                    val exp_arg_type = if is_varargs { raw_exp_arg_type }
+                    val exp_arg_type = if !is_varargs { raw_exp_arg_type }
                         else { get_va_list_type(raw_exp_arg_type) }
                     val exp_t: TypedNode = decl_c 
                         |> check_annotation(exp_arg_type)
@@ -621,7 +621,7 @@ pub fun Checker::check_invocation(
                 if exp_varargs && got_arg_c < exp_arg_c {
                     self.messages |> push(Message::unexpected_argc_varargs(
                         path |> values() |> join("::"),
-                        exp_arg_t |> length(), args |> length(),
+                        exp_arg_t |> length() |> subtract(1), args |> length(),
                         node.source
                     ))
                 }

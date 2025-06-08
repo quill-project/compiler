@@ -66,7 +66,7 @@ fun assert_symbol(
         return "Checking assertion failed ('_' for [_]):\n" 
             |> fmt(path, t_args_s) |> concat(content)
             |> concat("\n\nTest expected:\n") |> concat(expected)
-            |> concat("\n\nParser returned:\n") |> concat(output)
+            |> concat("\n\nChecker returned:\n") |> concat(output)
             |> panic()
     }
 }
@@ -190,7 +190,7 @@ pub fun generics() {
 mod std
 pub ext fun Int::as_float(self: Int) -> Float = \"\"
 pub ext fun Float::as_string(self: Float) -> String = \"\"
-pub fun Float::sum_of(...values: Float) -> Float = \"\"
+pub ext fun sum[T](...values: List[T]) -> T = \"\"
 
 pub struct Box[T](value: T)
 pub enum Option[T](Some: T, None)
@@ -224,7 +224,8 @@ fun fun_stuff() {
 }
 
 fun varargs() {
-    val r = Float::sum_of(1.0, 2.0, 3.0, 4, 5.0)
+    val a = sum(1, 2, 3)
+    val b = sum(1.0, 2.0, 3.0)
 }
     "
     val t = check_symbols(c)
@@ -255,6 +256,13 @@ val r = (fun@std::pipeline(\
 |n| { return (fun@std::Int::as_float(var@n (=Int))) (=Float) (=Unit) } (=Fun(Int) -> Float), \
 |x| { return (fun@std::Float::as_string(var@x (=Float))) (=String) (=Unit) \
 } (=Fun(Float) -> String))) (=String) (=Unit) \
+} (=Unit)"
+    )
+    assert_symbol(t, c,
+        "test::varargs", List::empty(),
+        "fun varargs[]() { \
+val a = (fun@std::sum(1 (=Int), 2 (=Int), 3 (=Int))) (=Int) (=Unit); \
+val b = (fun@std::sum(1 (=Float), 2 (=Float), 3 (=Float))) (=Float) (=Unit) \
 } (=Unit)"
     )
 }

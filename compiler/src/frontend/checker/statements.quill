@@ -255,6 +255,8 @@ pub fun Checker::check_statement(
             return panic("not yet implemented")
         }
 
-        _ { return Pair(make_node(ast::Variant::Invalid), ScopeExit::None) }
+        _ { 
+            return Pair(self |> infer(node), ScopeExit::None) 
+        }
     }
 }

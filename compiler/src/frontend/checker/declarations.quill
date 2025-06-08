@@ -209,6 +209,13 @@ pub fun Checker::check_declaration(
         = |v| TypedNode(
             v, node.source, Type(Variant::Unit, !IS_MUTABLE, node.source)
         )
+    val assert_valid_va: Fun(TypedNode) = |n| {
+        match n.type.value {
+            List(_) { return unit }
+            _ {}
+        }
+        self.messages |> push(Message::va_into_non_list(n.type, n.source))
+    }
     match node.value {
         Module(path) { return make_node(ast::Variant::Module(path)) }
         Usages(aliases) { return make_node(ast::Variant::Usages(aliases)) }
@@ -229,13 +236,7 @@ pub fun Checker::check_declaration(
                 |> map(|a| Pair(a.first, self |> check_annotation(a.second)))
                 |> List::collect()
             if varargs {
-                val last_arg_t: TypedNode = (args_t |> at(-1)).second
-                match last_arg_t.type.value {
-                    List(_) {}
-                    _ { self.messages |> push(Message::va_into_non_list(
-                        last_arg_t.type, last_arg_t.source
-                    )) }
-                }
+                assert_valid_va((args_t |> at(-1)).second)
             }
             val return_type_t: Option[TypedNode] = return_type
                 |> map(|n| self |> check_annotation(n))
@@ -277,6 +278,9 @@ pub fun Checker::check_declaration(
                 |> values()
                 |> map(|a| Pair(a.first, self |> check_annotation(a.second)))
                 |> List::collect()
+            if varargs {
+                assert_valid_va((args_t |> at(-1)).second)
+            }
             val return_type_t: Option[TypedNode] = return_type
                 |> map(|n| self |> check_annotation(n))
             return make_node(ast::Variant::ExternalFunction(
