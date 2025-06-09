@@ -84,13 +84,6 @@ pub fun Checker::is_assignable(
     }
 }
 
-pub enum PatternValue(
-    Unit, 
-    Bool: Bool, 
-    Enum: Pair[String, PatternValue], 
-    Struct: Map[String, PatternValue], 
-    Any
-)
 pub enum PatternLoc(
     StructMember: String,
     EnumMember: String
@@ -142,7 +135,7 @@ pub fun Checker::check_match_pattern(
         return typed
     }
     match node.value {
-        PathRef(ast::PathRef(ref_path, t_args)) {
+        PathRef(ast::PathRef(ref_path, ref_t_args)) {
             if ref_path |> length() |> is_not(1) { return default_check() }
             val name: String = ref_path |> at(0)
             if enum_has_member(name) {
@@ -151,7 +144,7 @@ pub fun Checker::check_match_pattern(
                         exp_enum_path() 
                             |> expect("required by 'enum_has_member'")
                             |> concat(List::of(name)),
-                        t_args
+                        ref_t_args
                     )),
                     node.source
                 )
@@ -171,11 +164,154 @@ pub fun Checker::check_match_pattern(
             return default_check()
         }
         Call(ast::Invocation(
-            UntypedNode(ast::Variant::PathRef(ast::PathRef(ref_path, _)), _),
+            UntypedNode(ast::Variant::PathRef(ast::PathRef(ref_path, o_ref_t_args)), _),
             args
         )) {
-            // TODO!
-            return panic("not yet implemented")
+            val struct_path: List[String] = self |> expand_path(ref_path)
+            val raw_enum_path: List[String] = self 
+                |> expand_path(ref_path |> slice_to(-1))
+            val check_type_args: Fun(List[String], List[Type]) -> List[TypedNode]
+                = |symbol_path, exp_t_args| {
+                    val ref_t_args: List[UntypedNode] = o_ref_t_args
+                        |> unwrap_or(List::empty())
+                    val exp_tac: Int = exp_t_args |> length()
+                    val got_tac: Int = ref_t_args |> length()
+                    if exp_tac != got_tac && (o_ref_t_args |> is_some()) {
+                        self.messages |> push(Message::wrong_type_arg_c(
+                            symbol_path, exp_tac, got_tac, node.source
+                        ))
+                    }
+                    return range(0, Int::min(exp_tac, got_tac)) 
+                        |> map[Int, TypedNode](|ta_i| {
+                            val exp_ta: Type = exp_t_args |> at(ta_i)
+                            val got_ta: TypedNode = self 
+                                |> check_annotation(ref_t_args |> at(ta_i))
+                            if !Type::matches(exp_ta, got_ta.type) {
+                                self.messages |> push(
+                                    Message::unexpected_type(exp, got_ta.type)
+                                )
+                            }
+                            return got_ta
+                        })
+                        |> List::collect()
+                }
+            val symbol_as_type: Fun(Symbol) -> Option[ast::CustomType[UntypedNode]] 
+            = |s| {
+                match s.node.value {
+                    Structure(t) | Enumeration(t) { return Option::Some(t) }
+                    _ { return Option::None }
+                }
+            }
+            val got_arg_c: Int = args |> length()
+            val check_arg_c: Fun(List[String], Int) = |symbol_path, exp_arg_c| {
+                if exp_arg_c == got_arg_c { return unit }
+                self.messages |> push(Message::unexpected_argc(
+                    symbol_path |> values() |> join("::"),
+                    exp_arg_c, got_arg_c, node.source
+                ))
+            }
+            val check_public: Fun(List[String], Bool, Symbol) 
+            = |symbol_path, p, s| {
+                if p || s.context.module == self.context.module { return unit }
+                self.messages |> push(Message::symbol_private(
+                    symbol_path, node.source, s.node.source
+                ))
+            }
+            match exp.value {
+                Struct(Pair(struct_path, s_t_args)) {
+                    val ref_t_args_t: List[TypedNode] 
+                        = check_type_args(struct_path, s_t_args)
+                    val s: Symbol = self.symbols.symbols 
+                        |> get(struct_path)
+                        |> expect("path was referenced by expected type")
+                    val t: ast::CustomType[UntypedNode] = symbol_as_type(s)
+                        |> expect("symbol was referenced by expected type")
+                    check_public(struct_path, t.public, s)
+                    check_arg_c(struct_path, t.members |> length())
+                    val decl_c = Checker(
+                        List::empty(),
+                        make_full_t_args(s_t_args, t.t_args, node.source),
+                        self.symbols, s.context,
+                        self.dependencies, List::empty() 
+                    )
+                    val args_t: List[TypedNode] 
+                        = range(0, Int::min(t.members |> length(), got_arg_c))
+                        |> map[Int, TypedNode](|arg_i| {
+                            val member = t.members |> at(arg_i)
+                            val loc: PatternLoc 
+                                = PatternLoc::StructMember(member.first)
+                            val exp_t: TypedNode = decl_c 
+                                |> check_annotation(member.second)
+                            return self |> check_match_pattern(
+                                args |> at(arg_i), exp_t.type, 
+                                pattern, List::concat(path, List::of(loc))
+                            )
+                        })
+                        |> List::collect()
+                    return TypedNode(
+                        ast::Variant::StructInit(ast::PathInvocation(
+                            struct_path, args_t, 
+                            o_ref_t_args |> map(|_| ref_t_args_t)
+                        )),
+                        node.source, exp
+                    )
+                }
+                Enum(Pair(enum_path, e_t_args)) {
+                    val path_matches: Bool = raw_enum_path == enum_path
+                        || (raw_enum_path |> length() |> is(0))
+                    if !path_matches { return default_check() }
+                    val ref_t_args_t: List[TypedNode]
+                        = check_type_args(enum_path, e_t_args)
+                    val s: Symbol = self.symbols.symbols 
+                        |> get(enum_path)
+                        |> expect("path was referenced by expected type")
+                    val t: ast::CustomType[UntypedNode] = symbol_as_type(s)
+                        |> expect("symbol was referenced by expected type")
+                    check_public(enum_path, t.public, s)
+                    check_arg_c(enum_path, 1)
+                    val decl_c = Checker(
+                        List::empty(),
+                        make_full_t_args(e_t_args, t.t_args, node.source),
+                        self.symbols, s.context,
+                        self.dependencies, List::empty() 
+                    )
+                    val member_name: String = ref_path |> at(-1)
+                    val member: Option[Pair[String, UntypedNode]] = t.members
+                        |> values()
+                        |> find(|m| member_name == m.first)
+                    if member |> is_none() {
+                        self.messages |> push(Message::missing_member(
+                            enum_path, member_name, node.source, s.node.source
+                        ))
+                    }
+                    val args_t: List[TypedNode] = member 
+                        |> and_then[Pair[String, UntypedNode], TypedNode](|m|
+                            args |> get(0) |> map[UntypedNode, TypedNode](|a| {
+                                val loc: PatternLoc 
+                                    = PatternLoc::EnumMember(member_name)
+                                val exp_t: TypedNode = decl_c 
+                                    |> check_annotation(m.second)
+                                return self |> check_match_pattern(
+                                    a, exp_t.type,
+                                    pattern, List::concat(path, List::of(loc))
+                                )
+                            })
+                        )
+                        |> as_seq()
+                        |> List::collect()
+                    return TypedNode(
+                        ast::Variant::EnumInit(ast::PathInvocation(
+                            List::concat(enum_path, List::of(member_name)), 
+                            args_t, 
+                            o_ref_t_args |> map(|_| ref_t_args_t)
+                        )),
+                        node.source, exp
+                    )
+                }
+                _ {
+                    return default_check()
+                }
+            }
         }
         _ {
             return default_check()
@@ -347,11 +483,38 @@ pub fun Checker::check_statement(
             )
         }
         Match(ast::Match(matched, branches)) {
-            // - check branches
-            // - exhaustiveness checking
-            // - build typed node
+            val matched_t: TypedNode = self |> infer(matched)
+            val branches_t: Pair[mut List[ast::MatchBranch[TypedNode]], ScopeExit]
+                = branches 
+                |> values()
+                |> fold(Pair(List::empty(), ScopeExit::Function), |acc, b| {
+                    val patterns_t: List[TypedNode] = b.patterns 
+                        |> values()
+                        |> map(|p| {
+                            val pattern = Pattern(List::empty(), List::empty())
+                            return self |> check_match_pattern(
+                                p, matched_t.type, pattern, List::empty()
+                            )
+                        })
+                        |> List::collect()
+                    val body: Pair[List[TypedNode], ScopeExit]
+                        = self |> check_statement_list(b.body, in_loop)
+                    val branch: ast::MatchBranch[TypedNode] 
+                        = ast::MatchBranch(patterns_t, body.first)
+                    acc.first |> push(branch)
+                    return Pair(acc.first, acc.second |> combine(body.second))
+                })
             // TODO!
-            return panic("not yet implemented")
+            // - ensure that all branch patterns have the same captures
+            //   (ignore if '_')
+            // - exhaustiveness checking
+            // - store the conditions and captures in the output node
+            return Pair(
+                make_node(ast::Variant::Match(ast::Match(
+                    matched_t, branches_t.first
+                ))),
+                branches_t.second
+            )
         }
 
         _ { 

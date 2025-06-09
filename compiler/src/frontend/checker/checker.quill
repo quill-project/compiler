@@ -126,3 +126,26 @@ pub fun Checker::join_types(
         }
     }
 }
+
+// Attempts to expand the path to an absolute path.
+// If in a module you have written `use foo::bar` and you pass 'bar',
+// this function will expand it to 'foo::bar'.
+// If the path starts with a generic type name, it will be replaced with
+// the full path of the type provided for that generic type parameter.
+// If there is no way to expand it, the original path will be returned.
+pub fun Checker::expand_path(
+    self: Checker, short: List[String]
+) -> List[String] {
+    if short |> length() |> is(0) { return short }
+    val start: String = short |> at(0)
+    val after: List[String] = short |> slice_from(1)
+    val alias: Fun() -> Option[List[String]] = || self.context.aliases
+        |> get(start) 
+        |> map[List[String], List[String]](|repl| List::concat(repl, after))
+    val generic: Fun() -> Option[List[String]] = || self.type_args
+        |> get(start)
+        |> map[Type, List[String]](|t| Type::as_path(t) |> concat(after))
+    return generic() 
+        |> or_else(alias) 
+        |> unwrap_or(short)
+}

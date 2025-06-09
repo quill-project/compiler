@@ -266,3 +266,85 @@ val b = (fun@std::sum(1 (=Float), 2 (=Float), 3 (=Float))) (=Float) (=Unit) \
 } (=Unit)"
     )
 }
+
+pub fun matching() {
+    val c = "
+mod std
+pub struct Vec2(x: Int, y: Int)
+pub struct Box[T](value: T)
+pub enum Option[T](Some: T, None)
+
+mod test
+fun add[T](a: T, b: T) -> T = a + b
+
+pub fun values(n: Int) {
+    match n {
+        1 {}
+        2 {}
+        add(1, 2) {}
+        _ {}
+    }
+}
+
+pub fun structs(pos: Vec2, double: Box[Bool]) {
+    match pos {
+        Vec2(0, 0) {}
+        Vec2(x, 0) {}
+        Vec2(0, y) {}
+        Vec2(x, y) {}
+    }
+    match double {
+        Box[Bool](true) {}
+        Box(false) {}
+    }
+}
+
+pub fun enums(name: Option[String]) {
+    match name {
+        Option::Some[String](\"Maria\") {}
+        Option::Some(\"Bob\") {}
+        Some(\"Chris\") {}
+        None {}
+    }
+}
+    "
+    val t = check_symbols(c)
+    val s = Source("test.quill", 0, 0)
+    assert_symbol(t, c,
+        "test::values", List::empty(),
+        "pub fun values[](n: type@Int (=Int)) { \
+match var@n (=Int) { \
+1 (=Int) -> {  } \
+2 (=Int) -> {  } \
+(fun@test::add(1 (=Int), 2 (=Int))) (=Int) -> {  } \
+var@_ (=Int) -> {  } \
+} (=Unit) \
+} (=Unit)"
+    )
+    assert_symbol(t, c,
+        "test::structs", List::empty(),
+        "pub fun structs[](pos: type@std::Vec2 (=std::Vec2), double: type@std::Box[type@Bool (=Bool)] (=std::Box[Bool])) { \
+match var@pos (=std::Vec2) { \
+(struct@std::Vec2(0 (=Int), 0 (=Int))) (=std::Vec2) -> {  } \
+(struct@std::Vec2(var@x (=Int), 0 (=Int))) (=std::Vec2) -> {  } \
+(struct@std::Vec2(0 (=Int), var@y (=Int))) (=std::Vec2) -> {  } \
+(struct@std::Vec2(var@x (=Int), var@y (=Int))) (=std::Vec2) -> {  } \
+} (=Unit); \
+match var@double (=std::Box[Bool]) { \
+(struct@std::Box[type@Bool (=Bool)](true (=Bool))) (=std::Box[Bool]) -> {  } \
+(struct@std::Box(false (=Bool))) (=std::Box[Bool]) -> {  } \
+} (=Unit) \
+} (=Unit)"
+    )
+    assert_symbol(t, c,
+        "test::enums", List::empty(),
+        "pub fun enums[](name: type@std::Option[type@String (=String)] (=std::Option[String])) { \
+match var@name (=std::Option[String]) { \
+(enum@std::Option::Some[type@String (=String)](\"Maria\" (=String))) (=std::Option[String]) -> {  } \
+(enum@std::Option::Some(\"Bob\" (=String))) (=std::Option[String]) -> {  } \
+(enum@std::Option::Some(\"Chris\" (=String))) (=std::Option[String]) -> {  } \
+(enum@std::Option::None(unit (=Unit))) (=std::Option[String]) -> {  } \
+} (=Unit) \
+} (=Unit)"
+    )
+}

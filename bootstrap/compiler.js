@@ -2818,7 +2818,7 @@ const quill = (function() {
                                     message.error(`Creation of unknown enum variant '${path}' attempted`),
                                     message.code(node),
                                     message.note(`'${enumPath}' originates from here:`),
-                                    message.code(called.node)
+                                    message.code(asEnum.s.node)
                                 );
                             }
                         }

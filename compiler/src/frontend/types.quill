@@ -61,6 +61,21 @@ pub fun Variant::as_string(self: Variant) -> String {
     }
 }
 
+pub fun Variant::as_path(self: Variant) -> List[String] {
+    match self {
+        Unit { return List::of("std", "Unit") }
+        Integer { return List::of("std", "Int") }
+        Float { return List::of("std", "Float") }
+        Boolean { return List::of("std", "Bool") }
+        String { return List::of("std", "String") }
+        Struct(Pair(path, _)) | 
+        Enum(Pair(path, _)) { return path }
+        Function(_) { return List::of("std", "Fun") }
+        List(elem_t) { return List::of("std", "List") }
+        Invalid { return List::of("<unknown>") }
+    }
+}
+
 pub struct Type(
     value: Variant,
     mutable: Bool,
@@ -76,6 +91,9 @@ pub fun Type::as_hash(self: Type) -> Int
 pub fun Type::as_string(self: Type) -> String
     = (if self.mutable { "mut " } else { "" })
     |> concat(self.value |> as_string())
+
+pub fun Type::as_path(self: Type) -> List[String]
+    = self.value |> as_path()
 
 // Computes the least upper bound of the two given types.
 // The function returns the most specific type that can safely represent
@@ -447,21 +465,6 @@ pub fun SymbolTable::from(
 ) -> mut SymbolTable {
     val names: Set[List[String]] = SymbolTable::collect_names(nodes)
     return SymbolTable(SymbolTable::collect_symbols(nodes, names, messages))
-}
-
-// Given a context and a short path, attempts to expand the path to an absolute path.
-// If in a module you have written `use foo::bar` and you pass 'bar',
-// this function will expand it to 'foo::bar'.
-// If there is no way to expand it, the original path will be returned.
-pub fun SymbolTable::expand(
-    self: SymbolTable, context: ModuleContext, short: List[String]
-) -> List[String] {
-    if short |> length() |> is(0) { return short }
-    val after: List[String] = short |> slice_from(1)
-    return context.aliases 
-        |> get(short |> at(0)) 
-        |> map[List[String], List[String]](|repl| List::concat(repl, after))
-        |> unwrap_or(short)
 }
 
 // Type checks the given symbol instance and inserts the result into the

@@ -10,8 +10,7 @@ use quill::ast::UntypedNode
 pub fun Checker::check_annotation(self: mut Checker, node: UntypedNode) -> TypedNode {
     match node.value {
         TypeRef(Pair(mutable, ast::PathRef(short_path, t_args))) {
-            val path: List[String] = self.symbols 
-                |> expand(self.context, short_path)
+            val path: List[String] = self |> expand_path(short_path)
             val g_t_args: List[TypedNode] = t_args
                 |> map[List[UntypedNode], List[TypedNode]](|a| a
                     |> values()
@@ -23,23 +22,23 @@ pub fun Checker::check_annotation(self: mut Checker, node: UntypedNode) -> Typed
                 = if t_args |> is_some() { Option::Some(g_t_args) } 
                 else { Option::None[List[TypedNode]] }
             // generic type argument (e.g. 'T')
-            if path |> length() |> is(1) {
-                match self.type_args |> get(path |> at(0)) {
+            if short_path |> length() |> is(1) {
+                match self.type_args |> get(short_path |> at(0)) {
                     Some(t) {
                         if mutable {
                             self.messages |> push(Message::immutable_generic(
-                                node.source, path |> at(0)
+                                node.source, short_path |> at(0)
                             ))
                         }
                         if t_args |> is_some() {
                             self.messages |> push(Message::args_on_generic(
-                                node.source, path |> at(0)
+                                node.source, short_path |> at(0)
                             ))
                         }
                         return TypedNode(
                             ast::Variant::TypeRef(Pair(
                                 !IS_MUTABLE, 
-                                ast::PathRef(path, Option::None)
+                                ast::PathRef(short_path, Option::None)
                             )),
                             node.source,
                             t

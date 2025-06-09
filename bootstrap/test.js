@@ -219,7 +219,8 @@ const tests = [
     "quill::tests::checker::declarations",
     "quill::tests::checker::numeric",
     "quill::tests::checker::structs",
-    "quill::tests::checker::generics"
+    "quill::tests::checker::generics",
+    "quill::tests::checker::matching"
 ];
 
 const fs = require("fs");

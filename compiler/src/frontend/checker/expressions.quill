@@ -263,7 +263,7 @@ pub fun Checker::check_closure(
 
 // Internal helper function to turn a list of types and a list of type argument names
 // into a map of <type arg name> -> <type>.
-fun make_full_t_args(types: List[Type], names: List[String], at: Source) -> mut Map[String, Type]
+pub fun make_full_t_args(types: List[Type], names: List[String], at: Source) -> mut Map[String, Type]
     = range(0, names |> length())
     |> map[Int, Pair[String, Type]](|i| Pair(
         names |> at(i),
@@ -359,7 +359,7 @@ pub fun Checker::check_path_ref(
             None {}
         }
     }
-    val path: List[String] = self.symbols |> expand(self.context, raw_path)
+    val path: List[String] = self |> expand_path(raw_path)
     val t_args_t: Option[List[TypedNode]] = t_args
         |> map[List[UntypedNode], List[TypedNode]](|args| args
             |> values()
@@ -375,12 +375,10 @@ pub fun Checker::check_path_ref(
             |> List::collect()    
         )
         |> unwrap_or(List::empty())
-    val check_public: Fun(Bool, Symbol) = |public, symbol| {
-        if public || symbol.context.module == self.context.module {
-            return unit
-        }
+    val check_public: Fun(Bool, Symbol) = |p, s| {
+        if p || s.context.module == self.context.module { return unit }
         self.messages |> push(Message::symbol_private(
-            path, node.source, symbol.node.source
+            path, node.source, s.node.source
         ))
     }
     val check_tac: Fun(Int) = |exp_tac| {
@@ -484,8 +482,7 @@ pub fun Checker::check_path_ref(
         } }
         None {}
     }
-    val enum_path: List[String] = self.symbols 
-        |> expand(self.context, raw_path |> slice_to(-1))
+    val enum_path: List[String] = self |> expand_path(raw_path |> slice_to(-1))
     match self.symbols.symbols |> get(enum_path) {
         Some(s) { match s.node.value {
             Enumeration(ast::CustomType(
@@ -664,8 +661,7 @@ pub fun Checker::check_invocation(
                 val result_type = (symbol_c |> check_annotation(got_ret_t)).type
                 return Pair(args_t, result_type)
             }
-            val path: List[String] = self.symbols 
-                |> expand(self.context, raw_path)
+            val path: List[String] = self |> expand_path(raw_path)
             match self.symbols.symbols |> get(path) {
                 Some(s) { match s.node.value {
                     ast::Variant::Function(ast::Function(
@@ -734,8 +730,8 @@ pub fun Checker::check_invocation(
                 } }
                 None {}
             }
-            val enum_path: List[String] = self.symbols 
-                |> expand(self.context, raw_path |> slice_to(-1))
+            val enum_path: List[String] = self 
+                |> expand_path(raw_path |> slice_to(-1))
             match self.symbols.symbols |> get(enum_path) {
                 Some(s) { match s.node.value {
                     ast::Variant::Enumeration(ast::CustomType(
@@ -806,6 +802,12 @@ pub fun Checker::check_invocation(
             exp_ret_t = ret_type
             check_argc(called_t.type |> as_string(), exp_arg_t |> length())
         }
+        Invalid {
+            return TypedNode(
+                ast::Variant::Invalid, node.source,
+                Type(Variant::Invalid, !IS_MUTABLE, node.source)
+            )
+        }
         _ { 
             self.messages |> push(
                 Message::expected_function(called_t.type, node.source)
@@ -855,8 +857,7 @@ pub fun Checker::check_piped_invocation(
                 )
                 |> unwrap_or(List::empty())
             val receiver_t: TypedNode = self |> infer(receiver)
-            val exp_path: List[String] = self.symbols 
-                |> expand(self.context, raw_path)
+            val exp_path: List[String] = self |> expand_path(raw_path)
             if self.symbols.symbols |> has(exp_path) {
                 return self |> check_invocation(node, invoked, raw_args, exp)
             }
