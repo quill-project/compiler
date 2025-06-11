@@ -1,0 +1,128 @@
+
+mod quill::ctx
+
+use quill::*
+use quill::types::*
+
+pub enum Pattern(
+    Any,
+    Wildcard: Type,
+    Unit,
+    Bool: Bool,
+    Tuple: List[Pattern],
+    Tag: Pair[String, Pattern]
+)
+
+// Constructs a pattern from a given typed AST node.
+pub fun Pattern::from(node: TypedNode, p: ast::MatchPattern[TypedNode]) -> Pattern {
+    match node.value {
+        VariableRef(name) { 
+            val captured: Bool = name == "_" || (
+                p.captures |> values() |> any(|c| c.name == Option::Some(name))
+            )
+            return if captured { Pattern::Wildcard(node.type) } 
+                else { Pattern::Any }
+        }
+        Bool(v) { return Pattern::Bool(v) }
+        Unit { return Pattern::Unit }
+        StructInit(ast::PathInvocation(_, args, _)) {
+            val v: List[Pattern] = args 
+                |> values()
+                |> map[TypedNode, Pattern](|arg| Pattern::from(arg, p)) 
+                |> List::collect()
+            return Pattern::Tuple(v)
+        }
+        EnumInit(ast::PathInvocation(path, args, _)) {
+            val n: String = path |> at(-1)
+            val v: Pattern = args 
+                |> get(0)
+                |> map[TypedNode, Pattern](|arg| Pattern::from(arg, p))
+                |> unwrap_or(Pattern::Any)
+            return Pattern::Tag(n, v)
+        }
+        _ { return Pattern::Any }
+    }
+}
+
+// Checks if the given patterns overlap.
+pub fun Pattern::overlap(p: Pattern, q: Pattern, ctx: Checker) -> Bool
+    = Pattern::subtract(p, q, ctx) != List::of(p)
+
+// Creates a list of possible combinations when subtracting the tuple
+// with values 'q_vals' from the tuple with values 'p_vals'.
+fun subtract_tuple(p_vals: List[Pattern], q_vals: List[Pattern], ctx: Checker) -> List[Pattern] {
+    val p_c: Int = p_vals |> length()
+    val q_c: Int = q_vals |> length()
+    val c: Int = Int::max(p_c, q_c)
+    val p_at: Fun(Int) -> Pattern 
+        = |i| p_vals |> get(i) |> unwrap_or(Pattern::Any)
+    val q_at: Fun(Int) -> Pattern 
+        = |i| q_vals |> get(i) |> unwrap_or(Pattern::Any)
+    return range(0, c)
+        |> take_while(|i| Pattern::overlap(p_at(i), q_at(i)))
+        |> fold(List::empty[Pattern](), |acc, i| {
+            val added: List[Pattern]
+                = Pattern::subtract(p_at(i), q_at(i), ctx) 
+                |> values()
+                |> map[Pattern, Pattern](|alt| {
+                    val tuple: mut List[Pattern] = p_vals |> slice_to(i)
+                    tuple |> push(alt)
+                    tuple = tuple |> concat(List::of_length(c - i - 1, Pattern::Wildcard))
+                    return Pattern::Tuple(tuple)
+                })
+                |> List::collect()
+            return List::concat(acc, added)
+        })
+}
+
+// Subtracts the given pattern 'q' from the given pattern 'p'.
+pub fun Pattern::subtract(p: Pattern, q: Pattern, ctx: Checker) -> List[Pattern] {
+    match Pair(p, q) {
+        // 'Any' means we don't know the value -> cannot subtract anything
+        Pair(_, Pattern::Any) | 
+        Pair(Pattern::Any, _) { return List::of(p) }
+
+        // subtracting a wildcard always results in nothing
+        Pair(_, Pattern::Wildcard) { return List::empty() }
+
+        // values
+        Pair(Pattern::Wildcard, Pattern::Unit) |
+        Pair(Pattern::Unit, Pattern::Unit) { 
+            return List::empty() 
+        }
+        Pair(Pattern::Wildcard, Pattern::Bool(true)) { 
+            return List::of(Pattern::Bool(false)) 
+        }
+        Pair(Pattern::Wildcard, Pattern::Bool(false)) { 
+            return List::of(Pattern::Bool(true)) 
+        }
+        Pair(Pattern::Bool(true), Pattern::Bool(true)) |
+        Pair(Pattern::Bool(false), Pattern::Bool(false)) {
+            return List::empty()
+        }
+
+        // structs
+        Pair(Pattern::Wildcard, Pattern::Tuple(q_vals)) {
+            val p_vals: List[Pattern] 
+                = List::of_length(q_vals |> length(), Pattern::Wildcard)
+            return subtract_tuple(p_vals, q_vals, ctx)
+        }
+        Pair(Pattern::Tuple(p_vals), Pattern::Tuple(q_vals)) {
+            return subtract_tuple(p_vals, q_vals, ctx)
+        }
+
+        // enums
+        Pair(Pattern::Wildcard, Pattern::Tag(Pair(q_name, q_val))) {
+
+        }
+        Pair(Pattern::Tag(Pair(p_name, p_val)), Pattern::Tag(Pair(q_name, q_val))) {
+            if p_name != q_name { return List::of(p) }
+            return Pattern::subtract(p_val, q_val, ctx)
+                |> map[Pattern, Pattern](|sub| Pattern::Tag(p_name, sub))
+                |> List::collect()
+        }
+
+        // fallback
+        _ { return List::of(p) }
+    }
+}

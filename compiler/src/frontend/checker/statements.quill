@@ -5,7 +5,7 @@ use quill::*
 use quill::types::*
 use quill::ast::(
     UntypedNode, 
-    PatternLoc, PatternCond, PatternCapture, MatchPattern as Pattern
+    PatternLoc, PatternCond, PatternCapture, MatchPattern
 )
 
 pub val IN_LOOP: Bool = true
@@ -98,7 +98,7 @@ pub fun Checker::is_assignable(
 // The function writes resulting conditions and captures into the given `pattern`.
 pub fun Checker::check_match_pattern(
     self: mut Checker, node: UntypedNode, exp: Type,
-    pattern: mut Pattern[TypedNode], path: List[PatternLoc]
+    pattern: mut MatchPattern[TypedNode], path: List[PatternLoc]
 ) -> TypedNode {
     val exp_enum_path: Fun() -> Option[List[String]] = || {
         match exp.value { 
@@ -317,9 +317,9 @@ pub fun Checker::check_match_pattern(
 // The function returns a map of capture name to the joined type of all the
 // captures with the respective names.
 pub fun Checker::check_pattern_captures(
-    self: mut Checker, patterns: List[Pattern[TypedNode]]
+    self: mut Checker, patterns: List[MatchPattern[TypedNode]]
 ) -> Map[String, Type] {
-    val build_map: Fun(Pattern[TypedNode]) -> Pair[Map[String, Type], Source] = |p| {
+    val build_map: Fun(MatchPattern[TypedNode]) -> Pair[Map[String, Type], Source] = |p| {
         val m: Map[String, Type] 
             = p.captures
             |> values()
@@ -366,6 +366,8 @@ pub fun Checker::check_pattern_captures(
         |> map[Pair[Map[String, Type], Source], Map[String, Type]](|p| p.first)
         |> unwrap_or(Map::empty())
 }
+
+
 
 // Checks a singular statement node using the context provided by the given
 // checker state. 'in_loop' may be used to specify if 'continue' and 'break'
@@ -536,10 +538,10 @@ pub fun Checker::check_statement(
                 = branches 
                 |> values()
                 |> fold(Pair(List::empty(), ScopeExit::Function), |acc, b| {
-                    val patterns_t: List[Pattern[TypedNode]] = b.patterns
+                    val patterns_t: List[MatchPattern[TypedNode]] = b.patterns
                         |> values()
                         |> map(|p| {
-                            val p_t: mut Pattern[TypedNode] = Pattern(
+                            val p_t: mut MatchPattern[TypedNode] = MatchPattern(
                                 TypedNode(
                                     ast::Variant::Invalid, p.node.source, 
                                     matched_t.type
