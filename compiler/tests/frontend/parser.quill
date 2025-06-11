@@ -119,7 +119,7 @@ pub fun control_flow() {
     )
     assert_tree(parser::parse_statement,
         "match n { 0 { println(\"Hello\") } 1 { println(\"world\") } }",
-        "match n { 0 -> { (println(\"Hello\")) } 1 -> { (println(\"world\")) } }"
+        "match n { 0 () -> { (println(\"Hello\")) } 1 () -> { (println(\"world\")) } }"
     )
 }
 

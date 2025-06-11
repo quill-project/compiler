@@ -502,3 +502,15 @@ pub fun Message::va_into_non_list(got: Type, at: Source) -> Message
             "Varargs requires the type to be a list to collect the arguments into."
         )
     ))
+
+pub fun Message::missing_capture(name: String, at: Source) -> Message
+    = Message(List::of(
+        Message::Section::Error(
+            "Pattern is missing a capture named '_' present in other patterns"
+                |> fmt(name)
+        ),
+        Message::Section::Code(at),
+        Message::Section::Info(
+            "A capture present in one pattern of a branch needs to be present in all other patterns of the same branch (expept wildcards - '_')."
+        )
+    ))

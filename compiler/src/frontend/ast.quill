@@ -23,7 +23,27 @@ pub struct If[N](cond: N, if_body: List[N], else_body: List[N])
 pub struct While[N](cond: N, body: List[N])
 pub struct For[N](name: String, in: N, body: List[N])
 pub struct Match[N](matched: N, branches: List[MatchBranch[N]])
-pub struct MatchBranch[N](patterns: List[N], body: List[N])
+pub struct MatchBranch[N](
+    patterns: List[MatchPattern[N]],
+    capture_types: Map[String, types::Type],
+    body: List[N]
+)
+pub struct MatchPattern[N](
+    node: N,
+    captures: mut List[PatternCapture],
+    conditions: mut List[Pair[List[PatternLoc], PatternCond[N]]]
+)
+pub enum PatternLoc(
+    StructMember: String,
+    EnumMember: String
+)
+pub enum PatternCond[N](
+    EnumVariant: String,
+    Value: N
+)
+pub struct PatternCapture(
+    name: Option[String], path: List[PatternLoc], type: types::Type
+)
 
 pub struct GlobalVariable[N](
     path: List[String], public: Bool, mutable: Bool, type: N, value: N
@@ -123,9 +143,21 @@ pub fun PathInvocation::as_string[N](self: PathInvocation[N]) -> String {
 }
 
 pub fun MatchBranch::as_string[N](self: MatchBranch[N]) -> String
-    = "_ -> { _ }" |> fmt(
-        self.patterns |> values() |> map(N::as_string) |> join(" | "),
-        self.body |> values() |> map(N::as_string) |> join("; ")
+    = "_ (_) -> { _ }" |> fmt(
+        self.patterns 
+            |> values() 
+            |> map[MatchPattern[N], String](|p| N::as_string(p.node)) 
+            |> join(" | "),
+        self.capture_types
+            |> entries() 
+            |> map[Pair[String, types::Type], String](
+                |e| "_: _" |> fmt(e.first, types::Type::as_string(e.second))
+            )
+            |> join(", ")
+        self.body 
+            |> values() 
+            |> map(N::as_string) 
+            |> join("; ")
     )
 
 

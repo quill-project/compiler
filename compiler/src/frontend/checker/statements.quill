@@ -3,7 +3,10 @@ mod quill::checker
 
 use quill::*
 use quill::types::*
-use quill::ast::UntypedNode
+use quill::ast::(
+    UntypedNode, 
+    PatternLoc, PatternCond, PatternCapture, MatchPattern as Pattern
+)
 
 pub val IN_LOOP: Bool = true
 
@@ -84,19 +87,6 @@ pub fun Checker::is_assignable(
     }
 }
 
-pub enum PatternLoc(
-    StructMember: String,
-    EnumMember: String
-)
-pub enum PatternCond(
-    EnumVariant: String,
-    Value: TypedNode
-)
-pub struct Pattern(
-    captures: mut List[Pair[List[PatternLoc], Option[String]]],
-    conditions: mut List[Pair[List[PatternLoc], PatternCond]]
-)
-
 // Checks a singular `match` branch pattern. This behaves the same as `check`,
 // but with a few special rules:
 // - unknown variables DO NOT error - they are captures
@@ -108,7 +98,7 @@ pub struct Pattern(
 // The function writes resulting conditions and captures into the given `pattern`.
 pub fun Checker::check_match_pattern(
     self: mut Checker, node: UntypedNode, exp: Type,
-    pattern: mut Pattern, path: List[PatternLoc]
+    pattern: mut Pattern[TypedNode], path: List[PatternLoc]
 ) -> TypedNode {
     val exp_enum_path: Fun() -> Option[List[String]] = || {
         match exp.value { 
@@ -129,7 +119,7 @@ pub fun Checker::check_match_pattern(
         |> is_some()
     val default_check: Fun() -> TypedNode = || {
         val typed: TypedNode = self |> check(node, exp)
-        val cond: Pair[List[PatternLoc], PatternCond] 
+        val cond: Pair[List[PatternLoc], PatternCond[TypedNode]] 
             = Pair(path, PatternCond::Value(typed))
         pattern.conditions |> push(cond)
         return typed
@@ -154,8 +144,7 @@ pub fun Checker::check_match_pattern(
             if local |> is_none() {
                 val n: Option[String] = if name != "_" { Option::Some(name) } 
                     else { Option::None[String] }
-                val capture: Pair[List[PatternLoc], Option[String]] 
-                    = Pair(path, n)
+                val capture: PatternCapture = PatternCapture(n, path, exp)
                 pattern.captures |> push(capture)
                 return TypedNode(
                     ast::Variant::VariableRef(name), node.source, exp
@@ -317,6 +306,65 @@ pub fun Checker::check_match_pattern(
             return default_check()
         }
     }
+}
+
+// Given a list of patterns for a single match branch, this function attempts
+// to validate and return all captures of the given branch.
+// A capture present in one of the patterns must be present in all other patterns
+// of the same branch, and the types of the respective captures must be
+// compatible with each other.
+// Wildcards ('_') get entirely ignored in this process.
+// The function returns a map of capture name to the joined type of all the
+// captures with the respective names.
+pub fun Checker::check_pattern_captures(
+    self: mut Checker, patterns: List[Pattern[TypedNode]]
+) -> Map[String, Type] {
+    val build_map: Fun(Pattern[TypedNode]) -> Pair[Map[String, Type], Source] = |p| {
+        val m: Map[String, Type] 
+            = p.captures
+            |> values()
+            |> filter(|c| c.name |> is_some())
+            |> map[PatternCapture, Pair[String, Type]](
+                |c| Pair(c.name |> expect("filtered above"), c.type)
+            )
+            |> Map::collect()
+        return Pair(m, p.node.source)
+    }
+    val combine_maps: Fun(
+        Pair[Map[String, Type], Source], 
+        Pair[Map[String, Type], Source]
+    ) -> Pair[Map[String, Type], Source] = |p_a, p_b| {
+        val a: Map[String, Type] = p_a.first
+        val b: Map[String, Type] = p_b.first
+        val check_has_all: Fun(Map[String, Type], Map[String, Type], Source) 
+            = |from, check, report| from |> keys()
+            |> filter(|n| !(check |> has(n)))
+            |> for_each(|n| {
+                self.messages |> push(Message::missing_capture(n, report))
+            })
+        check_has_all(a, b, p_b.second) // check that all captures of 'a' are in 'b' (report 'b' for missing)
+        check_has_all(b, a, p_a.second) // check that all captures of 'b' are in 'a' (report 'a' for missing)
+        val r: Map[String, Type] 
+            = a |> keys()
+            |> map[String, Pair[String, Type]](|n| {
+                val lhs: Type = a |> get(n) |> expect("we iterate over 'a'")
+                val rhs: Type = b |> get(n) |> unwrap_or_else(
+                    || Type(Variant::Invalid, !IS_MUTABLE, p_b.second)
+                )
+                val r: Type = self |> join_types(
+                    lhs, rhs, Source::range(p_a.second, p_b.second)
+                )
+                return Pair(n, r)
+            })
+            |> Map::collect()
+        return Pair(r, p_a.second)
+    }
+    return patterns 
+        |> values()
+        |> map(build_map)
+        |> reduce(combine_maps)
+        |> map[Pair[Map[String, Type], Source], Map[String, Type]](|p| p.first)
+        |> unwrap_or(Map::empty())
 }
 
 // Checks a singular statement node using the context provided by the given
@@ -488,25 +536,36 @@ pub fun Checker::check_statement(
                 = branches 
                 |> values()
                 |> fold(Pair(List::empty(), ScopeExit::Function), |acc, b| {
-                    val patterns_t: List[TypedNode] = b.patterns 
+                    val patterns_t: List[Pattern[TypedNode]] = b.patterns
                         |> values()
                         |> map(|p| {
-                            val pattern = Pattern(List::empty(), List::empty())
-                            return self |> check_match_pattern(
-                                p, matched_t.type, pattern, List::empty()
+                            val p_t: mut Pattern[TypedNode] = Pattern(
+                                TypedNode(
+                                    ast::Variant::Invalid, p.node.source, 
+                                    matched_t.type
+                                ),
+                                List::empty(), List::empty()
                             )
+                            val checked: TypedNode = self |> check_match_pattern(
+                                p.node, matched_t.type, p_t, List::empty()
+                            )
+                            p_t.node = checked
+                            return p_t
                         })
                         |> List::collect()
+                    val capture_types: Map[String, Type] = self
+                        |> check_pattern_captures(patterns_t)
                     val body: Pair[List[TypedNode], ScopeExit]
                         = self |> check_statement_list(b.body, in_loop)
                     val branch: ast::MatchBranch[TypedNode] 
-                        = ast::MatchBranch(patterns_t, body.first)
+                        = ast::MatchBranch(patterns_t, capture_types, body.first)
                     acc.first |> push(branch)
                     return Pair(acc.first, acc.second |> combine(body.second))
                 })
             // TODO!
             // - ensure that all branch patterns have the same captures
             //   (ignore if '_')
+            // - collect types of all captures of a branch (ignore if '_')
             // - exhaustiveness checking
             // - store the conditions and captures in the output node
             return Pair(

@@ -570,12 +570,12 @@ pub fun parse_statement(s: mut Parser) -> UntypedNode {
                     |t| t.type == TokenType::BraceClose || s.broken
                 )
                 |> map[Token, ast::MatchBranch[UntypedNode]](|_| {
-                    val patterns: List[UntypedNode]
+                    val patterns: List[ast::MatchPattern[UntypedNode]]
                         = Stream::new[Token](|| s.current)
                         |> take_until(
                             |t| t.type == TokenType::BraceOpen || s.broken
                         )
-                        |> map[Token, UntypedNode](|_| {
+                        |> map[Token, ast::MatchPattern[UntypedNode]](|_| {
                             val p = parse_expression(s, Int::MAX)
                             s |> expect(
                                 TokenType::Pipe, TokenType::BraceOpen
@@ -583,18 +583,22 @@ pub fun parse_statement(s: mut Parser) -> UntypedNode {
                             if s.current.type == TokenType::Pipe {
                                 s |> advance()
                             }
-                            return p
+                            return ast::MatchPattern(
+                                p, List::empty(), List::empty()
+                            )
                         })
                         |> List::collect()
                     if s |> expect(TokenType::BraceOpen) {
-                        return ast::MatchBranch(patterns, List::empty())
+                        return ast::MatchBranch(
+                            patterns, Map::empty(), List::empty()
+                        )
                     }
                     s |> advance()
                     val body: List[UntypedNode] 
                         = parse_statement_list(s, TokenType::BraceClose)
                     s |> expect(TokenType::BraceClose)
                     s |> advance()
-                    return ast::MatchBranch(patterns, body)
+                    return ast::MatchBranch(patterns, Map::empty(), body)
                 })
                 |> List::collect()
             if s |> expect(TokenType::BraceClose) { return make_inv(s) }
