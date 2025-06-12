@@ -156,7 +156,9 @@ fun infer_call_t_args(
         })
     val added_msgs: List[Message] = call_c.messages
     call_c.messages = old_call_msgs
-    added_msgs |> values() |> for_each(|m| { call_c.messages |> push(m) })
+    if !had_success {
+        added_msgs |> values() |> for_each(|m| { call_c.messages |> push(m) })
+    }
     val unknown: mut Sequence[String] = decl_c.type_args 
         |> entries()
         |> filter(|t| {
@@ -212,7 +214,7 @@ fun Checker::operands_numeric(
 // and the context provided by the given checker state.
 pub fun Checker::check_closure(
     self: mut Checker, node: UntypedNode, c: ast::Closure[UntypedNode],
-    arg_types: List[Type]
+    arg_types: List[Type], exp_ret_type: Option[Type]
 ) -> TypedNode {
     val exp_arg_c: Int = arg_types |> length()
     val got_arg_c: Int = c.args |> length()
@@ -232,10 +234,7 @@ pub fun Checker::check_closure(
             )
         ))
         |> Map::collect()
-    val func = Function(
-        List::of(Scope(scope_vars)), 
-        Option::None
-    )
+    val func = Function(List::of(Scope(scope_vars)), exp_ret_type)
     self.functions |> push(func)
     self |> enter_scope()
     val body_t: Pair[List[TypedNode], ScopeExit] 
@@ -844,6 +843,13 @@ pub fun Checker::check_piped_invocation(
     val receiver: UntypedNode = raw_args |> at(0)
     match invoked.value {
         PathRef(ast::PathRef(raw_path, t_args)) {
+            if raw_path |> length() |> is_not(1) {
+                return self |> check_invocation(node, invoked, raw_args, exp)
+            }
+            val exp_path: List[String] = self |> expand_path(raw_path)
+            if self.symbols.symbols |> has(exp_path) {
+                return self |> check_invocation(node, invoked, raw_args, exp)
+            }
             val t_args_t: Option[List[TypedNode]] = t_args
                 |> map[List[UntypedNode], List[TypedNode]](|args| args
                     |> values()
@@ -860,13 +866,6 @@ pub fun Checker::check_piped_invocation(
                 )
                 |> unwrap_or(List::empty())
             val receiver_t: TypedNode = self |> infer(receiver)
-            val exp_path: List[String] = self |> expand_path(raw_path)
-            if self.symbols.symbols |> has(exp_path) {
-                return self |> check_invocation(node, invoked, raw_args, exp)
-            }
-            if raw_path |> length() |> is_not(1) {
-                return self |> check_invocation(node, invoked, raw_args, exp)
-            }
             val is_receiver: Fun(Symbol, List[String], UntypedNode) -> Bool
             = |symbol, decl_t_args, receiver_ann| {
                 val symbol_c = Checker(
@@ -886,11 +885,18 @@ pub fun Checker::check_piped_invocation(
             = |p| { match self.symbols.symbols |> get(p) {
                 Some(s) { match s.node.value {
                     ast::Variant::Function(ast::Function(
-                        _, _, s_t_args, s_args, false, _, _
+                        _, _, s_t_args, s_args, varargs, _, _
                     )) |
                     ExternalFunction(ast::ExternalFunction(
-                        _, _, s_t_args, s_args, false, _, _
-                    )) |
+                        _, _, s_t_args, s_args, varargs, _, _
+                    )) {
+                        val s_arg_c: Int = s_args |> length()
+                        val min_req_c: Int = if varargs { 2 } else { 1 } 
+                        if s_arg_c < min_req_c { return false }
+                        val receiver_ann: UntypedNode = (s_args |> at(0))
+                            .second
+                        return is_receiver(s, s_t_args, receiver_ann)
+                    }
                     Structure(ast::CustomType(
                         _, _, s_t_args, s_args
                     )) |
@@ -1033,8 +1039,9 @@ pub fun Checker::check(
         Closure(c) {
             match exp.value {
                 Variant::Function(Pair(exp_arg_t, exp_ret_t)) {
-                    val checked: TypedNode
-                        = self |> check_closure(node, c, exp_arg_t)
+                    val checked: TypedNode = self |> check_closure(
+                        node, c, exp_arg_t, Option::Some(exp_ret_t)
+                    )
                     if !Type::matches(exp, checked.type) {
                         self.messages |> push(
                             Message::unexpected_type(exp, checked.type)
@@ -1222,7 +1229,7 @@ pub fun Checker::infer(
                     Message::insufficient_closure_context(node.source)
                 )
             }
-            return self |> check_closure(node, c, List::empty())
+            return self |> check_closure(node, c, List::empty(), Option::None)
         }
         Add(o) {
             return infer_arithmetic(o, |op| ast::Variant::Add(op))

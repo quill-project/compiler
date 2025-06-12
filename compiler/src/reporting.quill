@@ -32,7 +32,19 @@ pub fun Message::Section::display(self: Message::Section, files: Map[String, Str
         Error(msg) { return "! error ! " |> concat(msg) }
         Warning(msg) { return "warning: " |> concat(msg) }
         Info(msg) { return "info: " |> concat(msg) }
-        Code(at) { return "at " |> concat(Source::as_string(at)) }
+        Code(at) { 
+            val content: String = files
+                |> get(at.path) 
+                |> unwrap_or("<file not found>")
+            val line_at: Fun(Int) -> Int
+                = |i| content |> slice_to(i) 
+                |> chars() |> filter(|c| c == "\n") |> length()
+            return "at _:_.._" |> fmt(
+                at.path, 
+                (line_at(at.start) + 1) |> as_string(), 
+                (line_at(at.end) + 1) |> as_string()
+            )
+        }
     }
 }
 
