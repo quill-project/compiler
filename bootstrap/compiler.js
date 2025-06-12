@@ -2967,6 +2967,7 @@ const quill = (function() {
                             );
                             if(pattern === branch.patterns[0]) { continue; }
                             for(const v of branch.patterns[0].variables) {
+                                if(v.name === null) { continue; }
                                 if(pattern.variables.some(e => e.name === v.name)) { continue; }
                                 throw message.from(
                                     message.error("'match'-pattern has partially defined variables"),
@@ -2977,6 +2978,7 @@ const quill = (function() {
                                 );
                             }
                             for(const v of pattern.variables) {
+                                if(v.name === null) { continue; }
                                 if(branch.patterns[0].variables.some(e => e.name === v.name)) { continue; }
                                 throw message.from(
                                     message.error("'match'-pattern has partially defined variables"),

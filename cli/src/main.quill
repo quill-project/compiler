@@ -3,6 +3,8 @@ mod quill::cli
 
 use quill::*
 
+fun compile(files: Map[])
+
 fun main() {
     println("Hello, world!")
 }

@@ -4,6 +4,7 @@ mod quill::tests::checker
 use std::test::*
 use quill::*
 use quill::types::*
+use quill::checker::*
 use quill::tests::types::build_table
 
 fun check_symbols(content: String) -> mut SymbolTable {
@@ -267,6 +268,47 @@ val b = (fun@std::sum(1 (=Float), 2 (=Float), 3 (=Float))) (=Float) (=Unit) \
     )
 }
 
+pub fun patterns() {
+    val c = "
+pub struct BoolPair(a: Bool, b: Bool)
+    "
+    val t = check_symbols(c)
+    val s = Source("test.quill", 0, 0)
+    val ctx = Checker(
+        List::empty(),
+        Map::empty(),
+        t, 
+        ModuleContext(List::empty(), Map::empty()), 
+        List::empty(), 
+        List::empty()
+    )
+    assert_eq(
+        Pattern::subtract(
+            Pattern::Wildcard(Type(Variant::Boolean, !IS_MUTABLE, s)),
+            Pattern::Bool(true),
+            ctx
+        ) |> as_string(),
+        "List(false)"
+    )
+    assert_eq(
+        Pattern::subtract(
+            Pattern::Wildcard(Type(
+                Variant::Struct(Pair(List::of("BoolPair"), List::empty())), 
+                !IS_MUTABLE, s
+            )),
+            Pattern::Tuple(PatternTuple(
+                List::of("BoolPair"), List::empty(),
+                List::of(
+                    Pattern::Bool(true)
+                    Pattern::Bool(false)
+                )
+            )),
+            ctx
+        ) |> as_string(),
+        "List(BoolPair(false, _), BoolPair(true, true))"
+    )
+}
+
 pub fun matching() {
     val c = "
 mod std
@@ -305,6 +347,7 @@ pub fun enums(name: Option[String]) {
         Option::Some[String](\"Maria\") {}
         Option::Some(\"Bob\") {}
         Some(\"Chris\") {}
+        Some(_) {}
         None {}
     }
 }
@@ -344,6 +387,7 @@ match var@name (=std::Option[String]) { \
 (enum@std::Option::Some[type@String (=String)](\"Maria\" (=String))) (=std::Option[String]) () -> {  } \
 (enum@std::Option::Some(\"Bob\" (=String))) (=std::Option[String]) () -> {  } \
 (enum@std::Option::Some(\"Chris\" (=String))) (=std::Option[String]) () -> {  } \
+(enum@std::Option::Some(var@_ (=String))) (=std::Option[String]) () -> {  } \
 (enum@std::Option::None(unit (=Unit))) (=std::Option[String]) () -> {  } \
 } (=Unit) \
 } (=Unit)"

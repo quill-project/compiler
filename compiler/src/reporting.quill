@@ -514,3 +514,24 @@ pub fun Message::missing_capture(name: String, at: Source) -> Message
             "A capture present in one pattern of a branch needs to be present in all other patterns of the same branch (expept wildcards - '_')."
         )
     ))
+
+pub fun Message::unmatched_values(vals: Set[checker::Pattern], at: Source) -> Message {
+    val vals_d: String = vals
+        |> values()
+        |> map(checker::Pattern::as_string)
+        |> map[String, String](|p| "- '_'" |> fmt(p))
+        |> join("\n")
+    return Message(List::of(
+        Message::Section::Warning(
+            "Match branches don't match all possible values"
+        ),
+        Message::Section::Code(at),
+        Message::Section::Info(
+            "The following values are not handled by any branch:\n" 
+                |> concat(vals_d)
+        ),
+        Message::Section::Info(
+            "'match' statements should always provide a branch for all possible values of the matched type. You can add a default branch by using '_' as the match pattern."
+        )
+    ))
+}

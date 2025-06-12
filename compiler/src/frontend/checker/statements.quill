@@ -557,24 +557,31 @@ pub fun Checker::check_statement(
                         |> List::collect()
                     val capture_types: Map[String, Type] = self
                         |> check_pattern_captures(patterns_t)
+                    val scope_vars: mut Map[String, mut Variable] = capture_types
+                        |> entries()
+                        |> map(|c| Pair(
+                            c.first, 
+                            Variable(node.source, !IS_MUTABLE, !IS_USED, c.second)
+                        ))
+                        |> Map::collect()
+                    val scope: Scope = Scope(scope_vars)
+                    val function: mut Function = self.functions |> at(-1)
+                    function.scopes |> push(scope)
                     val body: Pair[List[TypedNode], ScopeExit]
                         = self |> check_statement_list(b.body, in_loop)
+                    self |> exit_scope()
                     val branch: ast::MatchBranch[TypedNode] 
                         = ast::MatchBranch(patterns_t, capture_types, body.first)
                     acc.first |> push(branch)
                     return Pair(acc.first, acc.second |> combine(body.second))
                 })
-            // TODO!
-            // - ensure that all branch patterns have the same captures
-            //   (ignore if '_')
-            // - collect types of all captures of a branch (ignore if '_')
-            // - exhaustiveness checking
-            // - store the conditions and captures in the output node
+            val exhaustive: Bool = self 
+                |> is_exhaustive(matched_t.type, branches_t.first, node.source)
             return Pair(
                 make_node(ast::Variant::Match(ast::Match(
                     matched_t, branches_t.first
                 ))),
-                branches_t.second
+                if exhaustive { branches_t.second } else { ScopeExit::None }
             )
         }
 

@@ -140,7 +140,7 @@ pub fun TokenType::as_string(self: TokenType) -> String {
 }
 
 pub fun TokenType::as_hash(self: TokenType) -> Int {
-        match self {
+    match self {
         Whitespace { return 0 }
         LineComment { return 1 }
         Identifier { return 2 }

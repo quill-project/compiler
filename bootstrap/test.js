@@ -220,6 +220,7 @@ const tests = [
     "quill::tests::checker::numeric",
     "quill::tests::checker::structs",
     "quill::tests::checker::generics",
+    "quill::tests::checker::patterns",
     "quill::tests::checker::matching"
 ];
 

@@ -1,8 +1,9 @@
 
-mod quill::ctx
+mod quill::checker
 
 use quill::*
 use quill::types::*
+use quill::ast::UntypedNode
 
 pub struct PatternTuple(
     path: List[String], t_args: List[Type],
@@ -19,11 +20,38 @@ pub enum Pattern(
 )
 
 pub fun Pattern::as_hash(self: Pattern) -> Int {
-    // TODO!
+    match self {
+        Any { return 0 }
+        Wildcard(t) { return t |> as_hash() |> hash::combine_ord(1) }
+        Unit { return 2 }
+        Bool(v) { return v |> as_hash() |> hash::combine_ord(3) }
+        Tuple(PatternTuple(_, _, v)) { 
+            return v |> as_hash() 
+                |> hash::combine_ord(4) 
+        }
+        Tag(Pair(n, v)) { 
+            return n |> as_hash()
+                |> hash::combine_ord(v |> as_hash())
+                |> hash::combine_ord(5)
+        }
+    }
 }
 
 pub fun Pattern::as_string(self: Pattern) -> String {
-    // TODO!
+    match self {
+        Any | Wildcard(_) { return "_" } 
+        Unit { return "unit" }
+        Bool(v) { return v |> as_string() }
+        Tuple(PatternTuple(p, t, v)) {
+            val path: String = p |> values() |> join("::")
+            val t_args: String = t |> values() |> map(Type::as_string) |> join(", ")
+            val b_t_args: String = if t |> length() |> is(0) { "" }
+                else { "[_]" |> fmt(t_args) }
+            val vals: String = v |> values() |> map(Pattern::as_string) |> join(", ")
+            return "__(_)" |> fmt(path, b_t_args, vals)
+        }
+        Tag(Pair(n, v)) { return "_(_)" |> fmt(n, v |> as_string()) }
+    }
 }
 
 // Constructs a pattern from a given typed AST node.
@@ -56,7 +84,7 @@ pub fun Pattern::from(node: TypedNode, p: ast::MatchPattern[TypedNode]) -> Patte
                 |> get(0)
                 |> map[TypedNode, Pattern](|arg| Pattern::from(arg, p))
                 |> unwrap_or(Pattern::Any)
-            return Pattern::Tag(n, v)
+            return Pattern::Tag(Pair(n, v))
         }
         _ { return Pattern::Any }
     }
@@ -68,20 +96,20 @@ pub fun Pattern::overlap(p: Pattern, q: Pattern, ctx: Checker) -> Bool
 
 // Internal helper to instantiate the given symbol and return its member types.
 fun member_types_of(path: List[String], t_args: List[Type], ctx: Checker) -> Option[List[Pair[String, Type]]]
-    = ctx.symbols.symbols |> get(p.path)
+    = ctx.symbols.symbols |> get(path)
     |> and_then[Symbol, List[Pair[String, Type]]](|s| { match s.node.value {
         Structure(ast::CustomType(_, _, t_arg_n, members)) |
         Enumeration(ast::CustomType(_, _, t_arg_n, members)) {
             val decl_ctx = Checker(
                 List::empty(),
-                make_full_t_args(p.t_args, t_arg_n, s.node.source),
+                make_full_t_args(t_args, t_arg_n, s.node.source),
                 ctx.symbols, s.context, 
                 ctx.dependencies, List::empty()
             )
             val mems: List[Pair[String, Type]] 
                 = members |> values()
                 |> map[Pair[String, UntypedNode], Pair[String, Type]](
-                    |m| Pair(m.first, (ctx |> check_annotation(m.second)).type) 
+                    |m| Pair(m.first, (decl_ctx |> check_annotation(m.second)).type) 
                 )
                 |> List::collect()
             return Option::Some(mems)
@@ -91,8 +119,12 @@ fun member_types_of(path: List[String], t_args: List[Type], ctx: Checker) -> Opt
 
 // Creates a list of possible combinations when subtracting the tuple
 // with values 'q.vals' from the tuple with values 'p.vals'.
-fun subtract_tuple(p: PatternTuple, q: PatternTuple, ctx: Checker) -> List[Pattern] {
-    if p.path != q.path || p.t_args != q.t_args { return List::of(p) }
+fun subtract_tuple(
+    p: PatternTuple, q: PatternTuple, ctx: Checker
+) -> List[Pattern] {
+    if p.path != q.path || p.t_args != q.t_args { 
+        return List::of(Pattern::Tuple(p)) 
+    }
     val p_c: Int = p.vals |> length()
     val q_c: Int = q.vals |> length()
     val c: Int = Int::max(p_c, q_c)
@@ -100,10 +132,10 @@ fun subtract_tuple(p: PatternTuple, q: PatternTuple, ctx: Checker) -> List[Patte
         = |i| p.vals |> get(i) |> unwrap_or(Pattern::Any)
     val q_at: Fun(Int) -> Pattern 
         = |i| q.vals |> get(i) |> unwrap_or(Pattern::Any)
-    val struct_members: List[Pair[String, Type]] = member_types_of(p.path, p.t_args, ctx)
+    val struct_members: List[Pair[String, Type]] 
+        = member_types_of(p.path, p.t_args, ctx)
         |> expect("PatternTuple must contain valid struct ref")
     return range(0, c)
-        |> take_while(|i| Pattern::overlap(p_at(i), q_at(i)))
         |> fold(List::empty[Pattern](), |acc, i| {
             val added: List[Pattern]
                 = Pattern::subtract(p_at(i), q_at(i), ctx) 
@@ -115,7 +147,7 @@ fun subtract_tuple(p: PatternTuple, q: PatternTuple, ctx: Checker) -> List[Patte
                         val t: Type = (struct_members |> at(j)).second
                         tuple |> push(Pattern::Wildcard(t))
                     })
-                    return Pattern::Tuple(tuple)
+                    return Pattern::Tuple(PatternTuple(p.path, p.t_args, tuple))
                 })
                 |> List::collect()
             return List::concat(acc, added)
@@ -125,12 +157,12 @@ fun subtract_tuple(p: PatternTuple, q: PatternTuple, ctx: Checker) -> List[Patte
 // Subtracts the given pattern 'q' from the given pattern 'p'.
 pub fun Pattern::subtract(p: Pattern, q: Pattern, ctx: Checker) -> List[Pattern] {
     match Pair(p, q) {
-        // 'Any' means we don't know the value -> cannot subtract anything
-        Pair(_, Pattern::Any) | 
-        Pair(Pattern::Any, _) { return List::of(p) }
-
-        // subtracting a wildcard always results in nothing
+        // subtracting a wildcard ALWAYS results in nothing
         Pair(_, Pattern::Wildcard(_)) { return List::empty() }
+
+        // 'Any' means we don't know the value -> cannot subtract anything
+        Pair(_, Pattern::Any) |
+        Pair(Pattern::Any, _) { return List::of(p) }
 
         // values
         Pair(Pattern::Wildcard(_), Pattern::Unit) |
@@ -200,55 +232,48 @@ pub fun Pattern::subtract(p: Pattern, q: Pattern, ctx: Checker) -> List[Pattern]
         Pair(Pattern::Tag(Pair(p_name, p_val)), Pattern::Tag(Pair(q_name, q_val))) {
             if p_name != q_name { return List::of(p) }
             return Pattern::subtract(p_val, q_val, ctx)
-                |> map[Pattern, Pattern](|sub| Pattern::Tag(p_name, sub))
+                |> values()
+                |> map[Pattern, Pattern](|sub| Pattern::Tag(Pair(p_name, sub)))
                 |> List::collect()
         }
 
-        // fallback
-        _ { return List::of(p) }
+        _ {}
     }
+    // fallback
+    return List::of(p)
 }
 
 // Given a type, a list of branches and a checker, this function determines
 // whether all possible values of the given type are handled.
 // This function will generate a warning if not all possible values are handled.
 pub fun Checker::is_exhaustive(
-    self: mut Checker, t: Type, branches: List[ast::MatchBranch[TypedNode]]
+    self: mut Checker, t: Type, branches: List[ast::MatchBranch[TypedNode]],
+    statement_src: Source
 ) -> Bool {
     val start: List[Pattern] = List::of(Pattern::Wildcard(t))
-    val unchecked: List[Pattern] 
-        = branches 
-        |> values() 
-        |> fold(start, |u_b, branch| branch.patterns 
+    val subtract_pattern: Fun(List[Pattern], ast::MatchPattern[TypedNode]) -> List[Pattern]
+    = |unchecked, pattern| {
+        val p = Pattern::from(pattern.node, pattern)
+        return unchecked 
             |> values() 
-            |> fold(u_b, |u_p, pattern| {
-                val p = Pattern::from(pattern.node, pattern)
-                return u_b 
-                    |> values() 
-                    |> map(|u| Pattern::subtract(u, p))
-                    |> reduce(List::concat)
-            })
-        )
-    if unchecked |> length() |> is_not(0) {
-        val u: Set[Pattern] = unchecked 
-            |> values() 
-            |> Set::collect()
-        val u_s: String = u 
-            |> values()
-            |> map(Pattern::as_string)
-            |> map[String, String](|p| "- " |> concat(p))
-            |> join("\n")
+            |> map[Pattern, List[Pattern]](|u| Pattern::subtract(u, p, self))
+            |> reduce(List::concat)
+            |> unwrap_or(List::empty())
     }
-
+    val subtract_branch: Fun(List[Pattern], ast::MatchBranch[TypedNode]) -> List[Pattern]
+    = |unchecked, branch| branch.patterns 
+        |> values() 
+        |> fold(unchecked, subtract_pattern)
+    val unchecked: List[Pattern] = branches 
+        |> values() 
+        |> fold(start, subtract_branch)
+    val exhaustive: Bool = unchecked |> length() |> is(0)
+    if exhaustive { return true }
+    val unchecked_set: Set[Pattern] = unchecked 
+        |> values() 
+        |> Set::collect()
+    self.messages |> push(
+        Message::unmatched_values(unchecked_set, statement_src)
+    )
+    return false
 }
-
-// is exhaustive:
-//   result = []
-//   for pattern in branches:
-//     old_result = result
-//     result = []
-//     for r in old_result:
-//       result += subtract(r, pattern)
-//   for r in result:
-//     report warning
-//   return result.length == 0
