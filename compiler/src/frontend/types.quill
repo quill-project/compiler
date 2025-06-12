@@ -338,7 +338,7 @@ pub struct Symbol(
     node: UntypedNode,
     type_args: List[String],
     context: ModuleContext,
-    instances: mut Map[List[Type], Pair[TypedNode, Int]],
+    instances: mut Map[String, Pair[TypedNode, Int]],
     next_id: Int
 )
 
@@ -346,6 +346,9 @@ pub struct SymbolInstance(
     path: List[String],
     type_args: List[Type]
 )
+
+pub fun SymbolInstance::key(self: SymbolInstance) -> String
+    = self.type_args |> values() |> map(Type::as_string) |> join(",")
 
 pub struct SymbolTable(
     symbols: mut Map[List[String], mut Symbol]
@@ -478,10 +481,11 @@ pub fun SymbolTable::check_symbol(
     dependencies: mut List[SymbolInstance],
     messages: mut List[Message]
 ) {
+    val instance_key: String = instance |> key()
     val symbol: mut Symbol = self.symbols 
         |> get(instance.path) 
         |> expect("Requested instances must be for existing symbols")
-    if symbol.instances |> has(instance.type_args) { return unit }
+    if symbol.instances |> has(instance_key) { return unit }
     val named_t_args: mut Map[String, Type] = instance.type_args 
         |> indices()
         |> map[Int, Pair[String, Type]](|i| Pair(
@@ -496,7 +500,7 @@ pub fun SymbolTable::check_symbol(
     val checked: TypedNode = checker |> check_declaration(symbol.node)
     val id: Int = symbol.next_id
     val variant: Pair[TypedNode, Int] = Pair(checked, id)
-    symbol.instances |> set(instance.type_args, variant)
+    symbol.instances |> set(instance_key, variant)
     symbol.next_id = id + 1
 }
 

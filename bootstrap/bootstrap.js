@@ -16,27 +16,35 @@ function collectFiles(dir, ext) {
     return files;
 }
 
+// collect all source files
 const files = [
-    ...collectFiles("./bootstrap/std-js/src", ".quill"),
+    ...collectFiles("./bootstrap", ".quill"),
     ...collectFiles("./std-base/src", ".quill"),
     ...collectFiles("./compiler/src", ".quill"),
     ...collectFiles("./cli/src", ".quill")
 ];
-const sources = {};
+const src_file_m = {};
+const src_file_l = [];
 for(const file of files) {
-	sources[file] = fs.readFileSync(file, 'utf8');
+    const content = fs.readFileSync(file, 'utf8')
+	src_file_m[file] = content;
+    src_file_l.push({ file, content });
 }
 
-const result = quill.compile(sources);
+// compile the compiler using the bootstrap compiler
+const result = quill.compile(src_file_m);
 console.error(result.messages
-    .map(m => quill.message.display(m, sources))
+    .map(m => quill.message.display(m, src_file_m))
     .join("\n\n")
 );
-if(result.success) {
-    result.code += "quill$cli$main$$0();";
-    fs.writeFileSync("bootstrap/build.js", result.code);
-	console.log(`Wrote output to 'bootstrap/build.js'`);
-} else {
+if(!result.success) {
     console.log("Compilation failed.");
     process.exit(1);
 }
+result.code += "module.exports = quill$bootstrap$compile$$0;\n";
+fs.writeFileSync("bootstrap/build.js", result.code);
+console.log(`Wrote output to 'bootstrap/build.js'`);
+
+// have the compiler compile itself
+const bootstrapped = require("./build.js");
+console.log(bootstrapped(src_file_l));

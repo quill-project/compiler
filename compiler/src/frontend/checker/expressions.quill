@@ -117,6 +117,7 @@ fun infer_call_t_args(
         _ { return UntypedNode(ast::Variant::Invalid, n.source) }
     } }
     val old_call_msgs: mut List[Message] = call_c.messages
+    call_c.messages = List::empty()
     exp_ret_type |> map[Type, Unit](|ret_t| {
         infer_anno_t_args(decl_c, given_ret_type, ret_t)
     })
@@ -153,9 +154,10 @@ fun infer_call_t_args(
                     had_success = true
                 })
         })
-    call_c.messages |> values() |> for_each(|m| { old_call_msgs |> push(m) })
+    val added_msgs: List[Message] = call_c.messages
     call_c.messages = old_call_msgs
-    val unknown: mut Sequence[Pair[String, Type]] = decl_c.type_args 
+    added_msgs |> values() |> for_each(|m| { call_c.messages |> push(m) })
+    val unknown: mut Sequence[String] = decl_c.type_args 
         |> entries()
         |> filter(|t| {
             match t.second.value {
@@ -163,9 +165,10 @@ fun infer_call_t_args(
                 _ { return false }
             }
         })
+        |> map[Pair[String, Type], String](|t| t.first)
     unknown |> for_each(|t| {
         call_c.messages |> push(
-            Message::failed_t_arg_inference(call_site, t.first)
+            Message::failed_t_arg_inference(call_site, t)
         )
     })
     return checked_args
@@ -953,6 +956,7 @@ pub fun Checker::check(
     val check_numeric: Fun() -> Type = || {
         match exp.value {
             Integer | Float { return exp }
+            Invalid { return Type(Variant::Invalid, !IS_MUTABLE, node.source) }
             _ {
                 self.messages |> push(
                     Message::unexpected_numeric(exp, node.source)

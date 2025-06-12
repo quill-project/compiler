@@ -1,0 +1,43 @@
+
+mod quill::bootstrap
+
+use quill::*
+
+pub struct SourceFile(file: String, content: String)
+
+pub fun compile(source_files: List[SourceFile]) -> String {
+    val sources: Map[String, String] = source_files
+        |> values()
+        |> map[SourceFile, Pair[String, String]](|f| Pair(f.file, f.content))
+        |> Map::collect()
+    val messages: mut List[Message] = List::empty()
+    // parse all source files
+    val nodes: List[ast::UntypedNode] = source_files
+        |> values()
+        |> map[SourceFile, List[ast::UntypedNode]](|s| {
+            val tokens: mut Stream[token::Token]
+                = lexer::tokenize(s.file, s.content, messages)
+            val parser = parser::Parser::from(tokens, messages)
+            return parser::parse_file(parser)
+        })
+        |> reduce(List::concat)
+        |> unwrap_or_else(List::empty)
+    // build a symbol table and check all symbols
+    val table = types::SymbolTable::from(nodes, messages)
+    val unchecked: mut List[types::SymbolInstance] 
+        = types::SymbolTable::base_instances(table)
+    Stream::new[mut List[types::SymbolInstance]](|| unchecked)
+        |> take_while(|q| q |> length() |> is_not(0))
+        |> for_each(|q| {
+            val i: types::SymbolInstance 
+                = q |> pop() 
+                |> expect("stream should've ended")
+            types::SymbolTable::check_symbol(table, i, q, messages)
+        })
+    // report messages
+    messages |> values() 
+        |> filter(Message::is_error)
+        |> map[Message, String](|m| m |> display(sources) |> concat("\n")) 
+        |> for_each(println)
+    return ""
+}

@@ -153,7 +153,7 @@ pub fun MatchBranch::as_string[N](self: MatchBranch[N]) -> String
             |> map[Pair[String, types::Type], String](
                 |e| "_: _" |> fmt(e.first, types::Type::as_string(e.second))
             )
-            |> join(", ")
+            |> join(", "),
         self.body 
             |> values() 
             |> map(N::as_string) 
