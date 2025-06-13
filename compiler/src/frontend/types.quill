@@ -71,7 +71,7 @@ pub fun Variant::as_path(self: Variant) -> List[String] {
         Struct(Pair(path, _)) | 
         Enum(Pair(path, _)) { return path }
         Function(_) { return List::of("std", "Fun") }
-        List(elem_t) { return List::of("std", "List") }
+        List(_) { return List::of("std", "List") }
         Invalid { return List::of("<unknown>") }
     }
 }

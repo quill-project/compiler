@@ -1,8 +1,14 @@
 
 mod std
 
-pub fun Unit::as_string(self: Unit) -> String = "unit"
+pub fun Unit::as_string(self: Unit) -> String {
+    self // unused
+    return "unit"
+}
 
-pub fun Unit::as_hash(self: Unit) -> Int = 97
+pub fun Unit::as_hash(self: Unit) -> Int {
+    self // unused
+    return 97
+}
 
 pub fun Unit::clone(self: Unit) -> Unit = self

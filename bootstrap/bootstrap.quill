@@ -36,7 +36,6 @@ pub fun compile(source_files: List[SourceFile]) -> String {
         })
     // report messages
     messages |> values() 
-        |> filter(Message::is_error)
         |> map[Message, String](|m| m |> display(sources) |> concat("\n")) 
         |> for_each(println)
     return ""

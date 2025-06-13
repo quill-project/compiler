@@ -23,28 +23,33 @@ const files = [
     ...collectFiles("./compiler/src", ".quill"),
     ...collectFiles("./cli/src", ".quill")
 ];
-const src_file_m = {};
-const src_file_l = [];
+const srcFilesM = {};
+const srcFilesL = [];
 for(const file of files) {
     const content = fs.readFileSync(file, 'utf8')
-	src_file_m[file] = content;
-    src_file_l.push({ file, content });
+	srcFilesM[file] = content;
+    srcFilesL.push({ file, content });
 }
 
 // compile the compiler using the bootstrap compiler
-const result = quill.compile(src_file_m);
-console.error(result.messages
-    .map(m => quill.message.display(m, src_file_m))
+const bscStart = Date.now();
+const bsResult = quill.compile(srcFilesM);
+const bscEnd = Date.now();
+console.log(`Bootstrap compiler took ${bscEnd - bscStart}ms to compile QIQ`);
+console.error(bsResult.messages
+    .map(m => quill.message.display(m, srcFilesM))
     .join("\n\n")
 );
-if(!result.success) {
+if(!bsResult.success) {
     console.log("Compilation failed.");
     process.exit(1);
 }
-result.code += "module.exports = quill$bootstrap$compile$$0;\n";
-fs.writeFileSync("bootstrap/build.js", result.code);
-console.log(`Wrote output to 'bootstrap/build.js'`);
+bsResult.code += "module.exports = quill$bootstrap$compile$$0;\n";
+fs.writeFileSync("bootstrap/build.js", bsResult.code);
 
 // have the compiler compile itself
 const bootstrapped = require("./build.js");
-console.log(bootstrapped(src_file_l));
+const qiqStart = Date.now();
+const result = bootstrapped(srcFilesL);
+const qiqEnd = Date.now();
+console.log(`QIQ took ${qiqEnd - qiqStart}ms to parse and check QIQ`);

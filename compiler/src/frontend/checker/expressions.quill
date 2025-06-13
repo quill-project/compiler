@@ -173,7 +173,7 @@ fun infer_call_t_args(
             Message::failed_t_arg_inference(call_site, t)
         )
     })
-    return checked_args
+    val r_args: List[TypedNode] = checked_args
         |> values()
         |> map[Option[TypedNode], TypedNode](|a| a |> unwrap_or_else(
             || TypedNode(
@@ -182,6 +182,21 @@ fun infer_call_t_args(
             )            
         ))
         |> List::collect()
+    r_args |> indices() |> for_each(|i| {
+        val arg_t: TypedNode = r_args |> at(i)
+        val ei = Int::min(exp_arg_c - 1, i)
+        val is_varargs = exp_varargs && i >= exp_arg_c - 1
+        val raw_exp_arg_type: UntypedNode = exp_arg_types |> at(ei)
+        val exp_arg_type = if !is_varargs { raw_exp_arg_type }
+            else { get_va_list_type(raw_exp_arg_type) }
+        val exp_t: TypedNode = decl_c 
+            |> check_annotation(exp_arg_type)
+        if Type::matches(exp_t.type, arg_t.type) { return unit }
+        call_c.messages |> push(
+            Message::unexpected_type(exp_t.type, arg_t.type)
+        )
+    })
+    return r_args
 }
 
 // Ensures both of the given concrete types to be of the same numeric type.

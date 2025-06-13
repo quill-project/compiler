@@ -527,7 +527,7 @@ pub fun Message::missing_capture(name: String, at: Source) -> Message
         )
     ))
 
-pub fun Message::unmatched_values(vals: Set[checker::Pattern], at: Source) -> Message {
+pub fun Message::unmatched_values(vals: List[checker::Pattern], at: Source) -> Message {
     val vals_d: String = vals
         |> values()
         |> map(checker::Pattern::as_string)

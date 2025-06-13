@@ -256,6 +256,7 @@ pub fun parse_value(s: mut Parser) -> UntypedNode {
                 Source::range(start.source, end)
             )
         }
+        _ {}
     }
     val op: Token = s.current
     mut prec: Int = 0

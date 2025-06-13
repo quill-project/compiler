@@ -1,4 +1,6 @@
-# quill
+<img src="./quill.png" height="200px" align="right">
+
+### Quill
 A beautifully simple statically typed, garbage compiled, transpiled programming language.
 
 ### Repository Structure

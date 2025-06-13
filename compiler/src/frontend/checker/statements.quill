@@ -575,10 +575,8 @@ pub fun Checker::check_statement(
                     acc.first |> push(branch)
                     return Pair(acc.first, acc.second |> combine(body.second))
                 })
-            // // TODO! fix this so it can be uncommented
-            // val exhaustive: Bool = self 
-                // |> is_exhaustive(matched_t.type, branches_t.first, node.source)
-            val exhaustive: Bool = true // temporary
+            val exhaustive: Bool = self 
+                |> is_exhaustive(matched_t.type, branches_t.first, node.source)
             return Pair(
                 make_node(ast::Variant::Match(ast::Match(
                     matched_t, branches_t.first

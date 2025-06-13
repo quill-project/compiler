@@ -42,13 +42,10 @@ pub fun Pattern::as_string(self: Pattern) -> String {
         Any | Wildcard(_) { return "_" } 
         Unit { return "unit" }
         Bool(v) { return v |> as_string() }
-        Tuple(PatternTuple(p, t, v)) {
+        Tuple(PatternTuple(p, _, v)) {
             val path: String = p |> values() |> join("::")
-            val t_args: String = t |> values() |> map(Type::as_string) |> join(", ")
-            val b_t_args: String = if t |> length() |> is(0) { "" }
-                else { "[_]" |> fmt(t_args) }
             val vals: String = v |> values() |> map(Pattern::as_string) |> join(", ")
-            return "__(_)" |> fmt(path, b_t_args, vals)
+            return "_(_)" |> fmt(path, vals)
         }
         Tag(Pair(n, v)) { return "_(_)" |> fmt(n, v |> as_string()) }
     }
@@ -75,6 +72,7 @@ pub fun Pattern::from(node: TypedNode, p: ast::MatchPattern[TypedNode]) -> Patte
                         |> List::collect()
                     return Pattern::Tuple(PatternTuple(path, t_args, v))
                 }
+                Invalid { return Pattern::Wildcard(node.type) }
                 _ { return Pattern::Any }
             }
         }
@@ -226,6 +224,7 @@ pub fun Pattern::subtract(p: Pattern, q: Pattern, ctx: Checker) -> List[Pattern]
                         |> List::collect()
                     return List::concat(other_vals, sub_vals)
                 }
+                Invalid { return List::empty() }
                 _ {}
             }
         }
@@ -243,6 +242,16 @@ pub fun Pattern::subtract(p: Pattern, q: Pattern, ctx: Checker) -> List[Pattern]
     return List::of(p)
 }
 
+// Given a list of patterns, this function returns a new list containing
+// each pattern from the original list at most once.
+pub fun deduplicate_patterns(long: List[Pattern]) -> List[Pattern]
+    = long 
+    |> values()
+    |> map[Pattern, Pair[String, Pattern]](|p| Pair(Pattern::as_string(p), p))
+    |> Map::collect()
+    |> values()
+    |> List::collect()
+
 // Given a type, a list of branches and a checker, this function determines
 // whether all possible values of the given type are handled.
 // This function will generate a warning if not all possible values are handled.
@@ -259,6 +268,7 @@ pub fun Checker::is_exhaustive(
             |> map[Pattern, List[Pattern]](|u| Pattern::subtract(u, p, self))
             |> reduce(List::concat)
             |> unwrap_or(List::empty())
+            |> deduplicate_patterns()
     }
     val subtract_branch: Fun(List[Pattern], ast::MatchBranch[TypedNode]) -> List[Pattern]
     = |unchecked, branch| branch.patterns 
@@ -268,12 +278,10 @@ pub fun Checker::is_exhaustive(
         |> values() 
         |> fold(start, subtract_branch)
     val exhaustive: Bool = unchecked |> length() |> is(0)
-    if exhaustive { return true }
-    val unchecked_set: Set[Pattern] = unchecked 
-        |> values() 
-        |> Set::collect()
-    self.messages |> push(
-        Message::unmatched_values(unchecked_set, statement_src)
-    )
-    return false
+    if !exhaustive {
+        self.messages |> push(
+            Message::unmatched_values(unchecked, statement_src)
+        )
+    }
+    return exhaustive
 }
