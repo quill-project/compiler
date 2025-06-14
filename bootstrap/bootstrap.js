@@ -50,6 +50,7 @@ fs.writeFileSync("bootstrap/build.js", bsResult.code);
 // have the compiler compile itself
 const bootstrapped = require("./build.js");
 const qiqStart = Date.now();
-const result = bootstrapped(srcFilesL);
+const result = bootstrapped(srcFilesL, "quill::cli::main");
 const qiqEnd = Date.now();
 console.log(`QIQ took ${qiqEnd - qiqStart}ms to parse and check QIQ`);
+fs.writeFileSync("bootstrap/build.c", result);

@@ -313,7 +313,7 @@ pub fun Checker::check_member(
                             List::empty(),
                             make_full_t_args(g_t_args, t_args, node.source),
                             self.symbols, s.context, 
-                            self.dependencies, List::empty()
+                            List::empty(), List::empty()
                         )
                         val mem_t: Option[Type] = members
                             |> values()
@@ -420,7 +420,7 @@ pub fun Checker::check_path_ref(
                 val var_c = Checker(
                     List::empty(), Map::empty(),
                     self.symbols, s.context, 
-                    self.dependencies, List::empty()
+                    List::empty(), List::empty()
                 )
                 val type_t: TypedNode = var_c |> check_annotation(type)
                 val instance: SymbolInstance 
@@ -441,7 +441,7 @@ pub fun Checker::check_path_ref(
                     List::empty(),
                     make_full_t_args(type_args, f_t_args, node.source),
                     self.symbols, s.context,
-                    self.dependencies, List::empty() 
+                    List::empty(), List::empty() 
                 )
                 match Pair(exp, t_args) {
                     Pair(Option::Some(_), Option::None) {
@@ -542,7 +542,7 @@ pub fun Checker::check_path_ref(
                     List::empty(),
                     make_full_t_args(type_args, t_t_args, node.source),
                     self.symbols, s.context,
-                    self.dependencies, List::empty() 
+                    List::empty(), List::empty() 
                 )
                 val values_t: List[TypedNode] = infer_call_t_args(
                     self, List::of(value), exp, node.source,
@@ -660,7 +660,7 @@ pub fun Checker::check_invocation(
                     List::empty(),
                     make_full_t_args(type_args, decl_t_args, node.source),
                     self.symbols, symbol.context,
-                    self.dependencies, List::empty() 
+                    List::empty(), List::empty() 
                 )
                 val args_t: List[TypedNode] = infer_call_t_args(
                     self, final_args, exp, node.source,
@@ -682,9 +682,9 @@ pub fun Checker::check_invocation(
             match self.symbols.symbols |> get(path) {
                 Some(s) { match s.node.value {
                     ast::Variant::Function(ast::Function(
-                        _, public, f_t_args, f_args, f_varargs, f_ret_t, _
+                        _, public, f_t_args, f_args, f_varargs, o_f_ret_t, _
                     )) | ast::Variant::ExternalFunction(ast::ExternalFunction(
-                        _, public, f_t_args, f_args, f_varargs, f_ret_t, _
+                        _, public, f_t_args, f_args, f_varargs, o_f_ret_t, _
                     )) {
                         val arg_nodes: List[UntypedNode] = f_args
                             |> values()
@@ -692,13 +692,20 @@ pub fun Checker::check_invocation(
                                 |a| a.second
                             )
                             |> List::collect()
-                        val ret_node: UntypedNode = f_ret_t
-                            |> unwrap_or_else(
-                                || UntypedNode(ast::Variant::Unit, node.source)
+                        val f_ret_t: UntypedNode = o_f_ret_t |> unwrap_or_else(
+                            || UntypedNode(
+                                ast::Variant::TypeRef(Pair(
+                                    !IS_MUTABLE, 
+                                    ast::PathRef(
+                                        List::of("std", "Unit"), Option::None
+                                    )
+                                )),
+                                s.node.source
                             )
+                        )
                         val checked = check_named(
                             path, s, public, f_t_args, arg_nodes, f_varargs, 
-                            ret_node
+                            f_ret_t
                         )
                         return TypedNode(
                             ast::Variant::NamedCall(ast::PathInvocation(
@@ -887,7 +894,7 @@ pub fun Checker::check_piped_invocation(
                     List::empty(),
                     make_full_t_args(type_args, decl_t_args, node.source),
                     self.symbols, symbol.context,
-                    self.dependencies, List::empty() 
+                    List::empty(), List::empty() 
                 )
                 infer_anno_t_args(
                     symbol_c, receiver_ann, receiver_t.type

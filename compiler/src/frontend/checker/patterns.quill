@@ -102,7 +102,7 @@ fun member_types_of(path: List[String], t_args: List[Type], ctx: Checker) -> Opt
                 List::empty(),
                 make_full_t_args(t_args, t_arg_n, s.node.source),
                 ctx.symbols, s.context, 
-                ctx.dependencies, List::empty()
+                List::empty(), List::empty()
             )
             val mems: List[Pair[String, Type]] 
                 = members |> values()

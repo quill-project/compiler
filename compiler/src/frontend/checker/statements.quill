@@ -221,7 +221,7 @@ pub fun Checker::check_match_pattern(
                         List::empty(),
                         make_full_t_args(s_t_args, t.t_args, node.source),
                         self.symbols, s.context,
-                        self.dependencies, List::empty() 
+                        List::empty(), List::empty() 
                     )
                     val args_t: List[TypedNode] 
                         = range(0, Int::min(t.members |> length(), got_arg_c))
@@ -262,7 +262,7 @@ pub fun Checker::check_match_pattern(
                         List::empty(),
                         make_full_t_args(e_t_args, t.t_args, node.source),
                         self.symbols, s.context,
-                        self.dependencies, List::empty() 
+                        List::empty(), List::empty() 
                     )
                     val member_name: String = ref_path |> at(-1)
                     val member: Option[Pair[String, UntypedNode]] = t.members

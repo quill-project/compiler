@@ -224,7 +224,8 @@ pub fun Checker::check_declaration(
             val t_type: TypedNode = self |> check_annotation(type)
             val t_value: TypedNode = self |> check(value, t_type.type)
             return make_node(ast::Variant::GlobalVariable(ast::GlobalVariable(
-                path, public, mutable, t_type, t_value
+                List::concat(self.context.module, path), 
+                public, mutable, t_type, t_value
             )))
         }
         ast::Variant::Function(ast::Function(
@@ -266,7 +267,8 @@ pub fun Checker::check_declaration(
                 )
             }
             return make_node(ast::Variant::Function(ast::Function(
-                path, public, t_args, args_t, varargs,
+                List::concat(self.context.module, path), 
+                public, t_args, args_t, varargs,
                 return_type_t, body_t.first
             )))
         }
@@ -284,7 +286,8 @@ pub fun Checker::check_declaration(
                 |> map(|n| self |> check_annotation(n))
             return make_node(ast::Variant::ExternalFunction(
                 ast::ExternalFunction(
-                    path, public, t_args, args_t, varargs,
+                    List::concat(self.context.module, path), 
+                    public, t_args, args_t, varargs,
                     return_type_t, body
                 )
             ))
@@ -295,7 +298,8 @@ pub fun Checker::check_declaration(
                 |> map(|m| Pair(m.first, self |> check_annotation(m.second)))
                 |> List::collect()
             return make_node(ast::Variant::Structure(ast::CustomType(
-                path, public, t_args, members_t
+                List::concat(self.context.module, path), 
+                public, t_args, members_t
             )))
         }
         Enumeration(ast::CustomType(path, public, t_args, members)) {
@@ -304,10 +308,16 @@ pub fun Checker::check_declaration(
                 |> map(|m| Pair(m.first, self |> check_annotation(m.second)))
                 |> List::collect()
             return make_node(ast::Variant::Enumeration(ast::CustomType(
-                path, public, t_args, members_t
+                List::concat(self.context.module, path), 
+                public, t_args, members_t
             )))
         }
 
-        _ { return make_node(ast::Variant::Invalid) }
+        _ { 
+            return TypedNode(
+                ast::Variant::Invalid, node.source, 
+                Type(Variant::Invalid, !IS_MUTABLE, node.source)
+            )
+        }
     }
 }

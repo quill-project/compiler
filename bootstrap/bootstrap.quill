@@ -5,7 +5,7 @@ use quill::*
 
 pub struct SourceFile(file: String, content: String)
 
-pub fun compile(source_files: List[SourceFile]) -> String {
+pub fun compile(source_files: List[SourceFile], main: String) -> String {
     val sources: Map[String, String] = source_files
         |> values()
         |> map[SourceFile, Pair[String, String]](|f| Pair(f.file, f.content))
@@ -38,5 +38,7 @@ pub fun compile(source_files: List[SourceFile]) -> String {
     messages |> values() 
         |> map[Message, String](|m| m |> display(sources) |> concat("\n")) 
         |> for_each(println)
-    return ""
+    // emit code
+    if messages |> values() |> any(Message::is_error) { return "" }
+    return codegen::c::emit(table, main |> split("::") |> List::collect())
 }
