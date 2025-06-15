@@ -1,0 +1,10 @@
+
+mod std
+
+pub ext fun Unit::eq(lhs: Unit, rhs: Unit) -> Bool = "
+    return QUILL_TRUE;
+"
+
+pub ext fun Unit::not_eq(lhs: Unit, rhs: Unit) -> Bool = "
+    return QUILL_FALSE;
+"

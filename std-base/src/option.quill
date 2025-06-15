@@ -3,6 +3,17 @@ mod std
 
 pub enum Option[T](Some: T, None)
 
+pub fun Option::eq[T](lhs: Option[T], rhs: Option[T]) -> Bool {
+    match Pair(lhs, rhs) {
+        Pair(Some(a), Some(b)) { return a == b }
+        Pair(None, None) { return true }
+        _ { return false }
+    }
+}
+
+pub fun Option::not_eq[T](lhs: Option[T], rhs: Option[T]) -> Bool
+    = !Option::eq(lhs, rhs)
+
 pub fun Option::as_string[T](self: Option[T]) -> String {
     match self {
         Some(v) { return "Some(" |> concat(T::as_string(v)) |> concat(")") }

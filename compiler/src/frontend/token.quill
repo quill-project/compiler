@@ -202,6 +202,12 @@ pub fun TokenType::as_hash(self: TokenType) -> Int {
     }
 }
 
+pub fun TokenType::eq(lhs: TokenType, rhs: TokenType) -> Bool
+    = TokenType::as_hash(lhs) == TokenType::as_hash(rhs)
+
+pub fun TokenType::not_eq(lhs: TokenType, rhs: TokenType) -> Bool
+    = TokenType::as_hash(lhs) != TokenType::as_hash(rhs)
+
 // Returns if a token type is relevant to Quill syntax and should therefore 
 // be included in the token stream passed to the parser.
 pub fun TokenType::is_relevant(self: TokenType) -> Bool {

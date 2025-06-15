@@ -65,6 +65,18 @@ pub fun Set::add[T](self: mut Set[T], value: T) -> Bool {
 
 // access
 
+pub fun Set::eq[T](lhs: Set[T], rhs: Set[T]) -> Bool {
+    if (lhs |> size()) != (rhs |> size()) { return false }
+    // no need to check if all values of 'rhs' are in 'lhs', 
+    // since size is the same 'rhs' can't have any extras
+    return lhs 
+        |> values() 
+        |> all(|v| rhs |> has(v))
+}
+
+pub fun Set::not_eq[T](lhs: Set[T], rhs: Set[T]) -> Bool 
+    = !Set::eq(lhs, rhs)
+
 pub fun Set::as_string[T](self: Set[T]) -> String {
     val contents = self
         |> values()

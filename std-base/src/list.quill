@@ -1,6 +1,15 @@
 
 mod std
 
+pub fun List::eq[T](lhs: List[T], rhs: List[T]) -> Bool {
+    if (lhs |> length()) != (rhs |> length()) { return false }
+    return Sequence::zip(lhs |> values(), rhs |> values(), T::eq)
+        |> all(|e| e)
+}
+
+pub fun List::not_eq[T](lhs: List[T], rhs: List[T]) -> Bool 
+    = !List::eq(lhs, rhs)
+
 pub fun List::as_string[T](self: List[T]) -> String {
     val contents = self
         |> values()

@@ -565,7 +565,7 @@ pub fun Message::missing_operator_impl(
         Message::Section::Info(
             "To implement it, a function taking _ argument_ must be defined under the path '_::_'" |> fmt(
                 operands |> length() |> as_string(),
-                if (operands |> length()) != 1 { "s" } else { "" }
+                if (operands |> length()) != 1 { "s" } else { "" },
                 types::Type::as_path((operands |> at(0)).type)
                     |> values() |> join("::"), 
                 name

@@ -250,17 +250,21 @@ pub fun expand_external_body(
     table: SymbolTable
 ) -> String {
     val expand_macro: Fun(String, String, Fun(String) -> String) -> String
-        = |before_body, macro, f| before_body 
-        |> find(macro)
-        |> fold(before_body, |body, i| {
-            val at: String = body |> slice_from(i + (macro |> length()))
-            val closing: Int = at |> find(")") |> next() 
-                |> expect("Unclosed macro in external function body")
-            val before: String = body |> slice_to(i)
-            val inner: String = at |> slice_to(closing)
-            val after: String = at |> slice_from(closing + 1)
-            return before |> concat(f(inner)) |> concat(after)
-        })
+    = |before_body, macro, f| {
+        mut rem: String = before_body
+        val repl: String 
+            = Sequence::new[Int](|| rem |> find(macro) |> next())
+            |> fold("", |repl, i| {
+                val at: String = rem |> slice_from(i + (macro |> length()))
+                val closing: Int = at |> find(")") |> next() 
+                    |> expect("Unclosed macro in external function body")
+                val before: String = rem |> slice_to(i)
+                val inner: String = at |> slice_to(closing)
+                rem = at |> slice_from(closing + 1)
+                return repl |> concat(before) |> concat(f(inner))
+            })
+        return repl |> concat(rem)
+    }
     return og_body
         |> expand_macro("#var(", |n| {
             val i: Int = args |> indices() 
@@ -450,15 +454,6 @@ pub fun emit_statement_list(gen: mut Generator, nodes: List[TypedNode])
 
 // Emits the equivalent lowered C code for the given expression.
 pub fun emit_expression(gen: mut Generator, node: TypedNode, into: String) {
-    val emit_biop: Fun(Pair[TypedNode, TypedNode], Fun(String, String) -> String) = |o, f| {
-        val lhs: String = gen |> alloc(o.first.type)
-        gen |> emit_expression(o.first, lhs)
-        val rhs: String = gen |> alloc(o.second.type)
-        gen |> emit_expression(o.second, rhs)
-        gen |> assign_to(into, node.type, f(lhs, rhs))
-    }
-    val int: String = "quill_int_t"
-    val uint: String = "quill_uint_t"
     match node.value {
         PathRef(_) {
 
@@ -483,63 +478,6 @@ pub fun emit_expression(gen: mut Generator, node: TypedNode, into: String) {
 
         }
         Closure(_) {
-
-        }
-        Add(operands) { emit_biop(operands, |a, b| { match node.type.value {
-            Integer { return "(_) ((_) _) + ((_) _)" |> fmt(int, uint, a, uint, b) }
-            Float { return "_ + _" |> fmt(a, b) }
-            _ { return panic("not a numeric type") }
-        } }) }
-        Subtract(operands) { emit_biop(operands, |a, b| { match node.type.value {
-            Integer { return "(_) ((_) _) - ((_) _)" |> fmt(int, uint, a, uint, b) }
-            Float { return "_ - _" |> fmt(a, b) }
-            _ { return panic("not a numeric type") }
-        } }) }
-        Multiply(operands) { emit_biop(operands, |a, b| { match node.type.value {
-            Integer { return "(_) ((_) _) * ((_) _)" |> fmt(int, uint, a, uint, b) }
-            Float { return "_ * _" |> fmt(a, b) }
-            _ { return panic("not a numeric type") }
-        } }) }
-        Divide(operands) { emit_biop(operands, |a, b| { match node.type.value {
-            Integer {
-                val d_check = "if(_ == 0) { _(\"Integer division by zero\"); }\n" 
-                gen |> in_body(d_check |> fmt(b, "quill_panic"))
-                return "(_) ((_) _) / ((_) _)" |> fmt(int, uint, a, uint, b) 
-            }
-            Float { return "_ / _" |> fmt(a, b) }
-            _ { return panic("not a numeric type") }
-        } }) }
-        Remainder(operands) { emit_biop(operands, |a, b| { match node.type.value {
-            Integer { 
-                val d_check = "if(_ == 0) { _(\"Integer division by zero\"); }\n" 
-                gen |> in_body(d_check |> fmt(b, "quill_panic"))
-                return "(_) ((_) _) % ((_) _)" |> fmt(int, uint, a, uint, b) 
-            }
-            Float { return "fmod(_, _)" |> fmt(a, b) }
-            _ { return panic("not a numeric type") }
-        } }) }
-        LessThan(operands) {
-            emit_biop(operands, |a, b| "_ < _" |> fmt(a, b))
-        }
-        GreaterThan(operands) {
-            emit_biop(operands, |a, b| "_ > _" |> fmt(a, b))
-        }
-        LessThanEqual(operands) {
-            emit_biop(operands, |a, b| "_ <= _" |> fmt(a, b))
-        }
-        GreaterThanEqual(operands) {
-            emit_biop(operands, |a, b| "_ >= _" |> fmt(a, b))
-        }
-        Equal(_) {
-
-        }
-        NotEqual(_) {
-
-        }
-        Negate(_) {
-
-        }
-        Not(_) {
 
         }
         Member(_) {

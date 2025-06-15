@@ -3,6 +3,17 @@ mod std
 
 pub enum Result[O, E](Ok: O, Err: E)
 
+pub fun Result::eq[O, E](lhs: Result[O, E], rhs: Result[O, E]) -> Bool {
+    match Pair(lhs, rhs) {
+        Pair(Ok(a), Ok(b)) { return a == b }
+        Pair(Err(a), Err(b)) { return a == b }
+        _ { return false }
+    }
+}
+
+pub fun Result::not_eq[O, E](lhs: Result[O, E], rhs: Result[O, E]) -> Bool
+    = !Result::eq(lhs, rhs)
+
 pub fun Result::as_string[O, E](self: Result[O, E]) -> String {
     match self {
         Ok(v) { return "Ok(" |> concat(O::as_string(v)) |> concat(")") }

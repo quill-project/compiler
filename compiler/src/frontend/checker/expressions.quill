@@ -1026,10 +1026,17 @@ pub fun Checker::infer_overloaded_operator(
                     List::empty(), List::empty() 
                 )
                 range(0, operand_c) |> for_each(|i| {
+                    val got_t: Type = (ch_operands |> at(i)).type
                     infer_anno_t_args(
                         symbol_c, 
                         (args |> at(i)).second, 
-                        (ch_operands |> at(i)).type
+                        got_t
+                    )
+                    val exp_t: TypedNode = symbol_c 
+                        |> check_annotation((args |> at(i)).second)
+                    if Type::matches(exp_t.type, got_t) { return unit }
+                    self.messages |> push(
+                        Message::unexpected_type(exp_t.type, got_t)
                     )
                 })
                 val final_type_args: List[Type] = t_arg_names |> values()
@@ -1079,18 +1086,6 @@ pub fun Checker::check(
             self.messages |> push(Message::unexpected_type(exp, r))
         }
         return TypedNode(v, node.source, r)
-    }
-    val check_numeric: Fun() -> Type = || {
-        match exp.value {
-            Integer | Float { return exp }
-            Invalid { return Type(Variant::Invalid, !IS_MUTABLE, node.source) }
-            _ {
-                self.messages |> push(
-                    Message::unexpected_numeric(exp, node.source)
-                )
-                return Type(Variant::Invalid, !IS_MUTABLE, node.source)
-            }
-        }
     }
     val check_overloaded_operator: Fun(String, List[UntypedNode]) -> TypedNode 
     = |name, operands| {

@@ -1,0 +1,64 @@
+
+mod std
+
+pub ext fun String::eq(lhs: String, rhs: String) -> Bool = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun String::not_eq(lhs: String, rhs: String) -> Bool = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun String::slice(self: String, start: Int, end: Int) -> String = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun String::concat(low: String, high: String) -> String = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun String::length(self: String) -> Int = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun String::as_code(self: String) -> Int = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun String::from_code(code: Int) -> String = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub fun String::chars(self: String) -> mut Sequence[String] {
+    mut r = self
+    return Sequence::new(|| {
+        val prev_l = r |> length()
+        if prev_l == 0 { return Option::None }
+        val char_l = if (r |> as_code()) > 65535 { 2 } else { 1 }
+        val char = r |> slice(0, char_l)
+        r = r |> slice(char_l, prev_l)
+        return Option::Some(char)
+    })
+}
+
+pub fun String::chars_rep(self: String) -> mut Stream[String] {
+    if 0 == (self |> length()) {
+        return panic("Attempt to get char stream from empty string!")
+    }
+    mut r = self
+    return Stream::new(|| {
+        val prev_l = r |> length()
+        val char_l = if (r |> as_code()) > 65535 { 2 } else { 1 }
+        val char = r |> slice(0, char_l)
+        r = r |> slice(char_l, prev_l)
+        if 0 == (r |> length()) { r = self }
+        return char
+    })
+}

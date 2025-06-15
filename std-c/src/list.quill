@@ -1,0 +1,47 @@
+
+mod std
+
+pub ext fun List::concat[T](low: List[T], high: List[T]) -> mut List[T] = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun List::push[T](self: mut List[T], value: T) -> Int = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun List::insert[T](self: mut List[T], position: Int, value: T) = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun List::set[T](self: mut List[T], position: Int, value: T) = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun List::of_length[T](length: Int, value: T) -> mut List[T] = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun List::slice[T](self: List[T], start: Int, end: Int) -> mut List[T] = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+ext fun List::get_unchecked[T](self: List[T], position: Int) -> T = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun List::length[T](self: List[T]) -> Int = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun List::splice[T](self: mut List[T], start: Int, end: Int) -> mut List[T] = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"

@@ -19,6 +19,25 @@ pub enum Variant(
     Invalid
 )
 
+pub fun Variant::eq(lhs: Variant, rhs: Variant) -> Bool {
+    match Pair(lhs, rhs) {
+        Pair(Unit, Unit) |
+        Pair(Integer, Integer) |
+        Pair(Float, Float) |
+        Pair(Boolean, Boolean) |
+        Pair(String, String) |
+        Pair(Invalid, Invalid) { return true }
+        Pair(Struct(a), Struct(b)) |
+        Pair(Enum(a), Enum(b)) { return a == b }
+        Pair(Function(a), Function(b)) { return a == b }
+        Pair(List(a), List(b)) { return a == b }
+        _ { return false }
+    }
+}
+
+pub fun Variant::not_eq(lhs: Variant, rhs: Variant) -> Bool
+    = !Variant::eq(lhs, rhs)
+
 pub fun Variant::as_hash(self: Variant) -> Int {
     match self {
         Unit { return 0 }
@@ -83,6 +102,13 @@ pub struct Type(
 )
 
 pub val IS_MUTABLE: Bool = true
+
+pub fun Type::eq(lhs: Type, rhs: Type) -> Bool
+    = lhs.mutable == rhs.mutable
+    && Variant::eq(lhs.value, rhs.value)
+
+pub fun Type::not_eq(lhs: Type, rhs: Type) -> Bool
+    = !Type::eq(lhs, rhs)
 
 pub fun Type::as_hash(self: Type) -> Int 
     = self.value |> as_hash()

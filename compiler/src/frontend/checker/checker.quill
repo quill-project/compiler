@@ -11,6 +11,12 @@ pub enum ScopeExit(
     Function
 )
 
+pub fun ScopeExit::eq(lhs: ScopeExit, rhs: ScopeExit) -> Bool
+    = ScopeExit::level(lhs) == ScopeExit::level(rhs)
+
+pub fun ScopeExit::not_eq(lhs: ScopeExit, rhs: ScopeExit) -> Bool
+    = ScopeExit::level(lhs) != ScopeExit::level(rhs)
+
 // Returns a score that represents the level of the given scope, representing
 // a hierarchy.
 pub fun ScopeExit::level(self: ScopeExit) -> Int {

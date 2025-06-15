@@ -1,0 +1,215 @@
+
+mod std
+
+pub ext fun Float::plus(lhs: Float, rhs: Float) -> Float = "
+    return #var(lhs) + #var(rhs);
+"
+
+pub ext fun Float::minus(lhs: Float, rhs: Float) -> Float = "
+    return #var(lhs) - #var(rhs);
+"
+
+pub ext fun Float::times(lhs: Float, rhs: Float) -> Float = "
+    return #var(lhs) * #var(rhs);
+"
+
+pub ext fun Float::div(lhs: Float, rhs: Float) -> Float = "
+    return #var(lhs) / #var(rhs);
+"
+
+pub ext fun Float::rem(lhs: Float, rhs: Float) -> Float = "
+    return fmod(#var(lhs), #var(rhs));
+"
+
+pub ext fun Float::lt(lhs: Float, rhs: Float) -> Bool = "
+    return #var(lhs) < #var(rhs);
+"
+
+pub ext fun Float::gt(lhs: Float, rhs: Float) -> Bool = "
+    return #var(lhs) > #var(rhs);
+"
+
+pub ext fun Float::lt_eq(lhs: Float, rhs: Float) -> Bool = "
+    return #var(lhs) <= #var(rhs);
+"
+
+pub ext fun Float::gt_eq(lhs: Float, rhs: Float) -> Bool = "
+    return #var(lhs) >= #var(rhs);
+"
+
+pub ext fun Float::eq(lhs: Float, rhs: Float) -> Bool = "
+    return #var(lhs) == #var(rhs);
+"
+
+pub ext fun Float::not_eq(lhs: Float, rhs: Float) -> Bool = "
+    return #var(lhs) != #var(rhs);
+"
+
+pub ext fun Float::u_minus(x: Float) -> Float = "
+    return -(#var(x));
+"
+
+pub ext fun Float::as_string(self: Float) -> String = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun Float::as_int(self: Float) -> Int = "
+    return (quill_int_t) #var(self);
+"
+
+
+pub ext fun Float::is_nan(self: Float) -> Bool = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun Float::is_infinite(self: Float) -> Bool = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun Float::is_finite(self: Float) -> Bool = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun Float::acos(self: Float) -> Float = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun Float::acosh(self: Float) -> Float = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun Float::asin(self: Float) -> Float = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun Float::asinh(self: Float) -> Float = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun Float::atan(self: Float) -> Float = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun Float::atan2(self: Float) -> Float = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun Float::atanh(self: Float) -> Float = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun Float::cbrt(self: Float) -> Float = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun Float::ceil(self: Float) -> Float = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun Float::cos(self: Float) -> Float = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun Float::cosh(self: Float) -> Float = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun Float::exp(self: Float) -> Float = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun Float::expm1(self: Float) -> Float = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun Float::floor(self: Float) -> Float = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun Float::hypot(a: Float, b: Float) -> Float = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun Float::log(self: Float) -> Float = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun Float::log10(self: Float) -> Float = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun Float::log1p(self: Float) -> Float = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun Float::log2(self: Float) -> Float = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun Float::powi(self: Float, n: Int) -> Float = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun Float::powf(self: Float, n: Float) -> Float = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun Float::round(self: Float) -> Float = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun Float::sin(self: Float) -> Float = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun Float::sinh(self: Float) -> Float = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun Float::sqrt(self: Float) -> Float = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun Float::tan(self: Float) -> Float = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun Float::tanh(self: Float) -> Float = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun Float::trunc(self: Float) -> Float = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"

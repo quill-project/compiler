@@ -1,0 +1,61 @@
+
+mod std
+
+pub ext fun Int::plus(lhs: Int, rhs: Int) -> Int = "
+    return (quill_int_t) (((quill_uint_t) #var(lhs)) + ((quill_uint_t) #var(rhs)));
+"
+
+pub ext fun Int::minus(lhs: Int, rhs: Int) -> Int = "
+    return (quill_int_t) (((quill_uint_t) #var(lhs)) - ((quill_uint_t) #var(rhs)));
+"
+
+pub ext fun Int::times(lhs: Int, rhs: Int) -> Int = "
+    return (quill_int_t) (((quill_uint_t) #var(lhs)) * ((quill_uint_t) #var(rhs)));
+"
+
+pub ext fun Int::div(lhs: Int, rhs: Int) -> Int = "
+    if(#var(rhs) == 0) { quill_panic((quill_string_t) { .alloc = NULL, .data = \"Integer division by zero\", .length_bytes = 24, .length_points = 24 }); }
+    return (quill_int_t) (((quill_uint_t) #var(lhs)) / ((quill_uint_t) #var(rhs)));
+"
+
+pub ext fun Int::rem(lhs: Int, rhs: Int) -> Int = "
+    if(#var(rhs) == 0) { quill_panic((quill_string_t) { .alloc = NULL, .data = \"Integer division by zero\", .length_bytes = 24, .length_points = 24 }); }
+    return (quill_int_t) (((quill_uint_t) #var(lhs)) % ((quill_uint_t) #var(rhs)));
+"
+
+pub ext fun Int::lt(lhs: Int, rhs: Int) -> Bool = "
+    return #var(lhs) < #var(rhs);
+"
+
+pub ext fun Int::gt(lhs: Int, rhs: Int) -> Bool = "
+    return #var(lhs) > #var(rhs);
+"
+
+pub ext fun Int::lt_eq(lhs: Int, rhs: Int) -> Bool = "
+    return #var(lhs) <= #var(rhs);
+"
+
+pub ext fun Int::gt_eq(lhs: Int, rhs: Int) -> Bool = "
+    return #var(lhs) >= #var(rhs);
+"
+
+pub ext fun Int::eq(lhs: Int, rhs: Int) -> Bool = "
+    return #var(lhs) == #var(rhs);
+"
+
+pub ext fun Int::not_eq(lhs: Int, rhs: Int) -> Bool = "
+    return #var(lhs) != #var(rhs);
+"
+
+pub ext fun Int::u_minus(x: Int) -> Int = "
+    return -(#var(x));
+"
+
+pub ext fun Int::as_string(self: Int) -> String = "
+    // TODO!
+    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+"
+
+pub ext fun Int::as_float(self: Int) -> Float = "
+    return (quill_float_t) #var(self);
+"

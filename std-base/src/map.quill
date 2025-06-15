@@ -70,6 +70,22 @@ pub fun Map::set[K, V](self: mut Map[K, V], key: K, value: V) -> Option[V]
 
 // access
 
+pub fun Map::eq[K, V](lhs: Map[K, V], rhs: Map[K, V]) -> Bool {
+    if (lhs |> size()) != (rhs |> size()) { return false }
+    // no need to check if all values of 'rhs' are in 'lhs', 
+    // since size is the same 'rhs' can't have any extras
+    return lhs 
+        |> entries() 
+        |> all(|a| rhs 
+            |> get(a.first) 
+            |> map[V, Bool](|b_v| a.second == b_v)
+            |> unwrap_or(false)
+        )
+}
+
+pub fun Map::not_eq[K, V](lhs: Map[K, V], rhs: Map[K, V]) -> Bool 
+    = !Map::eq(lhs, rhs)
+
 pub fun Map::as_string[K, V](self: Map[K, V]) -> String {
     val contents = self 
         |> entries() 

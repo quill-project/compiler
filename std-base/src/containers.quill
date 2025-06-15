@@ -3,6 +3,12 @@ mod std
 
 pub struct Box[T](value: T)
 
+pub fun Box::eq[T](lhs: Box[T], rhs: Box[T]) -> Bool
+    = lhs.value == rhs.value
+
+pub fun Box::not_eq[T](lhs: Box[T], rhs: Box[T]) -> Bool 
+    = !Box::eq(lhs, rhs)
+
 pub fun Box::as_string[T](self: Box[T]) -> String
     = "Box(" |> concat(T::as_string(self.value)) |> concat(")")
 
@@ -12,6 +18,13 @@ pub fun Box::clone[T](self: Box[T]) -> mut Box[T] = Box(T::clone(self.value))
 
 
 pub struct Pair[A, B](first: A, second: B)
+
+pub fun Pair::eq[A, B](lhs: Pair[A, B], rhs: Pair[A, B]) -> Bool
+    = lhs.first == rhs.first 
+    && lhs.second == rhs.second
+
+pub fun Pair::not_eq[A, B](lhs: Pair[A, B], rhs: Pair[A, B]) -> Bool 
+    = !Pair::eq(lhs, rhs)
 
 pub fun Pair::as_string[A, B](self: Pair[A, B]) -> String
     = "Pair(_, _)" |> fmt(
@@ -25,12 +38,20 @@ pub fun Pair::as_hash[A, B](self: Pair[A, B]) -> Int
 
 pub fun Pair::clone[A, B](self: Pair[A, B]) -> mut Pair[A, B]
     = Pair(
-        A::clone(self.first), 
+        A::clone(self.first),
         B::clone(self.second)
     )
 
 
 pub struct Triplet[A, B, C](first: A, second: B, third: C)
+
+pub fun Triplet::eq[A, B, C](lhs: Triplet[A, B, C], rhs: Triplet[A, B, C]) -> Bool
+    = lhs.first == rhs.first 
+    && lhs.second == rhs.second
+    && lhs.third == rhs.third
+
+pub fun Triplet::not_eq[A, B, C](lhs: Triplet[A, B, C], rhs: Triplet[A, B, C]) -> Bool 
+    = !Triplet::eq(lhs, rhs)
 
 pub fun Triplet::as_string[A, B, C](self: Triplet[A, B, C]) -> String
     = "Triplet(_, _, _)" |> fmt(

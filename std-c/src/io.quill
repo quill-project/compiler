@@ -1,0 +1,10 @@
+
+mod std
+
+ext fun raw_println(line: String) = "
+    quill_println(#var(line));
+"
+
+pub ext fun panic[T](reason: String) -> T = "
+    quill_panic(#var(reason));
+"

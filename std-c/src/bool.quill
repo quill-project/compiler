@@ -1,0 +1,14 @@
+
+mod std
+
+pub ext fun Bool::eq(lhs: Bool, rhs: Bool) -> Bool = "
+    return #var(lhs) == #var(rhs);
+"
+
+pub ext fun Bool::not_eq(lhs: Bool, rhs: Bool) -> Bool = "
+    return #var(lhs) != #var(rhs);
+"
+
+pub ext fun Bool::not(x: Bool) -> Bool = "
+    return !(#var(x));
+"
