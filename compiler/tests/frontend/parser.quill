@@ -42,7 +42,7 @@ pub fun literals() {
     assert_tree(parser::parse_value, "hello::world", "hello::world")
     assert_tree(parser::parse_value, 
         "if x < 5 { 5 } else if x > 10 { 10 } else { x }", 
-        "(if (x < 5) then 5 else (if (10 < x) then 10 else x))"
+        "(if (x < 5) then 5 else (if (x > 10) then 10 else x))"
     )
     assert_tree(parser::parse_value, "println[String]", "println[type@String]")
 }
@@ -57,7 +57,7 @@ pub fun binary() {
         = |p| parser::parse_expression(p, Int::MAX)
     
     assert_tree(expression, "5 + 5 * 10", "(5 + (5 * 10))")
-    assert_tree(expression, "3 > -4", "((- 4) < 3)")
+    assert_tree(expression, "3 > -4", "(3 > (- 4))")
     assert_tree(expression, 
         "5 < 10 || 10 < 20", 
         "(if (5 < 10) then true else (10 < 20))"
@@ -67,7 +67,7 @@ pub fun binary() {
         "my_cat.name == \"Bob\"", 
         "((my_cat .name) == \"Bob\")"
     )
-    assert_tree(expression, "0 >= x + 5", "((x + 5) <= 0)")
+    assert_tree(expression, "0 >= x + 5", "(0 >= (x + 5))")
     assert_tree(expression, 
         "is_logged_in() && is_verified()", 
         "(if (is_logged_in()) then (is_verified()) else false)"
@@ -107,7 +107,7 @@ pub fun control_flow() {
     )
     assert_tree(parser::parse_statement, 
         "if x < 5 { return 5 } else if x > 10 { return 10 } else { return x }", 
-        "if (x < 5) { return 5 } else { if (10 < x) { return 10 } else { return x } }"
+        "if (x < 5) { return 5 } else { if (x > 10) { return 10 } else { return x } }"
     )
     assert_tree(parser::parse_statement, 
         "while x < 5 { println(x)   x = x + 1 }", 

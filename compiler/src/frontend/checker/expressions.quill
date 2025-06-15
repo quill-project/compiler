@@ -1104,8 +1104,14 @@ pub fun Checker::check(
         LessThan(o) {
             return check_ordering(o, |op| ast::Variant::LessThan(op))
         }
+        GreaterThan(o) {
+            return check_ordering(o, |op| ast::Variant::GreaterThan(op))
+        }
         LessThanEqual(o) {
             return check_ordering(o, |op| ast::Variant::LessThanEqual(op))
+        }
+        GreaterThanEqual(o) {
+            return check_ordering(o, |op| ast::Variant::GreaterThanEqual(op))
         }
         Equal(o) {
             return check_comparison(o, |op| ast::Variant::Equal(op))
@@ -1271,8 +1277,14 @@ pub fun Checker::infer(
         LessThan(o) {
             return infer_ordering(o, |op| ast::Variant::LessThan(op))
         }
+        GreaterThan(o) {
+            return infer_ordering(o, |op| ast::Variant::GreaterThan(op))
+        }
         LessThanEqual(o) {
             return infer_ordering(o, |op| ast::Variant::LessThanEqual(op))
+        }
+        GreaterThanEqual(o) {
+            return infer_ordering(o, |op| ast::Variant::GreaterThanEqual(op))
         }
         Equal(o) {
             return infer_comparison(o, |op| ast::Variant::Equal(op))

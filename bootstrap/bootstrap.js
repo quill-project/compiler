@@ -16,28 +16,23 @@ function collectFiles(dir, ext) {
     return files;
 }
 
-// collect all source files
-const files = [
+// compile the compiler using the bootstrap compiler
+const bscFiles = [
     ...collectFiles("./bootstrap", ".quill"),
     ...collectFiles("./std-base/src", ".quill"),
-    ...collectFiles("./compiler/src", ".quill"),
-    ...collectFiles("./cli/src", ".quill")
+    ...collectFiles("./compiler/src", ".quill")
 ];
-const srcFilesM = {};
-const srcFilesL = [];
-for(const file of files) {
+const bscSrcFiles = {};
+for(const file of bscFiles) {
     const content = fs.readFileSync(file, 'utf8')
-	srcFilesM[file] = content;
-    srcFilesL.push({ file, content });
+	bscSrcFiles[file] = content;
 }
-
-// compile the compiler using the bootstrap compiler
 const bscStart = Date.now();
-const bsResult = quill.compile(srcFilesM);
+const bsResult = quill.compile(bscSrcFiles);
 const bscEnd = Date.now();
 console.log(`Bootstrap compiler took ${bscEnd - bscStart}ms to compile QIQ`);
 console.error(bsResult.messages
-    .map(m => quill.message.display(m, srcFilesM))
+    .map(m => quill.message.display(m, bscSrcFiles))
     .join("\n\n")
 );
 if(!bsResult.success) {
@@ -48,9 +43,20 @@ bsResult.code += "module.exports = quill$bootstrap$compile$$0;\n";
 fs.writeFileSync("bootstrap/build.js", bsResult.code);
 
 // have the compiler compile itself
+const qiqFiles = [
+    ...collectFiles("./std-base/src", ".quill"),
+    ...collectFiles("./std-c/src", ".quill"),
+    ...collectFiles("./compiler/src", ".quill"),
+    ...collectFiles("./cli/src", ".quill")
+];
+const qiqSrcFiles = [];
+for(const file of qiqFiles) {
+    const content = fs.readFileSync(file, 'utf8')
+    qiqSrcFiles.push({ file, content });
+}
 const bootstrapped = require("./build.js");
 const qiqStart = Date.now();
-const result = bootstrapped(srcFilesL, "quill::cli::main");
+const result = bootstrapped(qiqSrcFiles, "quill::cli::main");
 const qiqEnd = Date.now();
 console.log(`QIQ took ${qiqEnd - qiqStart}ms to parse and check QIQ`);
 fs.writeFileSync("bootstrap/build.c", result);

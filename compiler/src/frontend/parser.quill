@@ -326,17 +326,17 @@ pub fun parse_expression(s: mut Parser, parent_prec: Int) -> UntypedNode
         val operands: Pair[UntypedNode, UntypedNode] = Pair(lhs, rhs)
         val src: Source = Source::range(lhs.source, rhs.source)
         match op.type {
-            Asterisk         { return UntypedNode(ast::Variant::Multiply     (Pair(lhs, rhs)), src) }
-            Slash            { return UntypedNode(ast::Variant::Divide       (Pair(lhs, rhs)), src) }
-            Percent          { return UntypedNode(ast::Variant::Remainder    (Pair(lhs, rhs)), src) }
-            Plus             { return UntypedNode(ast::Variant::Add          (Pair(lhs, rhs)), src) }
-            Minus            { return UntypedNode(ast::Variant::Subtract     (Pair(lhs, rhs)), src) }
-            LessThan         { return UntypedNode(ast::Variant::LessThan     (Pair(lhs, rhs)), src) }
-            GreaterThan      { return UntypedNode(ast::Variant::LessThan     (Pair(rhs, lhs)), src) } // OPERANDS FLIPPED
-            LessThanEqual    { return UntypedNode(ast::Variant::LessThanEqual(Pair(lhs, rhs)), src) }
-            GreaterThanEqual { return UntypedNode(ast::Variant::LessThanEqual(Pair(rhs, lhs)), src) } // OPERANDS FLIPPED
-            DoubleEqual      { return UntypedNode(ast::Variant::Equal        (Pair(lhs, rhs)), src) }
-            NotEqual         { return UntypedNode(ast::Variant::NotEqual     (Pair(lhs, rhs)), src) }
+            Asterisk         { return UntypedNode(ast::Variant::Multiply        (Pair(lhs, rhs)), src) }
+            Slash            { return UntypedNode(ast::Variant::Divide          (Pair(lhs, rhs)), src) }
+            Percent          { return UntypedNode(ast::Variant::Remainder       (Pair(lhs, rhs)), src) }
+            Plus             { return UntypedNode(ast::Variant::Add             (Pair(lhs, rhs)), src) }
+            Minus            { return UntypedNode(ast::Variant::Subtract        (Pair(lhs, rhs)), src) }
+            LessThan         { return UntypedNode(ast::Variant::LessThan        (Pair(lhs, rhs)), src) }
+            GreaterThan      { return UntypedNode(ast::Variant::GreaterThan     (Pair(lhs, rhs)), src) }
+            LessThanEqual    { return UntypedNode(ast::Variant::LessThanEqual   (Pair(lhs, rhs)), src) }
+            GreaterThanEqual { return UntypedNode(ast::Variant::GreaterThanEqual(Pair(lhs, rhs)), src) }
+            DoubleEqual      { return UntypedNode(ast::Variant::Equal           (Pair(lhs, rhs)), src) }
+            NotEqual         { return UntypedNode(ast::Variant::NotEqual        (Pair(lhs, rhs)), src) }
             DoubleAmpersand {
                 // 'lhs && rhs' -> 'if lhs { rhs } else { false }'
                 return UntypedNode(ast::Variant::IfExpr(ast::IfExpr(

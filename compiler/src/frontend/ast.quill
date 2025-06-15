@@ -85,7 +85,9 @@ pub enum Variant[N](
     Divide: Pair[N, N],
     Remainder: Pair[N, N],
     LessThan: Pair[N, N],
+    GreaterThan: Pair[N, N],
     LessThanEqual: Pair[N, N],
+    GreaterThanEqual: Pair[N, N],
     Equal: Pair[N, N],
     NotEqual: Pair[N, N],
     Negate: N,
@@ -200,7 +202,9 @@ pub fun Variant::as_string[N](self: Variant[N]) -> String {
         Variant::Divide(Pair(a, b)) { return "(_ / _)" |> fmt(N::as_string(a), N::as_string(b)) }
         Variant::Remainder(Pair(a, b)) { return "(_ % _)" |> fmt(N::as_string(a), N::as_string(b)) }
         Variant::LessThan(Pair(a, b)) { return "(_ < _)" |> fmt(N::as_string(a), N::as_string(b)) }
+        Variant::GreaterThan(Pair(a, b)) { return "(_ > _)" |> fmt(N::as_string(a), N::as_string(b)) }
         Variant::LessThanEqual(Pair(a, b)) { return "(_ <= _)" |> fmt(N::as_string(a), N::as_string(b)) }
+        Variant::GreaterThanEqual(Pair(a, b)) { return "(_ >= _)" |> fmt(N::as_string(a), N::as_string(b)) }
         Variant::Equal(Pair(a, b)) { return "(_ == _)" |> fmt(N::as_string(a), N::as_string(b)) }
         Variant::NotEqual(Pair(a, b)) { return "(_ != _)" |> fmt(N::as_string(a), N::as_string(b)) }
         Variant::Negate(x) { return "(- _)" |> fmt(N::as_string(x)) }

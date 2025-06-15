@@ -26,10 +26,19 @@
 
 #include <stdint.h>
 #include <stdlib.h>
+#include <math.h>
+
+
+typedef uint8_t quill_unit_t;
+typedef int64_t quill_int_t;
+typedef uint64_t quill_uint_t;
+typedef double quill_float_t;
+typedef uint8_t quill_bool_t;
+
 
 typedef struct quill_alloc quill_alloc_t;
 
-typedef void (*quill_destructor_t)(quill_alloc_t* alloc);
+typedef quill_unit_t (*quill_destructor_t)(quill_alloc_t* alloc);
 
 typedef struct quill_alloc {
     uint64_t rc;
@@ -38,61 +47,68 @@ typedef struct quill_alloc {
 } quill_alloc_t;
 
 
-typedef uint8_t quill_unit_t;
-typedef int64_t quill_int_t;
-typedef double quill_float_t;
-typedef uint8_t quill_bool_t;
-
 typedef struct quill_string {
-    quill_alloc_t* alloc;
-    const char* data;
-    uint64_t length;
+    quill_alloc_t *alloc;
+    const char *data;
+    quill_uint_t length_points;
+    quill_uint_t length_bytes;
 } quill_string_t;
 
-typedef struct quill_struct {
-    quill_alloc_t* alloc;
-} quill_struct_t;
+typedef quill_alloc_t *quill_struct_t;
 
-typedef struct quill_enum {
-    quill_alloc_t* alloc;
-    uint32_t tag;
-} quill_enum_t;
+typedef quill_alloc_t *quill_enum_t;
 
-typedef const void* quill_fptr_t;
+typedef const void *quill_fptr_t;
 
 typedef struct quill_closure {
-    quill_alloc_t* alloc;
+    quill_alloc_t *alloc;
     quill_fptr_t body;
 } quill_closure_t;
 
-typedef struct quill_list {
-    void* buffer;
-    uint64_t capacity;
-    uint64_t length;
-} quill_list_t;
+typedef struct quill_list_layout {
+    void *buffer;
+    quill_uint_t capacity;
+    quill_uint_t length;
+} quill_list_layout_t;
+
+typedef quill_alloc_t *quill_list_t;
+
 
 #define QUILL_UNIT 0
 #define QUILL_FALSE 0
 #define QUILL_TRUE 1
-#define QUILL_STRING_LIT(l) ((quill_string_t) { .alloc = NULL, .data = (l), .length = sizeof(l) - 1 })
+#define QUILL_EMPTY_STRING ((quill_string_t) { .alloc = NULL, .data = NULL, .length_bytes = 0, .length_points = 0 })
+#define QUILL_NULL_ALLOC ((quill_alloc_t *) NULL)
+#define QUILL_NULL_STRUCT QUILL_NULL_ALLOC
+#define QUILL_NULL_ENUM QUILL_NULL_ALLOC
+#define QUILL_NULL_CLOSURE ((quill_closure_t) { .alloc = NULL, .body = NULL })
+#define QUILL_NULL_LIST QUILL_NULL_ALLOC
 
 
-static quill_alloc_t* quill_malloc(size_t n) {
+static quill_alloc_t *quill_malloc(size_t n, quill_destructor_t destructor) {
     if(n == 0) { return NULL; }
-    return (quill_alloc_t*) malloc(sizeof(quill_alloc_t) + n);
+    quill_alloc_t *alloc = malloc(sizeof(quill_alloc_t) + n);
+    alloc->rc = 1;
+    alloc->destructor = destructor;
+    return alloc;
 }
 
-static void quill_rc_add(quill_alloc_t* alloc) {
+static void quill_rc_add(quill_alloc_t *alloc) {
     if(alloc == NULL) { return; }
     alloc->rc += 1;
 }
 
-static void quill_rc_dec(quill_alloc_t* alloc) {
+static void quill_rc_dec(quill_alloc_t *alloc) {
     if(alloc == NULL) { return; }
     alloc->rc -= 1;
     if(alloc->rc > 0) { return; }
-    alloc->destructor(alloc);
+    quill_destructor_t destructor = alloc->destructor;
+    if(destructor != NULL) { destructor(alloc); }
     free(alloc);
 }
+
+
+void quill_println(quill_string_t line);
+void quill_panic(quill_string_t reason);
 
 #endif

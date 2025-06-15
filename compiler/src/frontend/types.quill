@@ -338,7 +338,7 @@ pub struct Symbol(
     node: UntypedNode,
     type_args: List[String],
     context: ModuleContext,
-    instances: mut Map[String, Pair[TypedNode, Int]],
+    instances: mut Map[String, Triplet[TypedNode, Int, List[Type]]],
     next_id: Int
 )
 
@@ -499,7 +499,8 @@ pub fun SymbolTable::check_symbol(
     )
     val checked: TypedNode = checker |> check_declaration(symbol.node)
     val id: Int = symbol.next_id
-    val variant: Pair[TypedNode, Int] = Pair(checked, id)
+    val variant: Triplet[TypedNode, Int, List[Type]] 
+        = Triplet(checked, id, instance.type_args)
     symbol.instances |> set(instance_key, variant)
     symbol.next_id = id + 1
 }
