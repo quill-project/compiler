@@ -12,7 +12,7 @@ fun check_symbols(content: String) -> mut SymbolTable {
     val messages: mut List[Message] = List::empty()
     val queue: mut List[SymbolInstance] = table |> base_instances()
     Stream::new[mut List[SymbolInstance]](|| queue)
-        |> take_while(|q| q |> length() |> is_not(0))
+        |> take_while(|q| (q |> length()) != 0)
         |> for_each(|q| {
             val i: SymbolInstance = q |> pop() |> expect("stream ends on empty")
             table |> check_symbol(i, q, messages)
@@ -39,7 +39,7 @@ fun assert_symbol(
     val queue: mut List[SymbolInstance] 
         = List::of(SymbolInstance(path_segs, t_args))
     Stream::new[mut List[SymbolInstance]](|| queue)
-        |> take_while(|q| q |> length() |> is_not(0))
+        |> take_while(|q| (q |> length()) != 0)
         |> for_each(|q| {
             val i: SymbolInstance = q |> pop() |> expect("stream ends on empty")
             table |> check_symbol(i, q, messages)
@@ -58,8 +58,8 @@ fun assert_symbol(
         |> unwrap_or_else(
             || panic("Checking assertion failed: '_' not found" |> fmt(path))
         )
-    val instance: Pair[TypedNode, Int] = symbol.instances
-        |> get(t_args)
+    val instance: Triplet[TypedNode, Int, List[Type]] = symbol.instances
+        |> get(SymbolInstance(path_segs, t_args) |> key())
         |> expect("instance was put in the queue earlier")
     val output: String = TypedNode::as_string(instance.first)
     if output != expected {
@@ -93,58 +93,69 @@ fun sum[T](of: std::List[T]) {}
     )
     assert_symbol(t, c, 
         "container::Box", List::of(Type(Variant::String, !IS_MUTABLE, s)), 
-        "pub struct Box[T](value: type@T (=String)) (=Unit)"
+        "pub struct container::Box[T](value: type@T (=String)) (=Unit)"
     )
     assert_symbol(t, c, 
         "container::display", List::of(Type(Variant::String, !IS_MUTABLE, s)), 
-        "fun display[T](self: type@container::Box[type@T (=String)] (=container::Box[String])) {  } (=Unit)"
+        "fun container::display[T](self: type@container::Box[type@T (=String)] (=container::Box[String])) {  } (=Unit)"
     )
     assert_symbol(t, c, 
         "arithmetic::add", List::of(Type(Variant::Integer, !IS_MUTABLE, s)), 
-        "fun add[T](a: type@T (=Int), b: type@T (=Int)) {  } (=Unit)"
+        "fun arithmetic::add[T](a: type@T (=Int), b: type@T (=Int)) {  } (=Unit)"
     )
     assert_symbol(t, c, 
         "arithmetic::add", List::of(Type(Variant::Float, !IS_MUTABLE, s)), 
-        "fun add[T](a: type@T (=Float), b: type@T (=Float)) {  } (=Unit)"
+        "fun arithmetic::add[T](a: type@T (=Float), b: type@T (=Float)) {  } (=Unit)"
     )
     assert_symbol(t, c, 
         "arithmetic::incr", List::empty(), 
-        "fun incr[](r: type+mut@container::Box[type@Int (=Int)] (=mut container::Box[Int])) {  } (=Unit)"
+        "fun arithmetic::incr[](r: type+mut@container::Box[type@Int (=Int)] (=mut container::Box[Int])) {  } (=Unit)"
     )
     assert_symbol(t, c, 
         "arithmetic::sum", List::of(Type(Variant::Integer, !IS_MUTABLE, s)), 
-        "fun sum[T](of: type@std::List[type@T (=Int)] (=List[Int])) {  } (=Unit)"
+        "fun arithmetic::sum[T](of: type@std::List[type@T (=Int)] (=List[Int])) {  } (=Unit)"
     )
 }
 
+pub val ARITHMETICS = "
+pub ext fun std::Int::plus(lhs: Int, rhs: Int) -> Int = \"\"
+pub ext fun std::Float::plus(lhs: Float, rhs: Float) -> Float = \"\"
+pub ext fun std::Float::minus(lhs: Float, rhs: Float) -> Float = \"\"
+pub ext fun std::Float::times(lhs: Float, rhs: Float) -> Float = \"\"
+pub ext fun std::Float::div(lhs: Float, rhs: Float) -> Float = \"\"
+pub ext fun std::Float::rem(lhs: Float, rhs: Float) -> Float = \"\"
+pub ext fun std::Float::lt(lhs: Float, rhs: Float) -> Bool = \"\"
+pub ext fun std::Float::u_minus(x: Float) -> Float = \"\"
+"
+
 pub fun numeric() {
-    val c = "
+    val c = ARITHMETICS |> concat("
 pub val FIVE_PLUS_TEN: Int = 5 + 10
 
 fun test() -> Float {
     if 0.5 < 10.0 { return -3.0 * 0.2 + 0.5 - 3.0 }
     return 2.5 + 2.0 / 0.5 % 3.0
 }
-    "
+    ")
     val t = check_symbols(c)
     val s = Source("test.quill", 0, 0)
     assert_symbol(t, c, 
         "FIVE_PLUS_TEN", List::empty(), 
-        "pub val FIVE_PLUS_TEN: type@Int (=Int) = (5 (=Int) + 10 (=Int)) (=Int) (=Unit)"
+        "pub val FIVE_PLUS_TEN: type@std::Int (=Int) = (fun@std::Int::plus[](5 (=Int), 10 (=Int))) (=Int) (=Unit)"
     )
     assert_symbol(t, c,
         "test", List::empty(),
-        "fun test[]() -> type@Float (=Float) { \
-if (0.5 (=Float) < 10 (=Float)) (=Bool) { \
-return ((((- 3 (=Float)) (=Float) * 0.2 (=Float)) (=Float) + 0.5 (=Float)) (=Float) - 3 (=Float)) (=Float) (=Unit) \
+        "fun test[]() -> type@std::Float (=Float) { \
+if (fun@std::Float::lt[](0.5 (=Float), 10 (=Float))) (=Bool) { \
+return (fun@std::Float::minus[]((fun@std::Float::plus[]((fun@std::Float::times[]((fun@std::Float::u_minus[](3 (=Float))) (=Float), 0.2 (=Float))) (=Float), 0.5 (=Float))) (=Float), 3 (=Float))) (=Float) (=Unit) \
 } else {  } (=Unit); \
-return (2.5 (=Float) + ((2 (=Float) / 0.5 (=Float)) (=Float) % 3 (=Float)) (=Float)) (=Float) (=Unit) \
+return (fun@std::Float::plus[](2.5 (=Float), (fun@std::Float::rem[]((fun@std::Float::div[](2 (=Float), 0.5 (=Float))) (=Float), 3 (=Float))) (=Float))) (=Float) (=Unit) \
 } (=Unit)"
     )
 }
 
 pub fun structs() {
-    val c = "
+    val c = ARITHMETICS |> concat("
 mod pet
 pub struct Cat(name: String, hunger: Float)
 pub val NO_HUNGER: Float = 0.0
@@ -160,28 +171,31 @@ pub fun rebirth(c: mut Cat, name: String) {
 
 pub fun mate(a: Cat, b: Cat) -> mut Cat
     = Cat(\"unnamed\", (a.hunger + b.hunger) / 2.0)
-    "
+    ")
     val t = check_symbols(c)
     val s = Source("test.quill", 0, 0)
     assert_symbol(t, c, 
         "pet::Cat", List::empty(), 
-        "pub struct Cat[](name: type@String (=String), hunger: type@Float (=Float)) (=Unit)"
+        "pub struct pet::Cat[](name: type@String (=String), hunger: type@std::Float (=Float)) (=Unit)"
     )
     assert_symbol(t, c,
         "pet::feed", List::empty(),
-        "pub fun feed[](c: type+mut@pet::Cat (=mut pet::Cat)) { (var@c (=mut pet::Cat) .hunger) (=Float) = pet::NO_HUNGER (=Float) (=Unit) } (=Unit)"
+        "pub fun pet::feed[](c: type+mut@pet::Cat (=mut pet::Cat)) { (var@c (=mut pet::Cat) .hunger) (=Float) = pet::NO_HUNGER (=Float) (=Unit) } (=Unit)"
     )
     assert_symbol(t, c,
         "pet::rebirth", List::empty(),
-        "pub fun rebirth[](c: type+mut@pet::Cat (=mut pet::Cat), name: type@String (=String)) { \
+        "pub fun pet::rebirth[](c: type+mut@pet::Cat (=mut pet::Cat), name: type@String (=String)) { \
 (var@c (=mut pet::Cat) .name) (=String) = var@name (=String) (=Unit); \
 (var@c (=mut pet::Cat) .hunger) (=Float) = pet::NO_HUNGER (=Float) (=Unit) \
 } (=Unit)"
     )
     assert_symbol(t, c,
         "pet::mate", List::empty(),
-        "pub fun mate[](a: type@pet::Cat (=pet::Cat), b: type@pet::Cat (=pet::Cat)) -> type+mut@pet::Cat (=mut pet::Cat) { \
-return (struct@pet::Cat(\"unnamed\" (=String), (((var@a (=pet::Cat) .hunger) (=Float) + (var@b (=pet::Cat) .hunger) (=Float)) (=Float) / 2 (=Float)) (=Float))) (=mut pet::Cat) (=Unit) \
+        "pub fun pet::mate[](a: type@pet::Cat (=pet::Cat), b: type@pet::Cat (=pet::Cat)) -> type+mut@pet::Cat (=mut pet::Cat) { \
+return (struct@pet::Cat(\
+\"unnamed\" (=String), \
+(fun@std::Float::div[]((fun@std::Float::plus[]((var@a (=pet::Cat) .hunger) (=Float), (var@b (=pet::Cat) .hunger) (=Float))) (=Float), 2 (=Float))) (=Float)\
+)) (=mut pet::Cat) (=Unit) \
 } (=Unit)"
     )
 }
@@ -233,7 +247,7 @@ fun varargs() {
     val s = Source("test.quill", 0, 0)
     assert_symbol(t, c,
         "test::boxing", List::empty(),
-        "fun boxing[]() { \
+        "fun test::boxing[]() { \
 val a = (struct@std::Box(5 (=Int))) (=mut std::Box[Int]) (=Unit); \
 val b: type@std::Box[type@std::Float (=Float)] (=std::Box[Float]) = (struct@std::Box(10 (=Float))) (=mut std::Box[Float]) (=Unit); \
 val c = (struct@std::Box[type@Bool (=Bool)](true (=Bool))) (=mut std::Box[Bool]) (=Unit) \
@@ -241,7 +255,7 @@ val c = (struct@std::Box[type@Bool (=Bool)](true (=Bool))) (=mut std::Box[Bool])
     )
     assert_symbol(t, c,
         "test::options", List::empty(),
-        "fun options[]() { \
+        "fun test::options[]() { \
 val a = (enum@std::Option::Some(25 (=Int))) (=std::Option[Int]) (=Unit); \
 val b: type@std::Option[type@std::Float (=Float)] (=std::Option[Float]) = (enum@std::Option::Some(13.1 (=Float))) (=std::Option[Float]) (=Unit); \
 val c = (enum@std::Option::Some[type@Bool (=Bool)](false (=Bool))) (=std::Option[Bool]) (=Unit); \
@@ -251,7 +265,7 @@ val e = (enum@std::Option::None[type@Unit (=Unit)](unit (=Unit))) (=std::Option[
     )
     assert_symbol(t, c,
         "test::fun_stuff", List::empty(),
-        "fun fun_stuff[]() { \
+        "fun test::fun_stuff[]() { \
 val r = (fun@std::pipeline(\
 5 (=Int), \
 |n| { return (fun@std::Int::as_float(var@n (=Int))) (=Float) (=Unit) } (=Fun(Int) -> Float), \
@@ -261,7 +275,7 @@ val r = (fun@std::pipeline(\
     )
     assert_symbol(t, c,
         "test::varargs", List::empty(),
-        "fun varargs[]() { \
+        "fun test::varargs[]() { \
 val a = (fun@std::sum(1 (=Int), 2 (=Int), 3 (=Int))) (=Int) (=Unit); \
 val b = (fun@std::sum(1 (=Float), 2 (=Float), 3 (=Float))) (=Float) (=Unit) \
 } (=Unit)"
@@ -310,7 +324,7 @@ pub struct BoolPair(a: Bool, b: Bool)
 }
 
 pub fun matching() {
-    val c = "
+    val c = ARITHMETICS |> concat("
 mod std
 pub struct Vec2(x: Int, y: Int)
 pub struct Box[T](value: T)
@@ -351,12 +365,12 @@ pub fun enums(name: Option[String]) {
         None {}
     }
 }
-    "
+    ")
     val t = check_symbols(c)
     val s = Source("test.quill", 0, 0)
     assert_symbol(t, c,
         "test::values", List::empty(),
-        "pub fun values[](n: type@Int (=Int)) { \
+        "pub fun test::values[](n: type@std::Int (=Int)) { \
 match var@n (=Int) { \
 1 (=Int) () -> {  } \
 2 (=Int) () -> {  } \
@@ -367,7 +381,7 @@ var@_ (=Int) () -> {  } \
     )
     assert_symbol(t, c,
         "test::structs", List::empty(),
-        "pub fun structs[](pos: type@std::Vec2 (=std::Vec2), double: type@std::Box[type@Bool (=Bool)] (=std::Box[Bool])) { \
+        "pub fun test::structs[](pos: type@std::Vec2 (=std::Vec2), double: type@std::Box[type@Bool (=Bool)] (=std::Box[Bool])) { \
 match var@pos (=std::Vec2) { \
 (struct@std::Vec2(0 (=Int), 0 (=Int))) (=std::Vec2) () -> {  } \
 (struct@std::Vec2(var@x (=Int), 0 (=Int))) (=std::Vec2) (x: Int) -> {  } \
@@ -382,7 +396,7 @@ match var@double (=std::Box[Bool]) { \
     )
     assert_symbol(t, c,
         "test::enums", List::empty(),
-        "pub fun enums[](name: type@std::Option[type@String (=String)] (=std::Option[String])) { \
+        "pub fun test::enums[](name: type@std::Option[type@String (=String)] (=std::Option[String])) { \
 match var@name (=std::Option[String]) { \
 (enum@std::Option::Some[type@String (=String)](\"Maria\" (=String))) (=std::Option[String]) () -> {  } \
 (enum@std::Option::Some(\"Bob\" (=String))) (=std::Option[String]) () -> {  } \

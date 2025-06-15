@@ -126,7 +126,7 @@ pub fun Checker::check_match_pattern(
     }
     match node.value {
         PathRef(ast::PathRef(ref_path, ref_t_args)) {
-            if ref_path |> length() |> is_not(1) { return default_check() }
+            if (ref_path |> length()) != 1 { return default_check() }
             val name: String = ref_path |> at(0)
             if enum_has_member(name) {
                 val repl = UntypedNode(
@@ -247,7 +247,7 @@ pub fun Checker::check_match_pattern(
                 }
                 Enum(Pair(enum_path, e_t_args)) {
                     val path_matches: Bool = raw_enum_path == enum_path
-                        || (raw_enum_path |> length() |> is(0))
+                        || (raw_enum_path |> length()) == 0
                     if !path_matches { return default_check() }
                     val ref_t_args_t: List[TypedNode]
                         = check_type_args(enum_path, e_t_args)

@@ -25,7 +25,7 @@ fun infer_anno_t_args(
             val exp_t_arg_c: Int = exp_t_args
                 |> map(List::length[UntypedNode])
                 |> unwrap_or(0)
-            val is_t_arg: Bool = (exp_path |> length() |> is(1))
+            val is_t_arg: Bool = 1 == (exp_path |> length())
                 && (decl_c.type_args |> has(exp_path |> at(0)))
             if is_t_arg {
                 val arg_name: String = exp_path |> at(0)
@@ -357,7 +357,7 @@ pub fun Checker::check_path_ref(
     raw_path: List[String], t_args: Option[List[UntypedNode]],
     exp: Option[Type]
 ) -> TypedNode {
-    if raw_path |> length() |> is(1) {
+    if 1 == (raw_path |> length()) {
         val local_name: String = raw_path |> at(0)
         match self |> find_variable(local_name) {
             Some(local) {
@@ -623,7 +623,7 @@ pub fun Checker::check_invocation(
                     ))
                 }
                 val exp_arg_c: Int = if !exp_varargs { exp_arg_t |> length() }
-                    else { exp_arg_t |> length() |> subtract(1) }
+                    else { (exp_arg_t |> length()) - 1 }
                 val got_arg_c: Int = args |> length()
                 if !exp_varargs && got_arg_c != exp_arg_c {
                     self.messages |> push(Message::unexpected_argc(
@@ -635,7 +635,7 @@ pub fun Checker::check_invocation(
                 if exp_varargs && got_arg_c < exp_arg_c {
                     self.messages |> push(Message::unexpected_argc_varargs(
                         path |> values() |> join("::"),
-                        exp_arg_t |> length() |> subtract(1), args |> length(),
+                        (exp_arg_t |> length()) - 1, args |> length(),
                         node.source
                     ))
                 }
@@ -865,7 +865,7 @@ pub fun Checker::check_piped_invocation(
     val receiver: UntypedNode = raw_args |> at(0)
     match invoked.value {
         PathRef(ast::PathRef(raw_path, t_args)) {
-            if raw_path |> length() |> is_not(1) {
+            if 1 != (raw_path |> length()) {
                 return self |> check_invocation(node, invoked, raw_args, exp)
             }
             val exp_path: List[String] = self |> expand_path(raw_path)
@@ -925,7 +925,7 @@ pub fun Checker::check_piped_invocation(
                     Enumeration(ast::CustomType(
                         _, _, s_t_args, s_args
                     )) {
-                        if s_args |> length() |> is(0) { return false }
+                        if (s_args |> length()) == 0 { return false }
                         val receiver_ann: UntypedNode = (s_args |> at(0))
                             .second
                         return is_receiver(s, s_t_args, receiver_ann)
@@ -968,6 +968,105 @@ pub fun Checker::check_piped_invocation(
     }
 }
 
+// Checks an overloaded operator using the context provided by the given
+// checker state by first inferring all given operands and looking for
+// for a defined function 'T::op', where 'T' is the first type of the operand
+// and 'op' is the provided name of the operator. 
+// If a function is found, it is instantiated and a call to the function is returned.
+// If no function is found, an invalid AST node is returned and an error is reported.
+// If a function is found but the argument types don't match, an error is reported.
+pub fun Checker::infer_overloaded_operator(
+    self: mut Checker, node: UntypedNode, name: String,
+    operands: List[UntypedNode]
+) -> TypedNode {
+    val ch_operands: List[TypedNode] 
+        = operands |> values()
+        |> map[UntypedNode, TypedNode](|n| self |> infer(n))
+        |> List::collect()
+    val operand_c: Int = ch_operands |> length()
+    val receiver: Type = (ch_operands |> at(0)).type
+    if receiver.value == Variant::Invalid {
+        return TypedNode(
+            ast::Variant::Invalid, node.source,
+            Type(Variant::Invalid, !IS_MUTABLE, node.source)
+        )
+    }
+    val path: List[String] = receiver |> as_path() |> concat(List::of(name))
+    val missing_impl: Fun() -> TypedNode = || {
+        self.messages |> push(
+            Message::missing_operator_impl(name, ch_operands, node.source)
+        )
+        return TypedNode(
+            ast::Variant::Invalid, node.source,
+            Type(Variant::Invalid, !IS_MUTABLE, node.source)
+        )
+    }
+    match self.symbols.symbols |> get(path) {
+        Some(s) { match s.node.value {
+            ast::Variant::Function(ast::Function(
+                _, public, t_arg_names, args, false, ret_type, _
+            )) |
+            ExternalFunction(ast::ExternalFunction(
+                _, public, t_arg_names, args, false, ret_type, _
+            )) { 
+                if operand_c != (args |> length()) { return missing_impl() } 
+                if !public && s.context.module != self.context.module {
+                    self.messages |> push(Message::symbol_private(
+                        path, node.source, s.node.source
+                    ))
+                }
+                val symbol_c = Checker(
+                    List::empty(),
+                    t_arg_names |> values()
+                        |> map[String, Pair[String, Type]](|t| Pair(
+                            t, Type(Variant::Invalid, !IS_MUTABLE, node.source)
+                        ))
+                        |> Map::collect(),
+                    self.symbols, s.context,
+                    List::empty(), List::empty() 
+                )
+                range(0, operand_c) |> for_each(|i| {
+                    infer_anno_t_args(
+                        symbol_c, 
+                        (args |> at(i)).second, 
+                        (ch_operands |> at(i)).type
+                    )
+                })
+                val final_type_args: List[Type] = t_arg_names |> values()
+                    |> map[String, Type](|t| symbol_c.type_args
+                        |> get(t)
+                        |> expect("was inserted earlier")
+                    )
+                    |> List::collect()
+                val result_type = ret_type 
+                    |> map[UntypedNode, Type](
+                        |t| (symbol_c |> check_annotation(t)).type
+                    )
+                    |> unwrap_or_else(
+                        || Type(Variant::Invalid, !IS_MUTABLE, s.node.source)
+                    )
+                return TypedNode(
+                    ast::Variant::NamedCall(ast::PathInvocation(
+                        path, ch_operands, 
+                        Option::Some(final_type_args
+                            |> values()
+                            |> map[Type, TypedNode](|t| TypedNode(
+                                // incredibly dirty hack - code gen will never
+                                // depend on the AST value of this, so it's fine
+                                ast::Variant::Invalid, t.source, t
+                            ))
+                            |> List::collect()
+                        )
+                    )),
+                    node.source, result_type
+                )
+            }
+            _ { return missing_impl() }
+        } }
+        None { return missing_impl() }
+    }
+}
+
 // Checks a given node using the context provided by the given checker state
 // and by asserting that its result must be a given concrete type.
 // This function should be used whenever a specific type is expected as the result.
@@ -993,40 +1092,18 @@ pub fun Checker::check(
             }
         }
     }
-    val check_arithmetic: Fun(
-        Pair[UntypedNode, UntypedNode], 
-        Fun(Pair[TypedNode, TypedNode]) -> ast::Variant[TypedNode]
-    ) -> TypedNode = |operands, constr| {
-        val n: Type = check_numeric()
-        val lhs: TypedNode = self |> check(operands.first, n)
-        val rhs: TypedNode = self |> check(operands.second, n)
-        return TypedNode(constr(Pair(lhs, rhs)), node.source, n)
-    }
-    val check_ordering: Fun(
-        Pair[UntypedNode, UntypedNode], 
-        Fun(Pair[TypedNode, TypedNode]) -> ast::Variant[TypedNode]
-    ) -> TypedNode = |operands, constr| {
-        val r: Type = Type(Variant::Boolean, !IS_MUTABLE, node.source)
-        if exp.value != r.value && exp.value != Variant::Invalid {
-            self.messages |> push(Message::unexpected_type(exp, r))
-        }
-        val lhs: TypedNode = self |> infer(operands.first)
-        val rhs: TypedNode = self |> infer(operands.second)
-        self |> operands_numeric(lhs.type, rhs.type, node.source)
-        return TypedNode(constr(Pair(lhs, rhs)), node.source, r)
-    }
-    val check_comparison: Fun(
-        Pair[UntypedNode, UntypedNode], 
-        Fun(Pair[TypedNode, TypedNode]) -> ast::Variant[TypedNode]
-    ) -> TypedNode = |operands, constr| {
-        val r: Type = Type(Variant::Boolean, !IS_MUTABLE, node.source)
-        if exp.value != r.value && exp.value != Variant::Invalid {
-            self.messages |> push(Message::unexpected_type(exp, r))
-        }
-        val lhs: TypedNode = self |> infer(operands.first)
-        val rhs: TypedNode = self |> infer(operands.second)
-        self |> join_types(lhs.type, rhs.type, node.source)
-        return TypedNode(constr(Pair(lhs, rhs)), node.source, r)
+    val check_overloaded_operator: Fun(String, List[UntypedNode]) -> TypedNode 
+    = |name, operands| {
+        val checked: TypedNode = self 
+            |> infer_overloaded_operator(node, name, operands)
+        if Type::matches(exp, checked.type) { return checked }
+        self.messages |> push(
+            Message::unexpected_type(exp, checked.type)
+        )
+        return TypedNode(
+            checked.value, checked.source, 
+            Type(Variant::Invalid, !IS_MUTABLE, checked.source)
+        )
     }
     match node.value {
         PathRef(ast::PathRef(path, t_args)) {
@@ -1086,51 +1163,44 @@ pub fun Checker::check(
                 }
             }
         }
-        Add(o) {
-            return check_arithmetic(o, |op| ast::Variant::Add(op))
+        Add(Pair(lhs, rhs)) {
+            return check_overloaded_operator("plus", List::of(lhs, rhs))
         }
-        Subtract(o) {
-            return check_arithmetic(o, |op| ast::Variant::Subtract(op))
+        Subtract(Pair(lhs, rhs)) {
+            return check_overloaded_operator("minus", List::of(lhs, rhs))
         }
-        Multiply(o) {
-            return check_arithmetic(o, |op| ast::Variant::Multiply(op))
+        Multiply(Pair(lhs, rhs)) {
+            return check_overloaded_operator("times", List::of(lhs, rhs))
         }
-        Divide(o) {
-            return check_arithmetic(o, |op| ast::Variant::Divide(op))
+        Divide(Pair(lhs, rhs)) {
+            return check_overloaded_operator("div", List::of(lhs, rhs))
         }
-        Remainder(o) {
-            return check_arithmetic(o, |op| ast::Variant::Remainder(op))
+        Remainder(Pair(lhs, rhs)) {
+            return check_overloaded_operator("rem", List::of(lhs, rhs))
         }
-        LessThan(o) {
-            return check_ordering(o, |op| ast::Variant::LessThan(op))
+        LessThan(Pair(lhs, rhs)) {
+            return check_overloaded_operator("lt", List::of(lhs, rhs))
         }
-        GreaterThan(o) {
-            return check_ordering(o, |op| ast::Variant::GreaterThan(op))
+        GreaterThan(Pair(lhs, rhs)) {
+            return check_overloaded_operator("gt", List::of(lhs, rhs))
         }
-        LessThanEqual(o) {
-            return check_ordering(o, |op| ast::Variant::LessThanEqual(op))
+        LessThanEqual(Pair(lhs, rhs)) {
+            return check_overloaded_operator("lt_eq", List::of(lhs, rhs))
         }
-        GreaterThanEqual(o) {
-            return check_ordering(o, |op| ast::Variant::GreaterThanEqual(op))
+        GreaterThanEqual(Pair(lhs, rhs)) {
+            return check_overloaded_operator("gt_eq", List::of(lhs, rhs))
         }
-        Equal(o) {
-            return check_comparison(o, |op| ast::Variant::Equal(op))
+        Equal(Pair(lhs, rhs)) {
+            return check_overloaded_operator("eq", List::of(lhs, rhs))
         }
-        NotEqual(o) {
-            return check_comparison(o, |op| ast::Variant::NotEqual(op))
+        NotEqual(Pair(lhs, rhs)) {
+            return check_overloaded_operator("not_eq", List::of(lhs, rhs))
         }
         Negate(value) {
-            val n: Type = check_numeric()
-            val v: TypedNode = self |> check(value, n)
-            return TypedNode(ast::Variant::Negate(v), node.source, n)
+            return check_overloaded_operator("u_minus", List::of(value))
         }
         Not(value) {
-            val r: Type = Type(Variant::Boolean, !IS_MUTABLE, node.source)
-            if exp.value != r.value && exp.value != Variant::Invalid {
-                self.messages |> push(Message::unexpected_type(exp, r))
-            }
-            val v: TypedNode = self |> check(value, r)
-            return TypedNode(ast::Variant::Not(v), node.source, r)
+            return check_overloaded_operator("not", List::of(value))
         }
         Member(Pair(accessed, mem_name)) {
             val checked: TypedNode = self 
@@ -1192,36 +1262,6 @@ pub fun Checker::check(
 pub fun Checker::infer(
     self: mut Checker, node: UntypedNode
 ) -> TypedNode {
-    val infer_arithmetic: Fun(
-        Pair[UntypedNode, UntypedNode], 
-        Fun(Pair[TypedNode, TypedNode]) -> ast::Variant[TypedNode]
-    ) -> TypedNode = |operands, constr| {
-        val lhs: TypedNode = self |> infer(operands.first)
-        val rhs: TypedNode = self |> infer(operands.second)
-        val t: Type = self 
-            |> operands_numeric(lhs.type, rhs.type, node.source)
-        return TypedNode(constr(Pair(lhs, rhs)), node.source, t)
-    } 
-    val infer_ordering: Fun(
-        Pair[UntypedNode, UntypedNode], 
-        Fun(Pair[TypedNode, TypedNode]) -> ast::Variant[TypedNode]
-    ) -> TypedNode = |operands, constr| {
-        val r: Type = Type(Variant::Boolean, !IS_MUTABLE, node.source)
-        val lhs: TypedNode = self |> infer(operands.first)
-        val rhs: TypedNode = self |> infer(operands.second)
-        self |> operands_numeric(lhs.type, rhs.type, node.source)
-        return TypedNode(constr(Pair(lhs, rhs)), node.source, r)
-    }
-    val infer_comparison: Fun(
-        Pair[UntypedNode, UntypedNode],
-        Fun(Pair[TypedNode, TypedNode]) -> ast::Variant[TypedNode]
-    ) -> TypedNode = |operands, constr| {
-        val r: Type = Type(Variant::Boolean, !IS_MUTABLE, node.source)
-        val lhs: TypedNode = self |> infer(operands.first)
-        val rhs: TypedNode = self |> infer(operands.second)
-        self |> join_types(lhs.type, rhs.type, node.source)
-        return TypedNode(constr(Pair(lhs, rhs)), node.source, r)
-    }
     match node.value {
         PathRef(ast::PathRef(path, t_args)) {
             return self |> check_path_ref(node, path, t_args, Option::None)
@@ -1259,57 +1299,57 @@ pub fun Checker::infer(
             }
             return self |> check_closure(node, c, List::empty(), Option::None)
         }
-        Add(o) {
-            return infer_arithmetic(o, |op| ast::Variant::Add(op))
+        Add(Pair(lhs, rhs)) {
+            return self 
+                |> infer_overloaded_operator(node, "plus", List::of(lhs, rhs))
         }
-        Subtract(o) {
-            return infer_arithmetic(o, |op| ast::Variant::Subtract(op))
+        Subtract(Pair(lhs, rhs)) {
+            return self 
+                |> infer_overloaded_operator(node, "minus", List::of(lhs, rhs))
         }
-        Multiply(o) {
-            return infer_arithmetic(o, |op| ast::Variant::Multiply(op))
+        Multiply(Pair(lhs, rhs)) {
+            return self 
+                |> infer_overloaded_operator(node, "times", List::of(lhs, rhs))
         }
-        Divide(o) {
-            return infer_arithmetic(o, |op| ast::Variant::Divide(op))
+        Divide(Pair(lhs, rhs)) {
+            return self 
+                |> infer_overloaded_operator(node, "div", List::of(lhs, rhs))
         }
-        Remainder(o) {
-            return infer_arithmetic(o, |op| ast::Variant::Remainder(op))
+        Remainder(Pair(lhs, rhs)) {
+            return self
+                |> infer_overloaded_operator(node, "rem", List::of(lhs, rhs))
         }
-        LessThan(o) {
-            return infer_ordering(o, |op| ast::Variant::LessThan(op))
+        LessThan(Pair(lhs, rhs)) {
+            return self 
+                |> infer_overloaded_operator(node, "lt", List::of(lhs, rhs))
         }
-        GreaterThan(o) {
-            return infer_ordering(o, |op| ast::Variant::GreaterThan(op))
+        GreaterThan(Pair(lhs, rhs)) {
+            return self 
+                |> infer_overloaded_operator(node, "gt", List::of(lhs, rhs))
         }
-        LessThanEqual(o) {
-            return infer_ordering(o, |op| ast::Variant::LessThanEqual(op))
+        LessThanEqual(Pair(lhs, rhs)) {
+            return self 
+                |> infer_overloaded_operator(node, "lt_eq", List::of(lhs, rhs))
         }
-        GreaterThanEqual(o) {
-            return infer_ordering(o, |op| ast::Variant::GreaterThanEqual(op))
+        GreaterThanEqual(Pair(lhs, rhs)) {
+            return self 
+                |> infer_overloaded_operator(node, "gt_eq", List::of(lhs, rhs))
         }
-        Equal(o) {
-            return infer_comparison(o, |op| ast::Variant::Equal(op))
+        Equal(Pair(lhs, rhs)) {
+            return self 
+                |> infer_overloaded_operator(node, "eq", List::of(lhs, rhs))
         }
-        NotEqual(o) {
-            return infer_comparison(o, |op| ast::Variant::NotEqual(op))
+        NotEqual(Pair(lhs, rhs)) {
+            return self 
+                |> infer_overloaded_operator(node, "not_eq", List::of(lhs, rhs))
         }
         Negate(value) {
-            val v: TypedNode = self |> infer(value)
-            mut r: Type = v.type
-            match v.type.value {
-                Integer | Float {}
-                _ { 
-                    self.messages |> push(
-                        Message::expected_numeric(v.type, node.source)
-                    )
-                    r = Type(Variant::Invalid, !IS_MUTABLE, node.source) 
-                }
-            }
-            return TypedNode(ast::Variant::Negate(v), node.source, r)
+            return self
+                |> infer_overloaded_operator(node, "u_minus", List::of(value))
         }
         Not(value) {
-            val r = Type(Variant::Boolean, !IS_MUTABLE, node.source)
-            val v: TypedNode = self |> check(value, r)
-            return TypedNode(ast::Variant::Not(v), node.source, r)
+            return self
+                |> infer_overloaded_operator(node, "not", List::of(value))
         }
         Member(Pair(accessed, mem_name)) {
             return self |> check_member(node, accessed, mem_name)

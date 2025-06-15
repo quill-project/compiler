@@ -94,7 +94,7 @@ pub fun Message::unexpected_token(token: Token, exp_types: List[TokenType]) -> M
         |> map(TokenType::as_string)
         |> join(", ") |> concat(" or ") 
         |> concat(exp_types |> at(-1) |> TokenType::as_string())
-    val exp: String = if exp_types |> length() |> is_not(1) { list_exp }
+    val exp: String = if 1 != (exp_types |> length()) { list_exp }
         else { TokenType::as_string(exp_types |> at(0)) }
     val got = token.type |> TokenType::as_string()
     return Message(List::of(
@@ -547,3 +547,28 @@ pub fun Message::unmatched_values(vals: List[checker::Pattern], at: Source) -> M
         )
     ))
 }
+
+pub fun Message::missing_operator_impl(
+    name: String, operands: List[types::TypedNode], at: Source
+) -> Message = Message(List::of(
+        Message::Section::Error(
+            "Operator '_' is not defined for operands _" |> fmt(
+                name,
+                operands |> values()
+                    |> map[types::TypedNode, String](|o| "'_'"
+                        |> fmt(types::Type::as_string(o.type))
+                    )
+                    |> join(", ")
+            )
+        ),
+        Message::Section::Code(at),
+        Message::Section::Info(
+            "To implement it, a function taking _ argument_ must be defined under the path '_::_'" |> fmt(
+                operands |> length() |> as_string(),
+                if (operands |> length()) != 1 { "s" } else { "" }
+                types::Type::as_path((operands |> at(0)).type)
+                    |> values() |> join("::"), 
+                name
+            )
+        )
+    ))

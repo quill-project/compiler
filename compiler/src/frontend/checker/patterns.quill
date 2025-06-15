@@ -277,7 +277,7 @@ pub fun Checker::is_exhaustive(
     val unchecked: List[Pattern] = branches 
         |> values() 
         |> fold(start, subtract_branch)
-    val exhaustive: Bool = unchecked |> length() |> is(0)
+    val exhaustive: Bool = (unchecked |> length()) == 0
     if !exhaustive {
         self.messages |> push(
             Message::unmatched_values(unchecked, statement_src)

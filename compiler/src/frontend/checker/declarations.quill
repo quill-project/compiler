@@ -22,7 +22,7 @@ pub fun Checker::check_annotation(self: mut Checker, node: UntypedNode) -> Typed
                 = if t_args |> is_some() { Option::Some(g_t_args) } 
                 else { Option::None[List[TypedNode]] }
             // generic type argument (e.g. 'T')
-            if short_path |> length() |> is(1) {
+            if 1 == (short_path |> length()) {
                 match self.type_args |> get(short_path |> at(0)) {
                     Some(t) {
                         if mutable {
@@ -89,7 +89,7 @@ pub fun Checker::check_annotation(self: mut Checker, node: UntypedNode) -> Typed
                             path |> at(-1), node.source
                         ))
                     }
-                    if g_t_args |> length() |> is_not(1) {
+                    if 1 != (g_t_args |> length()) {
                         self.messages |> push(Message::wrong_type_arg_c(
                             List::of("std", "List"), 1, 
                             g_t_args |> length(), node.source

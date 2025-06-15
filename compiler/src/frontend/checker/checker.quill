@@ -136,7 +136,7 @@ pub fun Checker::join_types(
 pub fun Checker::expand_path(
     self: Checker, short: List[String]
 ) -> List[String] {
-    if short |> length() |> is(0) { return short }
+    if 0 == (short |> length()) { return short }
     val start: String = short |> at(0)
     val after: List[String] = short |> slice_from(1)
     val alias: Fun() -> Option[List[String]] = || self.context.aliases

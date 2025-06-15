@@ -18,17 +18,6 @@ pub val SQRT_2: Float = 1.41421356237309504880168872420969808
 
 mod std
 
-pub fun Float::add(lhs: Float, rhs: Float) -> Float = lhs + rhs
-pub fun Float::subtract(lhs: Float, rhs: Float) -> Float = lhs - rhs
-pub fun Float::multiply(lhs: Float, rhs: Float) -> Float = lhs * rhs
-pub fun Float::divide(lhs: Float, rhs: Float) -> Float = lhs / rhs
-pub fun Float::modulo(lhs: Float, rhs: Float) -> Float = lhs % rhs
-pub fun Float::negate(x: Float) -> Float = -x
-pub fun Float::less_than(lhs: Float, rhs: Float) -> Bool = lhs < rhs
-pub fun Float::greater_than(lhs: Float, rhs: Float) -> Bool = lhs > rhs
-pub fun Float::less_than_eq(lhs: Float, rhs: Float) -> Bool = lhs <= rhs
-pub fun Float::greater_than_eq(lhs: Float, rhs: Float) -> Bool = lhs >= rhs
-
 pub fun Float::clone(self: Float) -> Float = self
 
 pub fun Float::as_radians(self: Float) -> Float
@@ -100,7 +89,7 @@ pub fun Float::parse(from: String) -> Option[Float] {
             return Option::Some(acc + Int::as_float(n - 48) * pos)
         }))
     val exp_start = fract_end + 1
-    val exp_len = from |> length() |> subtract(exp_start)
+    val exp_len = (from |> length()) - exp_start
     return fract_val
         |> map[Float, Float](|f| sign * (Int::as_float(int_val) + f))
         |> and_then(|v| {

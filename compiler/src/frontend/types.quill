@@ -46,7 +46,7 @@ pub fun Variant::as_string(self: Variant) -> String {
             val path_s: String = path |> values() |> join("::")
             val t_arg_i_s: String = t_arg_t |> values()
                 |> map(Type::as_string) |> join(", ")
-            val t_arg_s: String = if t_arg_t |> length() |> is(0) { "" }
+            val t_arg_s: String = if 0 == (t_arg_t |> length()) { "" }
                 else { "[_]" |> fmt(t_arg_i_s) }
             return path_s |> concat(t_arg_s)
         }
@@ -384,7 +384,7 @@ fun SymbolTable::process_alias(
     aliases: mut Map[String, List[String]],
     names: Set[List[String]]
 ) {
-    if alias.second |> at(-1) |> is_not("*") {
+    if "*" != (alias.second |> at(-1)) {
         aliases |> add(alias)
         return unit
     }
@@ -513,7 +513,7 @@ pub fun SymbolTable::base_instances(
 ) -> mut List[SymbolInstance]
     = self.symbols 
     |> entries()
-    |> filter(|s| s.second.type_args |> length() |> is(0))
+    |> filter(|s| 0 == (s.second.type_args |> length()))
     |> map[Pair[List[String], mut Symbol], SymbolInstance](
         |s| SymbolInstance(s.first, List::empty())
     )

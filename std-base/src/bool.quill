@@ -1,12 +1,6 @@
 
 mod std
 
-pub fun Bool::and(lhs: Bool, rhs: Bool) -> Bool = lhs && rhs
-pub fun Bool::and_then(lhs: Bool, rhs: Fun() -> Bool) -> Bool = lhs && rhs()
-pub fun Bool::or(lhs: Bool, rhs: Bool) -> Bool = lhs || rhs
-pub fun Bool::or_else(lhs: Bool, rhs: Fun() -> Bool) -> Bool = lhs || rhs()
-pub fun Bool::not(x: Bool) -> Bool = !x
-
 pub fun Bool::as_string(self: Bool) -> String 
     = if self == true { "true" } else { "false" }
 

@@ -27,7 +27,7 @@ pub fun compile(source_files: List[SourceFile], main: String) -> String {
     val unchecked: mut List[types::SymbolInstance] 
         = types::SymbolTable::base_instances(table)
     Stream::new[mut List[types::SymbolInstance]](|| unchecked)
-        |> take_while(|q| q |> length() |> is_not(0))
+        |> take_while(|q| (q |> length()) != 0)
         |> for_each(|q| {
             val i: types::SymbolInstance 
                 = q |> pop() 

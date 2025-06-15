@@ -7,17 +7,6 @@ pub val MIN: Int = -9223372036854775807 - 1
 
 mod std
 
-pub fun Int::add(lhs: Int, rhs: Int) -> Int = lhs + rhs
-pub fun Int::subtract(lhs: Int, rhs: Int) -> Int = lhs - rhs
-pub fun Int::multiply(lhs: Int, rhs: Int) -> Int = lhs * rhs
-pub fun Int::divide(lhs: Int, rhs: Int) -> Int = lhs / rhs
-pub fun Int::modulo(lhs: Int, rhs: Int) -> Int = lhs % rhs
-pub fun Int::negate(x: Int) -> Int = -x
-pub fun Int::less_than(lhs: Int, rhs: Int) -> Bool = lhs < rhs
-pub fun Int::greater_than(lhs: Int, rhs: Int) -> Bool = lhs > rhs
-pub fun Int::less_than_eq(lhs: Int, rhs: Int) -> Bool = lhs <= rhs
-pub fun Int::greater_than_eq(lhs: Int, rhs: Int) -> Bool = lhs >= rhs
-
 pub fun Int::as_hash(self: Int) -> Int = self
 
 pub fun Int::clone(self: Int) -> Int = self

@@ -63,7 +63,7 @@ pub fun emit_type(t: Type) -> String {
 // Given a list of member names and types, returns the C code for the body
 // of the equivalent type definition.
 fun emit_type_members(members: List[Pair[String, TypedNode]]) -> String {
-    if members |> length() |> is(0) { return "    quill_unit_t empty;" }
+    if 0 == (members |> length()) { return "    quill_unit_t empty;" }
     return members 
         |> values()
         |> map[Pair[String, TypedNode], String](|m|
@@ -224,7 +224,7 @@ pub fun emit_type_deconstructors(table: SymbolTable) -> String {
                         val d: String = emit_rc_dec(
                             "m->value.m_" |> concat(m.first), m.second.type
                         )
-                        if d |> length() |> is(0) { return "" }
+                        if 0 == (d |> length()) { return "" }
                         return "case _:\n_break;\n" 
                             |> fmt(m_i |> as_string(), d)
                     })
