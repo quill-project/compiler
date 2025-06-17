@@ -81,6 +81,16 @@ pub fun List::reversed[T](self: List[T]) -> mut Sequence[T]
     = range_incl(1, self |> length())
     |> map[Int, T](|i| self |> get_unchecked((self |> length()) - i))
 
+pub fun List::indices_rev[T](self: List[T]) -> mut Sequence[Int] {
+    mut i = (self |> length()) - 1
+    return Sequence::new[Int](|| {
+        if i < 0 { return Option::None }
+        val n: Int = i
+        i = i - 1
+        return Option::Some(n)
+    })
+}
+
 pub fun List::collect[T](from: mut Sequence[T]) -> mut List[T] {
     val r = List::of[T]()
     from |> for_each(|v| {

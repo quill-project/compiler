@@ -3127,7 +3127,13 @@ function quill$$eq(a, b) {
         };
     }
 
-    function manglePath(path) {
+    function manglePath(path, source, state) {
+        if(!path) {
+            throw message.from(
+                message.error(`Path missing ('manglePath' received undefined)`),
+                message.code(source)
+            );
+        }
         return path.split("::").join("$");
     }
 
@@ -3143,7 +3149,7 @@ function quill$$eq(a, b) {
                     state.scope().output += `${into} = ${value};\n`;
                     return into;
                 }
-                let r = manglePath(node.fullPath);
+                let r = manglePath(node.fullPath, node, state);
                 const s = state.checker.symbols[node.fullPath];
                 if(s.node.type === NodeType.Function) {
                     const inst = s.instances[node.instanceKey];
@@ -3285,7 +3291,7 @@ function quill$$eq(a, b) {
                 if(node.isExternal) { return null; }
                 if(state.isBase()) {
                     const value = generateCode(node.value, state);
-                    state.scope().output += `let ${manglePath(node.fullPath)} = ${value};\n`;
+                    state.scope().output += `let ${manglePath(node.fullPath, node, state)} = ${value};\n`;
                 } else {
                     const to = state.alloc();
                     const value = generateCode(node.value, state);
@@ -3324,15 +3330,16 @@ function quill$$eq(a, b) {
                     const vars = branch.patterns[0].variables;
                     state.enterScope();
                     out += `const body${branchI} = (`;
+                    let hadVar = false;
                     for(const varI in vars) {
-                        if(varI > 0) { out += ", "; }
+                        const name = vars[varI].name;
+                        if(name === null) { continue; }
+                        if(hadVar) { out += ", "; }
+                        hadVar = true;
                         const matchI = state.nextMatchedNumber;
                         state.nextMatchedNumber += 1;
                         out += `matched${matchI}`;
-                        const name = vars[varI].name;
-                        if(name !== null) {
-                            state.scope().aliases[name] = `matched${matchI}`;
-                        }
+                        state.scope().aliases[name] = `matched${matchI}`;
                     }
                     out += `) => {\n`;
                     branch.body.forEach(n => generateCode(n, state));
@@ -3390,8 +3397,12 @@ function quill$$eq(a, b) {
                         }
                         out += `) { returned = body${branchI}(`;
                         const vars = Object.keys(pattern.variables);
+                        let hadVar = false;
                         for(const varI in vars) {
-                            if(varI > 0) { out += ", "; }
+                            const name = pattern.variables[vars[varI]].name;
+                            if(name === null) { continue; }
+                            if(hadVar) { out += ", "; }
+                            hadVar = true;
                             out += matched;
                             generatePath(pattern.variables[vars[varI]].path);
                         }
@@ -3464,7 +3475,7 @@ function quill$$eq(a, b) {
                             impl = "\n" + vars + body;
                         }
                         state.scope().output
-                            += `function ${manglePath(node.fullPath)}`
+                            += `function ${manglePath(node.fullPath, node, state)}`
                             + `$$${inst.instanceI}`
                             + `(${args}) {`
                             + impl

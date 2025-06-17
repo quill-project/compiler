@@ -41,10 +41,12 @@ pub struct Variable(
     source: Source,
     mutable: Bool,
     used: Bool,
-    type: Type
+    type: Type,
+    captured: mut Box[Bool]
 )
 
 pub val IS_USED: Bool = true
+pub val IS_CAPTURED: Bool = true
 
 pub struct Scope(
     locals: mut Map[String, mut Variable]
@@ -52,6 +54,7 @@ pub struct Scope(
 
 pub struct Function(
     scopes: mut List[Scope],
+    captures: mut Set[String],
     return_type: Option[Type]
 )
 
@@ -85,19 +88,42 @@ pub fun Checker::scope(self: mut Checker) -> Scope {
 pub fun Checker::find_variable(
     self: mut Checker, name: String
 ) -> Option[mut Variable] {
-    val scopes: mut Sequence[Scope] 
-        = self.functions 
-        |> reversed()
-        |> map[mut Function, mut Sequence[Scope]](
-            |func| func.scopes |> reversed()
+    val scope_has: Fun(Scope) -> Bool = |s| s.locals |> has(name)
+    return self.functions 
+        |> indices_rev() 
+        |> find(
+            |func_i| (self.functions |> at(func_i)).scopes 
+            |> reversed() 
+            |> any(scope_has)
         )
-        |> flatten()
-    return scopes
-        |> map[Scope, Option[mut Variable]](
-            |scope| scope.locals |> get(name)
+        |> and_then[Int, Pair[Int, mut Variable]](
+            |func_i| (self.functions |> at(func_i)).scopes 
+            |> reversed() 
+            |> find(scope_has)
+            |> map[Scope, Pair[Int, mut Variable]](|scope| Pair(
+                func_i, 
+                scope.locals |> get(name) 
+                    |> expect("scope was selected to have the var above")
+            ))
         )
-        |> find(Option::is_some)
-        |> flatten()
+        |> map[Pair[Int, mut Variable], mut Variable](|ctx| {
+            // if the function the variable was defined in ('ctx.first')
+            // is not the current function ('curr_func_i'), mark it as having
+            // been captured
+            val curr_func_i: Int = (self.functions |> length()) - 1
+            if ctx.first != curr_func_i {
+                ctx.second.captured.value = IS_CAPTURED
+            }
+            // for every function inside the one that defines the variable
+            // ('ctx.first') up to (including) the current function 
+            // ('curr_func_i'), specify that it captures that variable.
+            range_incl(ctx.first + 1, curr_func_i) |> for_each(|f_i| {
+                val c_f: mut Function = self.functions |> at(f_i)
+                c_f.captures |> add(name)
+            })
+            // return the found variable
+            return ctx.second
+        })
 }
 
 // Pops the most recent scope of the current function from the checker state.

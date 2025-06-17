@@ -238,18 +238,26 @@ pub fun Checker::check_closure(
             exp_arg_c, got_arg_c, node.source
         ))
     }
+    val args_captured: mut List[Box[Bool]] = List::empty()
     val scope_vars: mut Map[String, mut Variable] = range(0, got_arg_c)
-        |> map[Int, Pair[String, mut Variable]](|i| Pair(
-            c.args |> at(i),
-            Variable(
-                node.source, !IS_MUTABLE, !IS_USED, 
-                arg_types |> get(i) |> unwrap_or_else(
-                    || Type(Variant::Invalid, !IS_MUTABLE, node.source)
+        |> map[Int, Pair[String, mut Variable]](|i| {
+            val captured_m: mut Box[Bool] = Box(!IS_CAPTURED)
+            val captured: Box[Bool] = captured_m
+            args_captured |> push(captured)
+            return Pair(
+                c.args |> at(i),
+                Variable(
+                    node.source, !IS_MUTABLE, !IS_USED, 
+                    arg_types |> get(i) |> unwrap_or_else(
+                        || Type(Variant::Invalid, !IS_MUTABLE, node.source)
+                    ),
+                    captured_m
                 )
             )
-        ))
+        })
         |> Map::collect()
-    val func = Function(List::of(Scope(scope_vars)), exp_ret_type)
+    val captures: mut Set[String] = Set::empty()
+    val func = Function(List::of(Scope(scope_vars)), captures, exp_ret_type)
     self.functions |> push(func)
     self |> enter_scope()
     val body_t: Pair[List[TypedNode], ScopeExit] 
@@ -269,7 +277,9 @@ pub fun Checker::check_closure(
         )
     }
     return TypedNode(
-        ast::Variant::Closure(ast::Closure(c.args, body_t.first)),
+        ast::Variant::Closure(ast::Closure(
+            c.args, args_captured, captures, body_t.first
+        )),
         node.source,
         Type(
             Variant::Function(Pair(arg_types, return_type)),
@@ -432,7 +442,7 @@ pub fun Checker::check_path_ref(
                 )
             }
             ast::Variant::Function(ast::Function(
-                _, public, f_t_args, f_args, false, f_ret_t, _
+                _, public, f_t_args, f_args, false, _, f_ret_t, _
             )) | ast::Variant::ExternalFunction(ast::ExternalFunction(
                 _, public, f_t_args, f_args, false, f_ret_t, _
             )) {
@@ -682,7 +692,7 @@ pub fun Checker::check_invocation(
             match self.symbols.symbols |> get(path) {
                 Some(s) { match s.node.value {
                     ast::Variant::Function(ast::Function(
-                        _, public, f_t_args, f_args, f_varargs, o_f_ret_t, _
+                        _, public, f_t_args, f_args, f_varargs, _, o_f_ret_t, _
                     )) | ast::Variant::ExternalFunction(ast::ExternalFunction(
                         _, public, f_t_args, f_args, f_varargs, o_f_ret_t, _
                     )) {
@@ -907,7 +917,7 @@ pub fun Checker::check_piped_invocation(
             = |p| { match self.symbols.symbols |> get(p) {
                 Some(s) { match s.node.value {
                     ast::Variant::Function(ast::Function(
-                        _, _, s_t_args, s_args, varargs, _, _
+                        _, _, s_t_args, s_args, varargs, _, _, _
                     )) |
                     ExternalFunction(ast::ExternalFunction(
                         _, _, s_t_args, s_args, varargs, _, _
@@ -1004,7 +1014,7 @@ pub fun Checker::infer_overloaded_operator(
     match self.symbols.symbols |> get(path) {
         Some(s) { match s.node.value {
             ast::Variant::Function(ast::Function(
-                _, public, t_arg_names, args, false, ret_type, _
+                _, public, t_arg_names, args, false, _, ret_type, _
             )) |
             ExternalFunction(ast::ExternalFunction(
                 _, public, t_arg_names, args, false, ret_type, _

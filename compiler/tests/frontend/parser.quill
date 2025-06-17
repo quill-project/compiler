@@ -37,7 +37,7 @@ pub fun literals() {
     assert_tree(parser::parse_value, "unit", "unit")
     assert_tree(parser::parse_value, 
         "|a, b| a + b", 
-        "|a, b| { return (a + b) }"
+        "|a, b| [] { return (a + b) }"
     )
     assert_tree(parser::parse_value, "hello::world", "hello::world")
     assert_tree(parser::parse_value, 

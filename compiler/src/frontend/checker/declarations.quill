@@ -229,7 +229,7 @@ pub fun Checker::check_declaration(
             )))
         }
         ast::Variant::Function(ast::Function(
-            path, public, t_args, args, varargs, return_type, body
+            path, public, t_args, args, varargs, _, return_type, body
         )) {
             val args_t: List[Pair[String, TypedNode]] = args
                 |> values()
@@ -240,12 +240,21 @@ pub fun Checker::check_declaration(
             }
             val return_type_t: Option[TypedNode] = return_type
                 |> map(|n| self |> check_annotation(n))
+            val args_captured: mut List[Box[Bool]] = List::empty()
             val scope_vars: mut Map[String, mut Variable] = args_t
                 |> values()
-                |> map(|a| Pair(
-                    a.first, 
-                    Variable(node.source, !IS_MUTABLE, !IS_USED, a.second.type)
-                ))
+                |> map(|a| {
+                    val mc: mut Box[Bool] = Box(!IS_CAPTURED)
+                    val c: Box[Bool] = mc
+                    args_captured |> push(c)
+                    return Pair(
+                        a.first, 
+                        Variable(
+                            node.source, !IS_MUTABLE, !IS_USED, a.second.type, 
+                            mc
+                        )
+                    )
+                })
                 |> Map::collect()
             val scope = Scope(scope_vars)
             val full_ret_t = return_type_t 
@@ -253,7 +262,11 @@ pub fun Checker::check_declaration(
                 |> unwrap_or_else(
                     || Type(Variant::Unit, !IS_MUTABLE, node.source)
                 ) 
-            val func = Function(List::of(scope), Option::Some(full_ret_t))
+            val func = Function(
+                List::of(scope), // scope stack
+                Set::empty(), // captures (functions can't capture anything :))
+                Option::Some(full_ret_t) // return type
+            )
             self.functions |> push(func)
             val body_t: Pair[List[TypedNode], ScopeExit] 
                 = self |> check_statement_list(body, !IN_LOOP)
@@ -269,7 +282,7 @@ pub fun Checker::check_declaration(
             return make_node(ast::Variant::Function(ast::Function(
                 List::concat(self.context.module, path), 
                 public, t_args, args_t, varargs,
-                return_type_t, body_t.first
+                args_captured, return_type_t, body_t.first
             )))
         }
         ExternalFunction(ast::ExternalFunction(

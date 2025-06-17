@@ -222,7 +222,9 @@ pub fun parse_value(s: mut Parser) -> UntypedNode {
                 )
             }
             return UntypedNode(
-                ast::Variant::Closure(ast::Closure(arg_names, body)),
+                ast::Variant::Closure(ast::Closure(
+                    arg_names, List::empty(), Set::empty(), body
+                )),
                 Source::range(start.source, end)
             )
         }
@@ -541,7 +543,7 @@ pub fun parse_statement(s: mut Parser) -> UntypedNode {
             val value: UntypedNode = parse_expression(s, Int::MAX)
             return UntypedNode(
                 ast::Variant::LocalVariable(ast::LocalVariable(
-                    name, mutable, type, value
+                    name, mutable, Box(false), type, value
                 )),
                 Source::range(start.source, value.source)
             )
@@ -682,7 +684,7 @@ pub fun parse_statement(s: mut Parser) -> UntypedNode {
             val end: Source = s.current.source
             s |> advance()
             return UntypedNode(
-                ast::Variant::For(ast::For(name, seq, body)),
+                ast::Variant::For(ast::For(name, Box(false), seq, body)),
                 Source::range(start.source, end)
             )
         }
@@ -918,7 +920,7 @@ pub fun parse_declaration(s: mut Parser) -> UntypedNode {
                 return UntypedNode(
                     ast::Variant::Function(ast::Function(
                         path, public, t_args, args, varargs.value, 
-                        ret_t, body
+                        List::empty(), ret_t, body
                     )),
                     Source::range(start.source, end)
                 )
@@ -931,7 +933,7 @@ pub fun parse_declaration(s: mut Parser) -> UntypedNode {
                 return UntypedNode(
                     ast::Variant::Function(ast::Function(
                         path, public, t_args, args, varargs.value, 
-                        ret_t, body
+                        List::empty(), ret_t, body
                     )),
                     Source::range(start.source, value.source)
                 )

@@ -119,6 +119,9 @@ fun sum[T](of: std::List[T]) {}
 
 pub val ARITHMETICS = "
 pub ext fun std::Int::plus(lhs: Int, rhs: Int) -> Int = \"\"
+pub ext fun std::Int::minus(lhs: Int, rhs: Int) -> Int = \"\"
+pub ext fun std::Int::times(lhs: Int, rhs: Int) -> Int = \"\"
+pub ext fun std::Int::div(lhs: Int, rhs: Int) -> Int = \"\"
 pub ext fun std::Float::plus(lhs: Float, rhs: Float) -> Float = \"\"
 pub ext fun std::Float::minus(lhs: Float, rhs: Float) -> Float = \"\"
 pub ext fun std::Float::times(lhs: Float, rhs: Float) -> Float = \"\"
@@ -268,8 +271,8 @@ val e = (enum@std::Option::None[type@Unit (=Unit)](unit (=Unit))) (=std::Option[
         "fun test::fun_stuff[]() { \
 val r = (fun@std::pipeline(\
 5 (=Int), \
-|n| { return (fun@std::Int::as_float(var@n (=Int))) (=Float) (=Unit) } (=Fun(Int) -> Float), \
-|x| { return (fun@std::Float::as_string(var@x (=Float))) (=String) (=Unit) \
+|n| [] { return (fun@std::Int::as_float(var@n (=Int))) (=Float) (=Unit) } (=Fun(Int) -> Float), \
+|x| [] { return (fun@std::Float::as_string(var@x (=Float))) (=String) (=Unit) \
 } (=Fun(Float) -> String))) (=String) (=Unit) \
 } (=Unit)"
     )
@@ -404,6 +407,82 @@ match var@name (=std::Option[String]) { \
 (enum@std::Option::Some(var@_ (=String))) (=std::Option[String]) () -> {  } \
 (enum@std::Option::None(unit (=Unit))) (=std::Option[String]) () -> {  } \
 } (=Unit) \
+} (=Unit)"
+    )
+}
+
+pub fun closure_captures() {
+    val c = ARITHMETICS |> concat("
+pub ext fun println[T](v: T) = \"\"
+
+fun capturing() {
+    val a: Int = 5
+    mut b: Int = 10
+    val c: Float = 3.14
+    val f: Fun() = || {
+        println(a)
+        val d: String = \"Hello\"
+        val g: Fun() = || {
+            b = b + 1
+            val e: Int = 10
+            println(d)
+            println(e)
+        }
+    }
+}
+
+fun shadowing() {
+    val a: Int = 5
+    mut b: Int = 10
+    val c: Float = 3.14
+    val f: Fun() = || {
+        println(a)
+        mut b: Int = 25
+        val g: Fun() = || {
+            b = b + 1
+            val e: Int = 10
+            println(b)
+            println(e)
+        }
+    }
+}
+    ")
+    val t = check_symbols(c)
+    val s = Source("test.quill", 0, 0)
+    assert_symbol(t, c, 
+        "capturing", List::empty(), 
+        "fun capturing[]() { \
+val a: type@std::Int (=Int) (captured) = 5 (=Int) (=Unit); \
+mut b: type@std::Int (=Int) (captured) = 10 (=Int) (=Unit); \
+val c: type@std::Float (=Float) = 3.14 (=Float) (=Unit); \
+val f: (Fun()) (=Fun() -> Unit) = || [a, b] { \
+(fun@println(var@a (=Int))) (=Unit); \
+val d: type@String (=String) (captured) = \"Hello\" (=String) (=Unit); \
+val g: (Fun()) (=Fun() -> Unit) = || [b, d] { \
+var@b (=Int) = (fun@std::Int::plus[](var@b (=Int), 1 (=Int))) (=Int) (=Unit); \
+val e: type@std::Int (=Int) = 10 (=Int) (=Unit); \
+(fun@println(var@d (=String))) (=Unit); \
+(fun@println(var@e (=Int))) (=Unit) \
+} (=Fun() -> Unit) (=Unit) \
+} (=Fun() -> Unit) (=Unit) \
+} (=Unit)"
+    )
+    assert_symbol(t, c, 
+        "shadowing", List::empty(), 
+        "fun shadowing[]() { \
+val a: type@std::Int (=Int) (captured) = 5 (=Int) (=Unit); \
+mut b: type@std::Int (=Int) = 10 (=Int) (=Unit); \
+val c: type@std::Float (=Float) = 3.14 (=Float) (=Unit); \
+val f: (Fun()) (=Fun() -> Unit) = || [a] { \
+(fun@println(var@a (=Int))) (=Unit); \
+mut b: type@std::Int (=Int) (captured) = 25 (=Int) (=Unit); \
+val g: (Fun()) (=Fun() -> Unit) = || [b] { \
+var@b (=Int) = (fun@std::Int::plus[](var@b (=Int), 1 (=Int))) (=Int) (=Unit); \
+val e: type@std::Int (=Int) = 10 (=Int) (=Unit); \
+(fun@println(var@b (=Int))) (=Unit); \
+(fun@println(var@e (=Int))) (=Unit) \
+} (=Fun() -> Unit) (=Unit) \
+} (=Fun() -> Unit) (=Unit) \
 } (=Unit)"
     )
 }

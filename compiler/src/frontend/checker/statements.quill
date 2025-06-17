@@ -387,12 +387,14 @@ pub fun Checker::check_statement(
                 val ann_t: TypedNode = self |> check_annotation(ann)
                 val value_t: TypedNode = self |> check(v.value, ann_t.type)
                 val scope: Scope = self |> scope()
+                val captured: mut Box[Bool] = Box(!IS_CAPTURED)
                 scope.locals |> set(v.name, Variable(
-                    node.source, v.mutable, !IS_USED, ann_t.type
+                    node.source, v.mutable, !IS_USED, ann_t.type, captured
                 ))
                 return Pair(
                     make_node(ast::Variant::LocalVariable(ast::LocalVariable(
-                        v.name, v.mutable, Option::Some(ann_t), value_t
+                        v.name, v.mutable, captured, 
+                        Option::Some(ann_t), value_t
                     ))), 
                     ScopeExit::None
                 )
@@ -400,12 +402,14 @@ pub fun Checker::check_statement(
             None {
                 val value_t: TypedNode = self |> infer(v.value)
                 val scope: Scope = self |> scope()
+                val captured: mut Box[Bool] = Box(!IS_CAPTURED)
                 scope.locals |> set(v.name, Variable(
-                    node.source, v.mutable, !IS_USED, value_t.type
+                    node.source, v.mutable, !IS_USED, value_t.type, captured
                 ))
                 return Pair(
                     make_node(ast::Variant::LocalVariable(ast::LocalVariable(
-                        v.name, v.mutable, Option::None, value_t
+                        v.name, v.mutable, captured, 
+                        Option::None, value_t
                     ))), 
                     ScopeExit::None
                 )
@@ -495,7 +499,7 @@ pub fun Checker::check_statement(
                 exit
             )
         }
-        For(ast::For(name, in, body)) {
+        For(ast::For(name, _, in, body)) {
             val in_t: TypedNode = self |> infer(in)
             mut iter_type: Type = in_t.type
             match in_t.type {
@@ -514,10 +518,11 @@ pub fun Checker::check_statement(
                     )
                 }
             }
+            val captured: mut Box[Bool] = Box(!IS_CAPTURED)
             val function: mut Function = self.functions |> at(-1)
             val scope: Scope = Scope(Map::of(
                 Pair(name, Variable(
-                    node.source, !IS_MUTABLE, !IS_USED, iter_type
+                    node.source, !IS_MUTABLE, !IS_USED, iter_type, captured
                 ))
             ))
             function.scopes |> push(scope)
@@ -528,7 +533,9 @@ pub fun Checker::check_statement(
             val exit = if body_exit_level > ScopeExit::level(ScopeExit::Loop)
                 { body_t.second } else { ScopeExit::None }
             return Pair(
-                make_node(ast::Variant::For(ast::For(name, in_t, body_t.first))),
+                make_node(ast::Variant::For(ast::For(
+                    name, captured, in_t, body_t.first
+                ))),
                 exit
             )
         }
@@ -557,12 +564,23 @@ pub fun Checker::check_statement(
                         |> List::collect()
                     val capture_types: Map[String, Type] = self
                         |> check_pattern_captures(patterns_t)
+                    val captures: mut Map[String, Pair[Type, Box[Bool]]]
+                        = Map::empty()
                     val scope_vars: mut Map[String, mut Variable] = capture_types
                         |> entries()
-                        |> map(|c| Pair(
-                            c.first, 
-                            Variable(node.source, !IS_MUTABLE, !IS_USED, c.second)
-                        ))
+                        |> map(|c| {
+                            val captured: mut Box[Bool] = Box(!IS_CAPTURED)
+                            val capture: Pair[Type, Box[Bool]] 
+                                = Pair(c.second, captured)
+                            captures |> set(c.first, capture)
+                            return Pair(
+                                c.first, 
+                                Variable(
+                                    node.source, !IS_MUTABLE, !IS_USED, 
+                                    c.second, captured
+                                )
+                            )
+                        })
                         |> Map::collect()
                     val scope: Scope = Scope(scope_vars)
                     val function: mut Function = self.functions |> at(-1)
@@ -571,7 +589,7 @@ pub fun Checker::check_statement(
                         = self |> check_statement_list(b.body, in_loop)
                     self |> exit_scope()
                     val branch: ast::MatchBranch[TypedNode] 
-                        = ast::MatchBranch(patterns_t, capture_types, body.first)
+                        = ast::MatchBranch(patterns_t, captures, body.first)
                     acc.first |> push(branch)
                     return Pair(acc.first, acc.second |> combine(body.second))
                 })

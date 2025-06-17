@@ -115,7 +115,7 @@ pub fun emit_declarations(table: SymbolTable) -> String
                 mangle_path(path, i.second)
             )
         }
-        ast::Variant::Function(ast::Function(path, _, _, args, _, ret, _)) |
+        ast::Variant::Function(ast::Function(path, _, _, args, _, _, ret, _)) |
         ExternalFunction(ast::ExternalFunction(path, _, _, args, _, ret, _)) {
             return emit_func_signature(
                     path, i.second, args, ret, i.first.source
@@ -311,7 +311,7 @@ pub fun emit_func_implementations(table: SymbolTable) -> String
         |s| s.instances |> values() |> map[Triplet[TypedNode, Int, List[Type]], String](
             |i| { match i.first.value {
                 ast::Variant::Function(ast::Function(
-                    path, _, _, args, _, ret, body
+                    path, _, _, args, _, args_captured, ret, body
                 )) {
                     val signature: String = emit_func_signature(
                         path, i.second, args, ret, i.first.source

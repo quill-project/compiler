@@ -221,7 +221,8 @@ const tests = [
     "quill::tests::checker::structs",
     "quill::tests::checker::generics",
     "quill::tests::checker::patterns",
-    "quill::tests::checker::matching"
+    "quill::tests::checker::matching",
+    "quill::tests::checker::closure_captures"
 ];
 
 const fs = require("fs");

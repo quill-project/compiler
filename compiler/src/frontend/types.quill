@@ -390,7 +390,7 @@ fun SymbolTable::collect_names(nodes: List[UntypedNode]) -> Set[List[String]] {
             Module(path) { module = path }
 
             GlobalVariable(ast::GlobalVariable(path, _, _, _, _)) |
-            Function(ast::Function(path, _, _, _, _, _, _)) |
+            Function(ast::Function(path, _, _, _, _, _, _, _)) |
             ExternalFunction(ast::ExternalFunction(path, _, _, _, _, _, _)) |
             Structure(ast::CustomType(path, _, _, _)) |
             Enumeration(ast::CustomType(path, _, _, _)) {
@@ -471,7 +471,7 @@ fun SymbolTable::collect_symbols(
                 symbols |> set(abs_path, symbol) 
                     |> map[Symbol, Unit](|p| err_duplicate(abs_path, p))
             }
-            Function(ast::Function(path, _, t_args, _, _, _, _)) |
+            Function(ast::Function(path, _, t_args, _, _, _, _, _)) |
             ExternalFunction(ast::ExternalFunction(path, _, t_args, _, _, _, _)) |
             Structure(ast::CustomType(path, _, t_args, _)) |
             Enumeration(ast::CustomType(path, _, t_args, _)) {

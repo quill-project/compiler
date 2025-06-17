@@ -12,20 +12,26 @@ pub fun UntypedNode::as_string(self: UntypedNode) -> String
 pub struct FunctionType[N](args: List[N], ret: Option[N])
 
 pub struct PathRef[N](path: List[String], t_args: Option[List[N]])
-pub struct Closure[N](args: List[String], body: List[N])
+pub struct Closure[N](
+    args: List[String], args_captured: List[Box[Bool]],
+    captures: Set[String], body: List[N]
+)
 
 pub struct Invocation[N](invoked: N, args: List[N])
 pub struct PathInvocation[N](path: List[String], args: List[N], t_args: Option[List[N]])
 pub struct IfExpr[N](cond: N, if_val: N, else_val: N)
 
-pub struct LocalVariable[N](name: String, mutable: Bool, type: Option[N], value: N)
+pub struct LocalVariable[N](
+    name: String, mutable: Bool, captured: Box[Bool],
+    type: Option[N], value: N
+)
 pub struct If[N](cond: N, if_body: List[N], else_body: List[N])
 pub struct While[N](cond: N, body: List[N])
-pub struct For[N](name: String, in: N, body: List[N])
+pub struct For[N](name: String, captured: Box[Bool], in: N, body: List[N])
 pub struct Match[N](matched: N, branches: List[MatchBranch[N]])
 pub struct MatchBranch[N](
     patterns: List[MatchPattern[N]],
-    capture_types: Map[String, types::Type],
+    captures: Map[String, Pair[types::Type, Box[Bool]]],
     body: List[N]
 )
 pub struct MatchPattern[N](
@@ -51,6 +57,7 @@ pub struct GlobalVariable[N](
 pub struct Function[N](
     path: List[String], public: Bool,
     t_args: List[String], args: List[Pair[String, N]], varargs: Bool,
+    args_captured: List[Box[Bool]],
     return_type: Option[N],
     body: List[N]    
 )
@@ -150,10 +157,14 @@ pub fun MatchBranch::as_string[N](self: MatchBranch[N]) -> String
             |> values() 
             |> map[MatchPattern[N], String](|p| N::as_string(p.node)) 
             |> join(" | "),
-        self.capture_types
+        self.captures
             |> entries() 
-            |> map[Pair[String, types::Type], String](
-                |e| "_: _" |> fmt(e.first, types::Type::as_string(e.second))
+            |> map[Pair[String, Pair[types::Type, Box[Bool]]], String](
+                |e| "_: __" |> fmt(
+                    e.first, 
+                    types::Type::as_string(e.second.first),
+                    if e.second.second.value { " (captured)" } else { "" }
+                )
             )
             |> join(", "),
         self.body 
@@ -190,10 +201,11 @@ pub fun Variant::as_string[N](self: Variant[N]) -> String {
         Variant::Bool(b) { return Bool::as_string(b) }
         Variant::Unit { return "unit" }
         Variant::String(s) { return "\"" |> concat(s) |> concat("\"") }
-        Variant::Closure(Closure(args, body)) {
+        Variant::Closure(Closure(args, _, captures, body)) {
             val args_s = args |> values() |> join(", ")
+            val captures_s = captures |> values() |> join(", ")
             val body_s = body |> values() |> map(N::as_string) |> join("; ")
-            return "|_| { _ }" |> fmt(args_s, body_s)
+            return "|_| [_] { _ }" |> fmt(args_s, captures_s, body_s)
         }
 
         Variant::Add(Pair(a, b)) { return "(_ + _)" |> fmt(N::as_string(a), N::as_string(b)) }
@@ -241,11 +253,12 @@ pub fun Variant::as_string[N](self: Variant[N]) -> String {
                 |> fmt(N::as_string(c), N::as_string(i), N::as_string(e))
         }
 
-        Variant::LocalVariable(LocalVariable(name, mutable, type, value)) {
-            return "_ __ = _" |> fmt(
+        Variant::LocalVariable(LocalVariable(name, mutable, captured, type, value)) {
+            return "_ __ _= _" |> fmt(
                 if mutable { "mut" } else { "val" }, name,
                 type |> map[N, String](|t| ": " |> concat(N::as_string(t)))
                     |> unwrap_or(""),
+                if captured.value { "(captured) " } else { "" },
                 N::as_string(value)
             )
         }
@@ -268,9 +281,11 @@ pub fun Variant::as_string[N](self: Variant[N]) -> String {
                 body |> values() |> map(N::as_string) |> join("; ")
             )
         }
-        Variant::For(For(name, seq, body)) {
-            return "for _: _ { _ }" |> fmt(
-                name, N::as_string(seq),
+        Variant::For(For(name, captured, seq, body)) {
+            return "for __: _ { _ }" |> fmt(
+                name,
+                if captured.value { " (captured)" } else { "" }, 
+                N::as_string(seq),
                 body |> values() |> map(N::as_string) |> join("; ")
             )
         }
@@ -306,7 +321,7 @@ pub fun Variant::as_string[N](self: Variant[N]) -> String {
                 N::as_string(value)
             )
         }
-        Variant::Function(Function(path, public, t_args, args, varargs, ret_t, body)) {
+        Variant::Function(Function(path, public, t_args, args, varargs, _, ret_t, body)) {
             return "_fun _[_](__)_ { _ }" |> fmt(
                 if public { "pub " } else { "" },
                 path |> values() |> join("::"),
