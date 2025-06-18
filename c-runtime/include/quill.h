@@ -38,7 +38,7 @@ typedef uint8_t quill_bool_t;
 
 typedef struct quill_alloc quill_alloc_t;
 
-typedef quill_unit_t (*quill_destructor_t)(quill_alloc_t* alloc);
+typedef quill_unit_t (*quill_destructor_t)(quill_alloc_t *alloc);
 
 typedef struct quill_alloc {
     uint64_t rc;
@@ -59,6 +59,8 @@ typedef quill_alloc_t *quill_struct_t;
 typedef quill_alloc_t *quill_enum_t;
 
 typedef const void *quill_fptr_t;
+
+typedef quill_alloc_t *quill_capture_t;
 
 typedef struct quill_closure {
     quill_alloc_t *alloc;
@@ -110,5 +112,39 @@ static void quill_rc_dec(quill_alloc_t *alloc) {
 
 void quill_println(quill_string_t line);
 void quill_panic(quill_string_t reason);
+
+
+static quill_unit_t quill_captured_noop_free(quill_alloc_t *alloc) {
+    (void) alloc;
+    return QUILL_UNIT;
+}
+
+static quill_unit_t quill_captured_string_free(quill_alloc_t *alloc) {
+    quill_string_t *ref = (quill_string_t *) alloc->data;
+    quill_rc_dec(ref->alloc);
+    return QUILL_UNIT;
+}
+
+static quill_unit_t quill_captured_ref_free(quill_alloc_t *alloc) {
+    quill_alloc_t **ref = (quill_alloc_t **) alloc->data;
+    quill_rc_dec(*ref);
+    return QUILL_UNIT;
+}
+
+static quill_unit_t quill_captured_closure_free(quill_alloc_t *alloc) {
+    quill_closure_t *ref = (quill_closure_t *) alloc->data;
+    quill_rc_dec(ref->alloc);
+    return QUILL_UNIT;
+}
+
+#define QUILL_UNIT_CAPTURE quill_malloc(sizeof(quill_unit_t), &quill_captured_noop_free)
+#define QUILL_INT_CAPTURE quill_malloc(sizeof(quill_int_t), &quill_captured_noop_free)
+#define QUILL_FLOAT_CAPTURE quill_malloc(sizeof(quill_float_t), &quill_captured_noop_free)
+#define QUILL_BOOL_CAPTURE quill_malloc(sizeof(quill_bool_t), &quill_captured_noop_free)
+#define QUILL_STRING_CAPTURE quill_malloc(sizeof(quill_string_t), &quill_captured_string_free)
+#define QUILL_STRUCT_CAPTURE quill_malloc(sizeof(quill_struct_t), &quill_captured_ref_free)
+#define QUILL_ENUM_CAPTURE quill_malloc(sizeof(quill_enum_t), &quill_captured_ref_free)
+#define QUILL_CLOSURE_CAPTURE quill_malloc(sizeof(quill_closure_t), &quill_captured_closure_free)
+#define QUILL_LIST_CAPTURE quill_malloc(sizeof(quill_list_t), &quill_captured_ref_free)
 
 #endif

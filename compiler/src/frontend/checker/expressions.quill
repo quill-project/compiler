@@ -625,7 +625,7 @@ pub fun Checker::check_invocation(
                     |> List::collect()    
                 )
                 |> unwrap_or(List::empty())
-            val check_named: Fun(List[String], Symbol, Bool, List[String], List[UntypedNode], Bool, UntypedNode) -> Pair[List[TypedNode], Type]
+            val check_named: Fun(List[String], Symbol, Bool, List[String], List[UntypedNode], Bool, UntypedNode) -> Triplet[List[TypedNode], Type, List[Type]]
             = |path, symbol, public, decl_t_args, exp_arg_t, exp_varargs, got_ret_t| {
                 if !public && symbol.context.module != self.context.module {
                     self.messages |> push(Message::symbol_private(
@@ -686,7 +686,17 @@ pub fun Checker::check_invocation(
                     = SymbolInstance(path, final_type_args)
                 self.dependencies |> push(instance)
                 val result_type = (symbol_c |> check_annotation(got_ret_t)).type
-                return Pair(args_t, result_type)
+                return Triplet(args_t, result_type, final_type_args)
+            }
+            val final_t_arg_nodes: Fun(List[Type]) -> List[TypedNode] = |t| {
+                return t 
+                    |> values()
+                    |> map[Type, TypedNode](|t| TypedNode(
+                        // incredibly dirty hack - code gen will never
+                        // depend on the AST value of this, so it's fine
+                        ast::Variant::Invalid, t.source, t
+                    ))
+                    |> List::collect()
             }
             val path: List[String] = self |> expand_path(raw_path)
             match self.symbols.symbols |> get(path) {
@@ -719,7 +729,8 @@ pub fun Checker::check_invocation(
                         )
                         return TypedNode(
                             ast::Variant::NamedCall(ast::PathInvocation(
-                                path, checked.first, t_args_t
+                                path, checked.first,
+                                Option::Some(final_t_arg_nodes(checked.third))
                             )),
                             node.source, checked.second
                         )
@@ -755,7 +766,8 @@ pub fun Checker::check_invocation(
                         )
                         return TypedNode(
                             ast::Variant::StructInit(ast::PathInvocation(
-                                path, checked.first, t_args_t
+                                path, checked.first,
+                                Option::Some(final_t_arg_nodes(checked.third))
                             )),
                             node.source, checked.second
                         )
@@ -814,7 +826,8 @@ pub fun Checker::check_invocation(
                         return TypedNode(
                             ast::Variant::EnumInit(ast::PathInvocation(
                                 List::concat(enum_path, List::of(member_name)), 
-                                checked.first, t_args_t
+                                checked.first,
+                                Option::Some(final_t_arg_nodes(checked.third))
                             )),
                             node.source, checked.second
                         )
@@ -1055,6 +1068,9 @@ pub fun Checker::infer_overloaded_operator(
                         |> expect("was inserted earlier")
                     )
                     |> List::collect()
+                val instance: SymbolInstance 
+                    = SymbolInstance(path, final_type_args)
+                self.dependencies |> push(instance)
                 val result_type = ret_type 
                     |> map[UntypedNode, Type](
                         |t| (symbol_c |> check_annotation(t)).type

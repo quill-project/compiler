@@ -10,6 +10,14 @@ pub struct PatternTuple(
     vals: List[Pattern]
 )
 
+pub fun PatternTuple::eq(lhs: PatternTuple, rhs: PatternTuple) -> Bool
+    = lhs.path == rhs.path
+    && lhs.t_args == rhs.t_args
+    && lhs.vals == rhs.vals
+
+pub fun PatternTuple::not_eq(lhs: PatternTuple, rhs: PatternTuple) -> Bool
+    = !PatternTuple::eq(lhs, rhs)
+
 pub enum Pattern(
     Any,
     Wildcard: Type,
@@ -50,6 +58,22 @@ pub fun Pattern::as_string(self: Pattern) -> String {
         Tag(Pair(n, v)) { return "_(_)" |> fmt(n, v |> as_string()) }
     }
 }
+
+pub fun Pattern::eq(lhs: Pattern, rhs: Pattern) -> Bool {
+    match Pair(lhs, rhs) {
+        Pair(Any, Any) { return true }
+        Pair(Wildcard(a), Wildcard(b)) { return a == b }
+        Pair(Unit, Unit) { return true }
+        Pair(Bool(a), Bool(b)) { return a == b }
+        Pair(Tuple(a), Tuple(b)) { return a == b }
+        Pair(Tag(a), Tag(b)) { return a == b }
+        
+        _ { return false }
+    }
+}
+
+pub fun Pattern::not_eq(lhs: Pattern, rhs: Pattern) -> Bool
+    = !Pattern::eq(lhs, rhs)
 
 // Constructs a pattern from a given typed AST node.
 pub fun Pattern::from(node: TypedNode, p: ast::MatchPattern[TypedNode]) -> Pattern {
