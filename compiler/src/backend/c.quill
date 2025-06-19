@@ -577,7 +577,7 @@ pub fun emit_expression(gen: mut Generator, node: TypedNode, into: String) {
             gen |> assign_to(into, node.type, v)
         }
         FunctionRef(_) {
-
+            // TODO!
         }
         Int(i) {
             val v: String = i |> as_string()
@@ -689,12 +689,47 @@ pub fun emit_expression(gen: mut Generator, node: TypedNode, into: String) {
             gen |> in_body(emit_rc_dec(into, node.type))
             gen |> in_body("_ = _;\n" |> fmt(into, r))
         }
-        EnumInit(_) {
-            // 1. increase RCs of values
-            // 2. decrease RC of into
-            // 3. allocate new object, put values and put into 'into' (without 'assign_to')
-
-            // TODO!
+        EnumInit(ast::PathInvocation(inv_path, args, t_n_args)) {
+            val path = inv_path |> slice_to(-1)
+            val name = inv_path |> at(-1)
+            val t_args: List[Type] = t_n_args
+                |> unwrap_or(List::empty())
+                |> values()
+                |> map[TypedNode, Type](|t| t.type)
+                |> List::collect()
+            val instance: Triplet[TypedNode, Int, List[Type]] 
+                = find_instance_with(path, t_args, gen.table)
+            val get_members: Fun() -> List[String] = || { match instance.first.value {
+                Enumeration(ast::CustomType(_, _, _, mems)) {
+                    return mems |> values() 
+                        |> map[Pair[String, TypedNode], String](|m| m.first)
+                        |> List::collect()
+                }
+                _ { return panic("initialized non-enum with 'EnumInit'") }
+            } }
+            val layout: String = mangle_path(path, instance.second)
+            val r: String = gen |> alloc(node.type)
+            gen |> in_body("_ = _(sizeof(_), &__);\n"
+                |> fmt(r, "quill_malloc", layout, layout, "_deconstruct")
+            )
+            val member_names: List[String] = get_members()
+            val member_i: Int = member_names 
+                |> indices()
+                |> find(|i| (member_names |> at(i)) == name)
+                |> expect("creation of unknown enum member")
+            gen |> in_body("((_ *) _->data)->tag = _;\n"
+                |> fmt(layout, r, member_i |> as_string())
+            )
+            val value: TypedNode = args |> at(0)
+            val value_into: String = "((_ *) _->data)->value.m__"
+                |> fmt(layout, r, "_", name)
+            gen |> emit_expression(value, value_into)
+            // We don't want to use 'assign_to' here since it increases
+            // the reference count of whatever we assign. 
+            // On creation, 'quill_malloc' returns an allocation with RC=1,
+            // so we only want to decrease the RC of whatever is replaced.
+            gen |> in_body(emit_rc_dec(into, node.type))
+            gen |> in_body("_ = _;\n" |> fmt(into, r))
         }
         IfExpr(ast::IfExpr(cond, if_val, else_val)) {
             val c: String = gen |> alloc(cond.type)
