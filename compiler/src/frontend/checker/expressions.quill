@@ -256,7 +256,7 @@ pub fun Checker::check_closure(
             )
         })
         |> Map::collect()
-    val captures: mut Set[String] = Set::empty()
+    val captures: mut Map[String, Type] = Map::empty()
     val func = Function(List::of(Scope(scope_vars)), captures, exp_ret_type)
     self.functions |> push(func)
     self |> enter_scope()

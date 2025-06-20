@@ -54,7 +54,7 @@ pub struct Scope(
 
 pub struct Function(
     scopes: mut List[Scope],
-    captures: mut Set[String],
+    captures: mut Map[String, Type],
     return_type: Option[Type]
 )
 
@@ -119,7 +119,7 @@ pub fun Checker::find_variable(
             // ('curr_func_i'), specify that it captures that variable.
             range_incl(ctx.first + 1, curr_func_i) |> for_each(|f_i| {
                 val c_f: mut Function = self.functions |> at(f_i)
-                c_f.captures |> add(name)
+                c_f.captures |> set(name, ctx.second.type)
             })
             // return the found variable
             return ctx.second

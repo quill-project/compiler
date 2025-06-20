@@ -1626,7 +1626,7 @@ const quill = (function() {
     ) {
         const s = callerState.symbols[path];
         if(s === undefined) { return null; }
-        const state = s.checker;
+        const state = s.checker.clone();
         const node = s.node;
         if(!allowedTypes.includes(node.type)) {
             return null;

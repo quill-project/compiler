@@ -264,7 +264,7 @@ pub fun Checker::check_declaration(
                 ) 
             val func = Function(
                 List::of(scope), // scope stack
-                Set::empty(), // captures (functions can't capture anything :))
+                Map::empty(), // captures (functions can't capture anything :))
                 Option::Some(full_ret_t) // return type
             )
             self.functions |> push(func)

@@ -223,7 +223,7 @@ pub fun parse_value(s: mut Parser) -> UntypedNode {
             }
             return UntypedNode(
                 ast::Variant::Closure(ast::Closure(
-                    arg_names, List::empty(), Set::empty(), body
+                    arg_names, List::empty(), Map::empty(), body
                 )),
                 Source::range(start.source, end)
             )

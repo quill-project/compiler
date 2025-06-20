@@ -25,7 +25,7 @@ pub fun List::as_hash[T](self: List[T]) -> Int = self
     |> unwrap_or(0)
 
 pub fun List::clone[T](self: List[T]) -> mut List[T] 
-    = self |> slice(0, self |> length())
+    = self |> values() |> map(T::clone) |> List::collect()
 
 pub fun List::empty[T]() -> mut List[T] = List::of[T]()
 

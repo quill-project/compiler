@@ -14,7 +14,7 @@ pub struct FunctionType[N](args: List[N], ret: Option[N])
 pub struct PathRef[N](path: List[String], t_args: Option[List[N]])
 pub struct Closure[N](
     args: List[String], args_captured: List[Box[Bool]],
-    captures: Set[String], body: List[N]
+    captures: Map[String, types::Type], body: List[N]
 )
 
 pub struct Invocation[N](invoked: N, args: List[N])
@@ -203,7 +203,7 @@ pub fun Variant::as_string[N](self: Variant[N]) -> String {
         Variant::String(s) { return "\"" |> concat(s) |> concat("\"") }
         Variant::Closure(Closure(args, _, captures, body)) {
             val args_s = args |> values() |> join(", ")
-            val captures_s = captures |> values() |> join(", ")
+            val captures_s = captures |> keys() |> join(", ")
             val body_s = body |> values() |> map(N::as_string) |> join("; ")
             return "|_| [_] { _ }" |> fmt(args_s, captures_s, body_s)
         }
