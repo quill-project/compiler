@@ -300,6 +300,16 @@ pub fun make_full_t_args(types: List[Type], names: List[String], at: Source) -> 
     ))
     |> Map::collect()
 
+// Internal helper function to turn a list of types into a list of typed AST nodes
+// which have the given types as their types.
+// The returned wrapping nodes will have an AST value of 'Invalid' and the same
+// sources as the given types.
+pub fun wrap_types_nodes(types: List[Type]) -> List[TypedNode]
+    = types
+    |> values()
+    |> map[Type, TypedNode](|t| TypedNode(ast::Variant::Invalid, t.source, t))
+    |> List::collect()
+
 // Checks a given member access node.
 pub fun Checker::check_member(
     self: mut Checker, node: UntypedNode, 
@@ -570,7 +580,8 @@ pub fun Checker::check_path_ref(
                 return TypedNode(
                     ast::Variant::EnumInit(ast::PathInvocation(
                         List::concat(enum_path, List::of(member_name)),
-                        values_t, t_args_t
+                        values_t, 
+                        Option::Some(wrap_types_nodes(final_type_args))
                     )),
                     node.source,
                     Type(
@@ -688,16 +699,6 @@ pub fun Checker::check_invocation(
                 val result_type = (symbol_c |> check_annotation(got_ret_t)).type
                 return Triplet(args_t, result_type, final_type_args)
             }
-            val final_t_arg_nodes: Fun(List[Type]) -> List[TypedNode] = |t| {
-                return t 
-                    |> values()
-                    |> map[Type, TypedNode](|t| TypedNode(
-                        // incredibly dirty hack - code gen will never
-                        // depend on the AST value of this, so it's fine
-                        ast::Variant::Invalid, t.source, t
-                    ))
-                    |> List::collect()
-            }
             val path: List[String] = self |> expand_path(raw_path)
             match self.symbols.symbols |> get(path) {
                 Some(s) { match s.node.value {
@@ -730,7 +731,7 @@ pub fun Checker::check_invocation(
                         return TypedNode(
                             ast::Variant::NamedCall(ast::PathInvocation(
                                 path, checked.first,
-                                Option::Some(final_t_arg_nodes(checked.third))
+                                Option::Some(wrap_types_nodes(checked.third))
                             )),
                             node.source, checked.second
                         )
@@ -767,7 +768,7 @@ pub fun Checker::check_invocation(
                         return TypedNode(
                             ast::Variant::StructInit(ast::PathInvocation(
                                 path, checked.first,
-                                Option::Some(final_t_arg_nodes(checked.third))
+                                Option::Some(wrap_types_nodes(checked.third))
                             )),
                             node.source, checked.second
                         )
@@ -827,7 +828,7 @@ pub fun Checker::check_invocation(
                             ast::Variant::EnumInit(ast::PathInvocation(
                                 List::concat(enum_path, List::of(member_name)), 
                                 checked.first,
-                                Option::Some(final_t_arg_nodes(checked.third))
+                                Option::Some(wrap_types_nodes(checked.third))
                             )),
                             node.source, checked.second
                         )
@@ -1081,15 +1082,7 @@ pub fun Checker::infer_overloaded_operator(
                 return TypedNode(
                     ast::Variant::NamedCall(ast::PathInvocation(
                         path, ch_operands, 
-                        Option::Some(final_type_args
-                            |> values()
-                            |> map[Type, TypedNode](|t| TypedNode(
-                                // incredibly dirty hack - code gen will never
-                                // depend on the AST value of this, so it's fine
-                                ast::Variant::Invalid, t.source, t
-                            ))
-                            |> List::collect()
-                        )
+                        Option::Some(wrap_types_nodes(final_type_args))
                     )),
                     node.source, result_type
                 )

@@ -58,5 +58,5 @@ const bootstrapped = require("./build.js");
 const qiqStart = Date.now();
 const result = bootstrapped(qiqSrcFiles, "quill::cli::main");
 const qiqEnd = Date.now();
-console.log(`QIQ took ${qiqEnd - qiqStart}ms to parse and check QIQ`);
+console.log(`QIQ took ${qiqEnd - qiqStart}ms to compile QIQ`);
 fs.writeFileSync("bootstrap/build.c", result);

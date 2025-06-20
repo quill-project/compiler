@@ -208,8 +208,7 @@ pub fun Checker::check_match_pattern(
             }
             match exp.value {
                 Struct(Pair(struct_path, s_t_args)) {
-                    val ref_t_args_t: List[TypedNode] 
-                        = check_type_args(struct_path, s_t_args)
+                    check_type_args(struct_path, s_t_args)
                     val s: Symbol = self.symbols.symbols 
                         |> get(struct_path)
                         |> expect("path was referenced by expected type")
@@ -237,10 +236,17 @@ pub fun Checker::check_match_pattern(
                             )
                         })
                         |> List::collect()
+                    val final_type_args: List[Type] = t.t_args
+                        |> values()
+                        |> map[String, Type](|n| decl_c.type_args
+                            |> get(n)
+                            |> expect("inserted by 'make_full_t_args'")
+                        )
+                        |> List::collect()
                     return TypedNode(
                         ast::Variant::StructInit(ast::PathInvocation(
                             struct_path, args_t, 
-                            o_ref_t_args |> map(|_| ref_t_args_t)
+                            Option::Some(wrap_types_nodes(final_type_args))
                         )),
                         node.source, exp
                     )
@@ -249,8 +255,7 @@ pub fun Checker::check_match_pattern(
                     val path_matches: Bool = raw_enum_path == enum_path
                         || (raw_enum_path |> length()) == 0
                     if !path_matches { return default_check() }
-                    val ref_t_args_t: List[TypedNode]
-                        = check_type_args(enum_path, e_t_args)
+                    check_type_args(enum_path, e_t_args)
                     val s: Symbol = self.symbols.symbols 
                         |> get(enum_path)
                         |> expect("path was referenced by expected type")
@@ -288,11 +293,18 @@ pub fun Checker::check_match_pattern(
                         )
                         |> as_seq()
                         |> List::collect()
+                    val final_type_args: List[Type] = t.t_args
+                        |> values()
+                        |> map[String, Type](|n| decl_c.type_args
+                            |> get(n)
+                            |> expect("inserted by 'make_full_t_args'")
+                        )
+                        |> List::collect()
                     return TypedNode(
                         ast::Variant::EnumInit(ast::PathInvocation(
                             List::concat(enum_path, List::of(member_name)), 
                             args_t, 
-                            o_ref_t_args |> map(|_| ref_t_args_t)
+                            Option::Some(wrap_types_nodes(final_type_args))
                         )),
                         node.source, exp
                     )
