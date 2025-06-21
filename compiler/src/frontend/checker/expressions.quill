@@ -497,10 +497,6 @@ pub fun Checker::check_path_ref(
                     |> unwrap_or_else(
                         || Type(Variant::Unit, !IS_MUTABLE, node.source)
                     )
-                val r = Type(
-                    Variant::Function(Pair(f_arg_types, f_ret_type)),
-                    !IS_MUTABLE, node.source
-                )
                 val final_type_args: List[Type] = f_t_args |> values()
                     |> map[String, Type](|t| func_c.type_args 
                         |> get(t) 
@@ -510,9 +506,45 @@ pub fun Checker::check_path_ref(
                 val instance: SymbolInstance 
                     = SymbolInstance(path, final_type_args)
                 self.dependencies |> push(instance)
+                val ref_arg_names: List[String] = f_arg_types 
+                    |> indices() 
+                    |> map[Int, String](
+                        |i| "p" |> concat(i |> as_string())
+                    )
+                    |> List::collect()
                 return TypedNode(
-                    ast::Variant::FunctionRef(ast::PathRef(path, t_args_t)),
-                    node.source, r
+                    ast::Variant::Closure(ast::Closure(
+                        ref_arg_names,
+                        List::of_length(f_arg_types |> length(), Box(false)),
+                        Map::empty(),
+                        List::of(TypedNode(
+                            ast::Variant::Return(TypedNode(
+                                ast::Variant::NamedCall(ast::PathInvocation(
+                                    path,
+                                    f_arg_types |> indices() 
+                                        |> map[Int, TypedNode](|i| TypedNode(
+                                            ast::Variant::VariableRef(
+                                                ref_arg_names |> at(i)
+                                            ),
+                                            node.source,
+                                            f_arg_types |> at(i)
+                                        ))
+                                        |> List::collect(),
+                                    Option::Some(
+                                        wrap_types_nodes(final_type_args)
+                                    )
+                                )),
+                                node.source, f_ret_type
+                            )),
+                            node.source,
+                            Type(Variant::Unit, !IS_MUTABLE, node.source)
+                        ))
+                    )),
+                    node.source,
+                    Type(
+                        Variant::Function(Pair(f_arg_types, f_ret_type)),
+                        !IS_MUTABLE, node.source
+                    )
                 )
             }
             _ {}

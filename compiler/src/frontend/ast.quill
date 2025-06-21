@@ -78,7 +78,6 @@ pub enum Variant[N](
 
     PathRef: PathRef[N],
     VariableRef: String,
-    FunctionRef: PathRef[N],
     Int: Int,
     Float: Float,
     Bool: Bool,
@@ -193,8 +192,7 @@ pub fun Variant::as_string[N](self: Variant[N]) -> String {
                 |> concat(")")
         }
 
-        Variant::PathRef(ref) |
-        Variant::FunctionRef(ref) { return PathRef::as_string(ref) }
+        Variant::PathRef(ref) { return PathRef::as_string(ref) }
         Variant::VariableRef(name) { return "var@" |> concat(name) }
         Variant::Int(i) { return Int::as_string(i) }
         Variant::Float(f) { return Float::as_string(f) }

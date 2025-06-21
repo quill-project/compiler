@@ -4,5 +4,7 @@ mod quill::cli
 use quill::*
 
 fun main() {
-    println("Hello, world!")
+    for i: range(0, 100) {
+        println(i)
+    }
 }

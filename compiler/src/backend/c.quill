@@ -555,8 +555,58 @@ pub fun emit_statement(gen: mut Generator, node: TypedNode) {
             gen |> emit_statement_list(body)
             gen |> in_body("}\n")
         }
-        For(_) {
-            // TODO!   
+        For(ast::For(name, captured, in, body)) {
+            val seq_path: List[String] = List::of("std", "Sequence")
+            val opt_val_path: List[String] = List::of("std", "Option")
+            val get_sequence_args: Fun() -> Option[List[Type]] = || { 
+                match in.type.value {
+                    Struct(Pair(seq_path, seq_t_args)) { 
+                        return Option::Some(seq_t_args) 
+                    }
+                    _ { return Option::None }
+                } 
+            }
+            val seq_t_args: List[Type] = get_sequence_args()
+                |> expect("Attempt to use 'For' with a non-sequence")
+            val seq_instance: Triplet[TypedNode, Int, List[Type]] 
+                = find_instance_with(seq_path, seq_t_args, gen.table)
+            val seq_layout: String = mangle_path(seq_path, seq_instance.second)
+            val opt_val_instance: Triplet[TypedNode, Int, List[Type]] 
+                = find_instance_with(opt_val_path, seq_t_args, gen.table)
+            val opt_val_layout: String 
+                = mangle_path(opt_val_path, opt_val_instance.second)
+            val get_opt_member_idx: Fun(String) -> Int = |member| { 
+                match opt_val_instance.first.value {
+                    Enumeration(ast::CustomType(_, _, _, members)) {
+                        return members 
+                            |> indices() 
+                            |> find(|i| (members |> at(i)).first == member)
+                            |> expect("'std::Option' is missing a required member")
+                    }
+                    _ { return panic("'std::Option' must be an enum") }
+                } 
+            }
+            val seq: String = gen |> alloc(in.type)
+            gen |> emit_expression(in, seq)
+            val seq_func: String = "((_ *) (_)->data)->m_"
+                |> fmt(seq_layout, seq, "_next")
+            gen |> in_body("for(;;) {\n")
+            gen |> in_body("_ _ = _(_, _(_, _));\n" |> fmt(
+                "quill_enum_t", "current_opt", "QUILL_CALL_CLOSURE_NA",
+                seq_func, "QUILL_CLOSURE_FPTR_NA", seq_func, "quill_enum_t"
+            ))
+            gen |> in_body("if(((_ *) _->data)->tag != _) { break; }\n" |> fmt(
+                opt_val_layout, "current_opt", 
+                get_opt_member_idx("Some") |> as_string()
+            ))
+            val opt_val: String = "((_ *) _->data)->value.m_"
+                |> fmt(opt_val_layout, "current_opt", "_Some")
+            val current: String = gen 
+                |> alloc_named(name, seq_t_args |> at(0), captured.value)
+            gen |> assign_to(current, seq_t_args |> at(0), opt_val)
+            gen |> in_body("quill_rc_dec(current_opt);\n")
+            gen |> emit_statement_list(body)
+            gen |> in_body("}\n")
         }
         Match(_) {
             // just abuse the 🦆 out of 'goto'
@@ -581,15 +631,18 @@ pub fun emit_statement_list(gen: mut Generator, nodes: List[TypedNode])
 
 // Emits the equivalent lowered C code for the given expression.
 pub fun emit_expression(gen: mut Generator, node: TypedNode, into: String) {
+    val get_fun_signature: Fun(Type) -> Option[Pair[List[Type], Type]] = |t| { 
+        match t.value {
+            Function(f) { return Option::Some(f) }
+            _ { return Option::None }
+        } 
+    }
     match node.value {
         PathRef(_) |
         VariableRef(_) |
         Member(_) {
             val v: String = gen |> emit_assignable(node)
             gen |> assign_to(into, node.type, v)
-        }
-        FunctionRef(_) {
-            // TODO!
         }
         Int(i) {
             val v: String = i |> as_string()
@@ -607,8 +660,14 @@ pub fun emit_expression(gen: mut Generator, node: TypedNode, into: String) {
             // Default value of variables containing 'quill_unit_t' is already
             // 'QUILL_UNIT', so there is nothing more to do
         }
-        String(_) {
-            // TODO!
+        String(content) {
+            gen |> in_body(emit_rc_dec(into, node.type))
+            gen |> in_body("_ = _((_ []) {_}, _);\n" |> fmt(
+                into, 
+                "quill_string_from_points", "uint32_t",
+                content |> codes() |> map(Int::as_string) |> join(","),
+                content |> codes() |> length() |> as_string()
+            ))
         }
         Closure(ast::Closure(args, args_capt, capture_types, body)) {
             val captures: List[String] = capture_types
@@ -635,13 +694,7 @@ pub fun emit_expression(gen: mut Generator, node: TypedNode, into: String) {
                 gen.closure_destr |> set(capture_c, destr_impl)
             }
             // generate the body for the closure
-            val get_closure_sig: Fun() -> Option[Pair[List[Type], Type]] = || { 
-                match node.type.value {
-                    Function(f) { return Option::Some(f) }
-                    _ { return Option::None }
-                } 
-            }
-            val signature: Pair[List[Type], Type] = get_closure_sig()
+            val signature: Pair[List[Type], Type] = get_fun_signature(node.type)
                 |> expect("result type of 'Closure' must be a function type!")
             val body_args_s: String = args 
                 |> indices()
@@ -716,16 +769,37 @@ pub fun emit_expression(gen: mut Generator, node: TypedNode, into: String) {
                 gen |> in_body("_ = _;\n" |> fmt(dest, value))
             })
         }
-        Call(_) {
-            //    DO NOT increase RCs of all arguments!
-            // 1. decrease RC of into
-            //     - cannot cause RC to drop to 0 because same reference,
-            //       since the reference must have been passed to the function
-            //       and the function increases the RC before returning
-            // 2. call and manually (without 'assign_to') put result into 'into'
-            //    since returning already increased the RC of the reference by 1
-
-            // TODO!
+        Call(ast::Invocation(invoked, args)) {
+            val signature: Pair[List[Type], Type] 
+                = get_fun_signature(invoked.type)
+                |> expect("'invoked' of 'Call' must result in a function type")
+            val called: String = gen |> alloc(invoked.type)
+            gen |> emit_expression(invoked, called)
+            val arg_t_s: String = signature.first
+                |> values()
+                |> map[Type, String](|t| ", " |> concat(emit_type(t)))
+                |> join("")
+            val args_s: String = args
+                |> values()
+                |> map[TypedNode, String](|arg| {
+                    val v: String = gen |> alloc(arg.type)
+                    gen |> emit_expression(arg, v)
+                    return ", " |> concat(v)
+                })
+                |> join("")
+            gen |> in_body(emit_rc_dec(into, node.type))
+            gen |> in_body("_ = _(_, _(_, __)_);\n" |> fmt(
+                into, 
+                if 0 == (args |> length()) { "QUILL_CALL_CLOSURE_NA" }
+                    else { "QUILL_CALL_CLOSURE" },
+                called, 
+                if 0 == (args |> length()) { "QUILL_CLOSURE_FPTR_NA" }
+                    else { "QUILL_CLOSURE_FPTR" },
+                called,
+                emit_type(signature.second),
+                arg_t_s,
+                args_s
+            ))
         }
         NamedCall(ast::PathInvocation(path, args, t_n_args)) {
             val t_args: List[Type] = t_n_args
