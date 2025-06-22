@@ -149,6 +149,3 @@ pub fun Sequence::filter[T](self: mut Sequence[T], cond: Fun(T) -> Bool) -> mut 
         }) |> for_each(|n| {})
         return found
     })
-
-pub fun Sequence::for_each[T](self: mut Sequence[T], f: Fun(T))
-    = self |> for_each_until(f, Option::None)

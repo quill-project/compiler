@@ -108,6 +108,13 @@ static void quill_rc_add(quill_alloc_t *alloc) {
     alloc->rc += 1;
 }
 
+static void quill_unit_rc_add(quill_unit_t v) { (void) v; }
+static void quill_int_rc_add(quill_int_t v) { (void) v; }
+static void quill_float_rc_add(quill_float_t v) { (void) v; }
+static void quill_bool_rc_add(quill_bool_t v) { (void) v; }
+static void quill_string_rc_add(quill_string_t v) { quill_rc_add(v.alloc); }
+static void quill_closure_rc_add(quill_closure_t v) { quill_rc_add(v.alloc); }
+
 static void quill_rc_dec(quill_alloc_t *alloc) {
     if(alloc == NULL) { return; }
     alloc->rc -= 1;
@@ -116,6 +123,13 @@ static void quill_rc_dec(quill_alloc_t *alloc) {
     if(destructor != NULL) { destructor(alloc); }
     free(alloc);
 }
+
+static void quill_unit_rc_dec(quill_unit_t v) { (void) v; }
+static void quill_int_rc_dec(quill_int_t v) { (void) v; }
+static void quill_float_rc_dec(quill_float_t v) { (void) v; }
+static void quill_bool_rc_dec(quill_bool_t v) { (void) v; }
+static void quill_string_rc_dec(quill_string_t v) { quill_rc_dec(v.alloc); }
+static void quill_closure_rc_dec(quill_closure_t v) { quill_rc_dec(v.alloc); }
 
 
 void quill_println(quill_string_t line);
@@ -130,6 +144,8 @@ quill_string_t quill_string_from_points(
     uint32_t *points, quill_int_t length_points
 );
 quill_string_t quill_string_from_static_cstr(const char* cstr);
+quill_string_t quill_string_from_int(quill_int_t i);
+quill_string_t quill_string_from_float(quill_float_t f);
 
 
 static quill_unit_t quill_captured_noop_free(quill_alloc_t *alloc) {

@@ -70,44 +70,38 @@ pub ext fun Int::as_float(self: Int) -> Float = "
 "
 
 
+pub ext fun List::of_length[T](length: Int, value: T) -> mut List[T] = "
+    return new Array(Number(length)).fill(value);
+"
+
 pub ext fun List::concat[T](low: List[T], high: List[T]) -> mut List[T] = "
     return [...low, ...high];
 "
 
-pub ext fun List::push[T](self: mut List[T], value: T) -> Int = "
-    const pos = BigInt(self.length);
-    self.push(value);
-    return pos;
+ext fun List::slice_unchecked[T](self: List[T], start: Int, end: Int) -> mut List[T] = "
+    return self.slice(Number(start), Number(end));
 "
 
-pub ext fun List::insert[T](self: mut List[T], position: Int, value: T) = "
+ext fun List::insert_unchecked[T](self: mut List[T], position: Int, value: T) = "
     const n = Number(position);
     self.push(value);
     self.copyWithin(n + 1, n, self.length - 1);
     self[n] = value;
 "
 
-pub ext fun List::set[T](self: mut List[T], position: Int, value: T) = "
+ext fun List::set_unchecked[T](self: mut List[T], position: Int, value: T) = "
     self[Number(position)] = value;
-"
-
-pub ext fun List::of_length[T](length: Int, value: T) -> mut List[T] = "
-    return new Array(Number(length)).fill(value);
-"
-
-pub ext fun List::slice[T](self: List[T], start: Int, end: Int) -> mut List[T] = "
-    return self.slice(Number(start), Number(end));
-"
-
-ext fun List::get_unchecked[T](self: List[T], position: Int) -> T = "
-    return self[Number(position)]
 "
 
 pub ext fun List::length[T](self: List[T]) -> Int = "
     return BigInt(self.length);
 "
 
-pub ext fun List::splice[T](self: mut List[T], start: Int, end: Int) -> mut List[T] = "
+ext fun List::get_unchecked[T](self: List[T], position: Int) -> T = "
+    return self[Number(position)]
+"
+
+ext fun List::splice_unchecked[T](self: mut List[T], start: Int, end: Int) -> mut List[T] = "
     return self.splice(Number(start), Number(end - start))
 "
 
@@ -120,9 +114,16 @@ ext fun Sequence::for_each_until[T](self: mut Sequence[T], f: Fun(T), end: Optio
     }
 "
 
+pub fun Sequence::for_each[T](self: mut Sequence[T], f: Fun(T))
+    = self |> for_each_until(f, Option::None)
 
-pub ext fun String::slice(self: String, start: Int, end: Int) -> String = "
+
+ext fun String::slice_unchecked(self: String, start: Int, end: Int) -> String = "
     return self.slice(Number(start), Number(end));
+"
+
+ext fun String::slice_from_unchecked(self: String, start: Int) -> String = "
+    return self.slice(Number(start), self.length);
 "
 
 pub ext fun String::concat(low: String, high: String) -> String = "
@@ -133,12 +134,12 @@ pub ext fun String::length(self: String) -> Int = "
     return BigInt(self.length);
 "
 
-pub ext fun String::as_code(self: String) -> Int = "
+ext fun String::as_code_unchecked(self: String) -> Int = "
     if(self.length === 0) { return 0n; }
     return BigInt(self.codePointAt(0));
 "
 
-pub ext fun String::from_code(code: Int) -> String = "
+ext fun String::from_code_unchecked(code: Int) -> String = "
     return String.fromCodePoint(Number(code));
 "
 

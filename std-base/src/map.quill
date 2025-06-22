@@ -25,6 +25,13 @@ pub fun Map::collect[K, V](from: mut Sequence[Pair[K, V]]) -> mut Map[K, V] {
     return r
 }
 
+pub fun Map::clone[K, V](self: Map[K, V]) -> mut Map[K, V] 
+    = Map(
+        self.load_factor,
+        self.size,
+        self.buckets |> clone()
+    )
+
 // modification
 
 pub fun Map::set_load_factor[K, V](self: mut Map[K, V], load_factor: Float) {
@@ -102,13 +109,6 @@ pub fun Map::as_hash[K, V](self: Map[K, V]) -> Int = self
     |> map(Pair::as_hash[K, V]) 
     |> reduce(hash::combine_unord) 
     |> unwrap_or(0)
-
-pub fun Map::clone[K, V](self: Map[K, V]) -> mut Map[K, V] 
-    = Map(
-        self.load_factor,
-        self.size,
-        self.buckets |> clone()
-    )
 
 pub fun Map::load_factor[K, V](self: Map[K, V]) -> Float 
     = self.load_factor

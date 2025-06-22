@@ -195,7 +195,7 @@ pub fun mate(a: Cat, b: Cat) -> mut Cat
     assert_symbol(t, c,
         "pet::mate", List::empty(),
         "pub fun pet::mate[](a: type@pet::Cat (=pet::Cat), b: type@pet::Cat (=pet::Cat)) -> type+mut@pet::Cat (=mut pet::Cat) { \
-return (struct@pet::Cat(\
+return (struct@pet::Cat[](\
 \"unnamed\" (=String), \
 (fun@std::Float::div[]((fun@std::Float::plus[]((var@a (=pet::Cat) .hunger) (=Float), (var@b (=pet::Cat) .hunger) (=Float))) (=Float), 2 (=Float))) (=Float)\
 )) (=mut pet::Cat) (=Unit) \
@@ -251,36 +251,36 @@ fun varargs() {
     assert_symbol(t, c,
         "test::boxing", List::empty(),
         "fun test::boxing[]() { \
-val a = (struct@std::Box(5 (=Int))) (=mut std::Box[Int]) (=Unit); \
-val b: type@std::Box[type@std::Float (=Float)] (=std::Box[Float]) = (struct@std::Box(10 (=Float))) (=mut std::Box[Float]) (=Unit); \
-val c = (struct@std::Box[type@Bool (=Bool)](true (=Bool))) (=mut std::Box[Bool]) (=Unit) \
+val a = (struct@std::Box[!INVALID! (=Int)](5 (=Int))) (=mut std::Box[Int]) (=Unit); \
+val b: type@std::Box[type@std::Float (=Float)] (=std::Box[Float]) = (struct@std::Box[!INVALID! (=Float)](10 (=Float))) (=mut std::Box[Float]) (=Unit); \
+val c = (struct@std::Box[!INVALID! (=Bool)](true (=Bool))) (=mut std::Box[Bool]) (=Unit) \
 } (=Unit)"
     )
     assert_symbol(t, c,
         "test::options", List::empty(),
         "fun test::options[]() { \
-val a = (enum@std::Option::Some(25 (=Int))) (=std::Option[Int]) (=Unit); \
-val b: type@std::Option[type@std::Float (=Float)] (=std::Option[Float]) = (enum@std::Option::Some(13.1 (=Float))) (=std::Option[Float]) (=Unit); \
-val c = (enum@std::Option::Some[type@Bool (=Bool)](false (=Bool))) (=std::Option[Bool]) (=Unit); \
-val d: type@std::Option[type@String (=String)] (=std::Option[String]) = (enum@std::Option::None(unit (=Unit))) (=std::Option[String]) (=Unit); \
-val e = (enum@std::Option::None[type@Unit (=Unit)](unit (=Unit))) (=std::Option[Unit]) (=Unit) \
+val a = (enum@std::Option::Some[!INVALID! (=Int)](25 (=Int))) (=std::Option[Int]) (=Unit); \
+val b: type@std::Option[type@std::Float (=Float)] (=std::Option[Float]) = (enum@std::Option::Some[!INVALID! (=Float)](13.1 (=Float))) (=std::Option[Float]) (=Unit); \
+val c = (enum@std::Option::Some[!INVALID! (=Bool)](false (=Bool))) (=std::Option[Bool]) (=Unit); \
+val d: type@std::Option[type@String (=String)] (=std::Option[String]) = (enum@std::Option::None[!INVALID! (=String)](unit (=Unit))) (=std::Option[String]) (=Unit); \
+val e = (enum@std::Option::None[!INVALID! (=Unit)](unit (=Unit))) (=std::Option[Unit]) (=Unit) \
 } (=Unit)"
     )
     assert_symbol(t, c,
         "test::fun_stuff", List::empty(),
         "fun test::fun_stuff[]() { \
-val r = (fun@std::pipeline(\
+val r = (fun@std::pipeline[!INVALID! (=Int), !INVALID! (=Float), !INVALID! (=String)](\
 5 (=Int), \
-|n| [] { return (fun@std::Int::as_float(var@n (=Int))) (=Float) (=Unit) } (=Fun(Int) -> Float), \
-|x| [] { return (fun@std::Float::as_string(var@x (=Float))) (=String) (=Unit) \
-} (=Fun(Float) -> String))) (=String) (=Unit) \
+|n| [] { return (fun@std::Int::as_float[](var@n (=Int))) (=Float) (=Unit) } (=Fun(Int) -> Float), \
+|x| [] { return (fun@std::Float::as_string[](var@x (=Float))) (=String) (=Unit) } (=Fun(Float) -> String)\
+)) (=String) (=Unit) \
 } (=Unit)"
     )
     assert_symbol(t, c,
         "test::varargs", List::empty(),
         "fun test::varargs[]() { \
-val a = (fun@std::sum(1 (=Int), 2 (=Int), 3 (=Int))) (=Int) (=Unit); \
-val b = (fun@std::sum(1 (=Float), 2 (=Float), 3 (=Float))) (=Float) (=Unit) \
+val a = (fun@std::sum[!INVALID! (=Int)](1 (=Int), 2 (=Int), 3 (=Int))) (=Int) (=Unit); \
+val b = (fun@std::sum[!INVALID! (=Float)](1 (=Float), 2 (=Float), 3 (=Float))) (=Float) (=Unit) \
 } (=Unit)"
     )
 }
@@ -377,7 +377,7 @@ pub fun enums(name: Option[String]) {
 match var@n (=Int) { \
 1 (=Int) () -> {  } \
 2 (=Int) () -> {  } \
-(fun@test::add(1 (=Int), 2 (=Int))) (=Int) () -> {  } \
+(fun@test::add[!INVALID! (=Int)](1 (=Int), 2 (=Int))) (=Int) () -> {  } \
 var@_ (=Int) () -> {  } \
 } (=Unit) \
 } (=Unit)"
@@ -386,14 +386,14 @@ var@_ (=Int) () -> {  } \
         "test::structs", List::empty(),
         "pub fun test::structs[](pos: type@std::Vec2 (=std::Vec2), double: type@std::Box[type@Bool (=Bool)] (=std::Box[Bool])) { \
 match var@pos (=std::Vec2) { \
-(struct@std::Vec2(0 (=Int), 0 (=Int))) (=std::Vec2) () -> {  } \
-(struct@std::Vec2(var@x (=Int), 0 (=Int))) (=std::Vec2) (x: Int) -> {  } \
-(struct@std::Vec2(0 (=Int), var@y (=Int))) (=std::Vec2) (y: Int) -> {  } \
-(struct@std::Vec2(var@x (=Int), var@y (=Int))) (=std::Vec2) (x: Int, y: Int) -> {  } \
+(struct@std::Vec2[](0 (=Int), 0 (=Int))) (=std::Vec2) () -> {  } \
+(struct@std::Vec2[](var@x (=Int), 0 (=Int))) (=std::Vec2) (x: Int) -> {  } \
+(struct@std::Vec2[](0 (=Int), var@y (=Int))) (=std::Vec2) (y: Int) -> {  } \
+(struct@std::Vec2[](var@x (=Int), var@y (=Int))) (=std::Vec2) (x: Int, y: Int) -> {  } \
 } (=Unit); \
 match var@double (=std::Box[Bool]) { \
-(struct@std::Box[type@Bool (=Bool)](true (=Bool))) (=std::Box[Bool]) () -> {  } \
-(struct@std::Box(false (=Bool))) (=std::Box[Bool]) () -> {  } \
+(struct@std::Box[!INVALID! (=Bool)](true (=Bool))) (=std::Box[Bool]) () -> {  } \
+(struct@std::Box[!INVALID! (=Bool)](false (=Bool))) (=std::Box[Bool]) () -> {  } \
 } (=Unit) \
 } (=Unit)"
     )
@@ -401,11 +401,11 @@ match var@double (=std::Box[Bool]) { \
         "test::enums", List::empty(),
         "pub fun test::enums[](name: type@std::Option[type@String (=String)] (=std::Option[String])) { \
 match var@name (=std::Option[String]) { \
-(enum@std::Option::Some[type@String (=String)](\"Maria\" (=String))) (=std::Option[String]) () -> {  } \
-(enum@std::Option::Some(\"Bob\" (=String))) (=std::Option[String]) () -> {  } \
-(enum@std::Option::Some(\"Chris\" (=String))) (=std::Option[String]) () -> {  } \
-(enum@std::Option::Some(var@_ (=String))) (=std::Option[String]) () -> {  } \
-(enum@std::Option::None(unit (=Unit))) (=std::Option[String]) () -> {  } \
+(enum@std::Option::Some[!INVALID! (=String)](\"Maria\" (=String))) (=std::Option[String]) () -> {  } \
+(enum@std::Option::Some[!INVALID! (=String)](\"Bob\" (=String))) (=std::Option[String]) () -> {  } \
+(enum@std::Option::Some[!INVALID! (=String)](\"Chris\" (=String))) (=std::Option[String]) () -> {  } \
+(enum@std::Option::Some[!INVALID! (=String)](var@_ (=String))) (=std::Option[String]) () -> {  } \
+(enum@std::Option::None[!INVALID! (=String)](unit (=Unit))) (=std::Option[String]) () -> {  } \
 } (=Unit) \
 } (=Unit)"
     )
@@ -456,14 +456,15 @@ val a: type@std::Int (=Int) (captured) = 5 (=Int) (=Unit); \
 mut b: type@std::Int (=Int) (captured) = 10 (=Int) (=Unit); \
 val c: type@std::Float (=Float) = 3.14 (=Float) (=Unit); \
 val f: (Fun()) (=Fun() -> Unit) = || [a, b] { \
-(fun@println(var@a (=Int))) (=Unit); \
+(fun@println[!INVALID! (=Int)](var@a (=Int))) (=Unit); \
 val d: type@String (=String) (captured) = \"Hello\" (=String) (=Unit); \
 val g: (Fun()) (=Fun() -> Unit) = || [b, d] { \
 var@b (=Int) = (fun@std::Int::plus[](var@b (=Int), 1 (=Int))) (=Int) (=Unit); \
 val e: type@std::Int (=Int) = 10 (=Int) (=Unit); \
-(fun@println(var@d (=String))) (=Unit); \
-(fun@println(var@e (=Int))) (=Unit) \
-} (=Fun() -> Unit) (=Unit) \
+(fun@println[!INVALID! (=String)](var@d (=String))) (=Unit); \
+(fun@println[!INVALID! (=Int)](var@e (=Int))) (=Unit) \
+} \
+(=Fun() -> Unit) (=Unit) \
 } (=Fun() -> Unit) (=Unit) \
 } (=Unit)"
     )
@@ -474,13 +475,13 @@ val a: type@std::Int (=Int) (captured) = 5 (=Int) (=Unit); \
 mut b: type@std::Int (=Int) = 10 (=Int) (=Unit); \
 val c: type@std::Float (=Float) = 3.14 (=Float) (=Unit); \
 val f: (Fun()) (=Fun() -> Unit) = || [a] { \
-(fun@println(var@a (=Int))) (=Unit); \
+(fun@println[!INVALID! (=Int)](var@a (=Int))) (=Unit); \
 mut b: type@std::Int (=Int) (captured) = 25 (=Int) (=Unit); \
 val g: (Fun()) (=Fun() -> Unit) = || [b] { \
 var@b (=Int) = (fun@std::Int::plus[](var@b (=Int), 1 (=Int))) (=Int) (=Unit); \
 val e: type@std::Int (=Int) = 10 (=Int) (=Unit); \
-(fun@println(var@b (=Int))) (=Unit); \
-(fun@println(var@e (=Int))) (=Unit) \
+(fun@println[!INVALID! (=Int)](var@b (=Int))) (=Unit); \
+(fun@println[!INVALID! (=Int)](var@e (=Int))) (=Unit) \
 } (=Fun() -> Unit) (=Unit) \
 } (=Fun() -> Unit) (=Unit) \
 } (=Unit)"

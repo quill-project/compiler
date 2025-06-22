@@ -1,6 +1,111 @@
 
 mod std
 
+// creation
+
+pub fun List::empty[T]() -> mut List[T] = List::of[T]()
+
+pub fun List::of[T](...values: mut List[T]) -> mut List[T] = values
+
+pub fun List::collect[T](from: mut Sequence[T]) -> mut List[T] {
+    val r = List::of[T]()
+    from |> for_each(|v| {
+        r |> push(v)
+    })
+    return r
+}
+
+// pub ext fun List::of_length[T](length: Int, value: T) -> mut List[T]
+
+// pub ext fun List::concat[T](low: List[T], high: List[T]) -> mut List[T]
+
+pub fun List::clone[T](self: List[T]) -> mut List[T] 
+    = self |> values() |> map(T::clone) |> List::collect()
+
+// ext fun List::slice_unchecked[T](self: List[T], start: Int, end: Int) -> mut List[T]
+
+pub fun List::slice[T](self: List[T], start: Int, end: Int) -> mut List[T] {
+    val len: Int = self |> length()
+    val s: Int = if start >= 0 { start } else { len + start }
+    val e: Int = if end >= 0 { end } else { len + end }
+    if s < 0 || s > len {
+        return "Attempt to slice list starting from position _, which is out of bounds for length _"
+            |> fmt(Int::as_string(start), Int::as_string(len))
+            |> panic()
+    }
+    if e < 0 || e > len {
+        return "Attempt to slice list up to position _, which is out of bounds for length _"
+            |> fmt(Int::as_string(end), Int::as_string(len))
+            |> panic()
+    }
+    if s > e {
+        return "Attempt to slice list from position _ up to position _, which is in descending order for length _"
+            |> fmt(Int::as_string(start), Int::as_string(end), Int::as_string(len))
+            |> panic()
+    }
+    return self |> slice_unchecked(s, e)
+}
+
+pub fun List::slice_from[T](self: List[T], start: Int) -> mut List[T] {
+    val len: Int = self |> length()
+    val s: Int = if start >= 0 { start } else { len + start }
+    if s < 0 || s > len {
+        return "Attempt to slice list starting from position _, which is out of bounds for length _"
+            |> fmt(Int::as_string(start), Int::as_string(len))
+            |> panic()
+    }
+    return self |> slice_unchecked(s, len)
+}
+
+pub fun List::slice_to[T](self: List[T], end: Int) -> mut List[T] {
+    val len: Int = self |> length()
+    val e: Int = if end >= 0 { end } else { len + end }
+    if e < 0 || e > len {
+        return "Attempt to slice list up to position _, which is out of bounds for length _"
+            |> fmt(Int::as_string(end), Int::as_string(len))
+            |> panic()
+    }
+    return self |> slice_unchecked(0, e)
+}
+
+// modification
+
+// ext fun List::insert_unchecked[T](self: mut List[T], position: Int, value: T)
+
+pub fun List::insert[T](self: mut List[T], position: Int, value: T) {
+    val len: Int = self |> length()
+    val i: Int = if position >= 0 { position } else { len + position }
+    if i >= 0 && i <= len {
+        return self |> insert_unchecked(i, value)
+    }
+    return "Attempt to insert into list at position _, which is out of bounds for length _"
+        |> fmt(Int::as_string(position), Int::as_string(len))
+        |> panic()
+}
+
+pub fun List::push[T](self: mut List[T], value: T) -> Int {
+    val pos: Int = self |> length()
+    self |> insert_unchecked(pos, value)
+    return pos
+}
+
+// ext fun List::set_unchecked[T](self: mut List[T], position: Int, value: T)
+
+pub fun List::set[T](self: mut List[T], position: Int, value: T) -> T {
+    val len: Int = self |> length()
+    val i: Int = if position >= 0 { position } else { len + position }
+    if i >= 0 && i < len {
+        val prev: T = self |> at(i)
+        self |> set_unchecked(i, value)
+        return prev
+    }
+    return "Attempt to write to list at position _, which is out of bounds for length _"
+        |> fmt(Int::as_string(position), Int::as_string(len))
+        |> panic()
+}
+
+// access
+
 pub fun List::eq[T](lhs: List[T], rhs: List[T]) -> Bool {
     if (lhs |> length()) != (rhs |> length()) { return false }
     return Sequence::zip(lhs |> values(), rhs |> values(), T::eq)
@@ -24,35 +129,26 @@ pub fun List::as_hash[T](self: List[T]) -> Int = self
     |> reduce(hash::combine_ord)
     |> unwrap_or(0)
 
-pub fun List::clone[T](self: List[T]) -> mut List[T] 
-    = self |> values() |> map(T::clone) |> List::collect()
+// pub ext fun List::length[T](self: List[T]) -> Int
 
-pub fun List::empty[T]() -> mut List[T] = List::of[T]()
+pub fun List::is_empty[T](self: List[T]) -> Bool = (self |> length()) == 0
 
-pub fun List::of[T](...values: mut List[T]) -> mut List[T] = values
+// ext fun List::get_unchecked[T](self: List[T], position: Int) -> T
 
 pub fun List::get[T](self: List[T], position: Int) -> Option[T] {
-    mut idx = position
-    if idx < 0 { idx = (self |> length()) + idx }
-    if idx < 0 { return Option::None }
-    if idx >= (self |> length()) { return Option::None }
-    return Option::Some(self |> get_unchecked(idx))
+    val len: Int = self |> length()
+    val i: Int = if position >= 0 { position } else { len + position }
+    return if i < 0 || i >= len { Option::None[T] }
+        else { Option::Some(self |> get_unchecked(i)) }
 }
 
 pub fun List::at[T](self: List[T], position: Int) -> T = self
     |> get(position)
-    |> unwrap_or_else(|| "Index " 
-        |> concat(position |> as_string())
-        |> concat(" is out of bounds for a list of range ")
-        |> concat(self |> length() |> as_string())
+    |> unwrap_or_else(
+        || "Attempt to read from list at position _, which is out of bounds for length _"
+        |> fmt(Int::as_string(position), Int::as_string(self |> length()))
         |> panic()
     )
-
-pub fun List::slice_from[T](self: List[T], start: Int) -> mut List[T]
-    = self |> slice(start, self |> length())
-
-pub fun List::slice_to[T](self: List[T], end: Int) -> mut List[T]
-    = self |> slice(0, end)
 
 pub fun List::indices[T](self: List[T]) -> mut Sequence[Int] 
     = range(0, self |> length())
@@ -91,26 +187,76 @@ pub fun List::indices_rev[T](self: List[T]) -> mut Sequence[Int] {
     })
 }
 
-pub fun List::collect[T](from: mut Sequence[T]) -> mut List[T] {
-    val r = List::of[T]()
-    from |> for_each(|v| {
-        r |> push(v)
-    })
-    return r
+// removal
+
+// ext fun List::splice_unchecked[T](self: mut List[T], start: Int, end: Int) -> mut List[T]
+
+pub fun List::splice[T](self: mut List[T], start: Int, end: Int) -> mut List[T] {
+    val len: Int = self |> length()
+    val s: Int = if start >= 0 { start } else { len + start }
+    val e: Int = if end >= 0 { end } else { len + end }
+    if s < 0 || s > len {
+        return "Attempt to splice list starting from position _, which is out of bounds for length _"
+            |> fmt(Int::as_string(start), Int::as_string(len))
+            |> panic()
+    }
+    if e < 0 || e > len {
+        return "Attempt to splice list up to position _, which is out of bounds for length _"
+            |> fmt(Int::as_string(end), Int::as_string(len))
+            |> panic()
+    }
+    if s > e {
+        return "Attempt to splice list from position _ up to position _, which is in descending order for length _"
+            |> fmt(Int::as_string(start), Int::as_string(end), Int::as_string(len))
+            |> panic()
+    }
+    return self |> splice_unchecked(s, e)
 }
 
-pub fun List::is_empty[T](self: List[T]) -> Bool = (self |> length()) == 0
+pub fun List::splice_from[T](self: mut List[T], start: Int) -> mut List[T] {
+    val len: Int = self |> length()
+    val s: Int = if start >= 0 { start } else { len + start }
+    if s < 0 || s > len {
+        return "Attempt to splice list starting from position _, which is out of bounds for length _"
+            |> fmt(Int::as_string(start), Int::as_string(len))
+            |> panic()
+    }
+    return self |> splice_unchecked(s, len)
+}
 
-pub fun List::remove[T](self: mut List[T], position: Int) -> T = self 
-    |> splice(position, position + 1) 
-    |> get_unchecked(0)
+pub fun List::splice_to[T](self: mut List[T], end: Int) -> mut List[T] {
+    val len: Int = self |> length()
+    val e: Int = if end >= 0 { end } else { len + end }
+    if e < 0 || e > len {
+        return "Attempt to splice list up to position _, which is out of bounds for length _"
+            |> fmt(Int::as_string(end), Int::as_string(len))
+            |> panic()
+    }
+    return self |> splice_unchecked(0, e)
+}
+
+pub fun List::remove[T](self: mut List[T], position: Int) -> T {
+    val len: Int = self |> length()
+    val i: Int = if position >= 0 { position } else { len + position }
+    if i >= 0 && i <= len {
+        return self 
+            |> splice_unchecked(i, i + 1)
+            |> get_unchecked(0)
+    }
+    return "Attempt to remove from list at position _, which is out of bounds for length _"
+        |> fmt(Int::as_string(position), Int::as_string(len))
+        |> panic()
+}
 
 pub fun List::pop[T](self: mut List[T]) -> Option[T] {
-    val l = self |> length()
-    if l == 0 { return Option::None }
-    return Option::Some(self |> splice(l - 1, l) |> get_unchecked(0))
+    val len: Int = self |> length()
+    if len == 0 { return Option::None }
+    val v: T = self
+        |> splice(len - 1, len)
+        |> get_unchecked(0)
+    return Option::Some(v)
 }
 
 pub fun List::clear[T](self: mut List[T]) {
-    self |> splice(0, self |> length())
+    self |> splice_unchecked(0, self |> length())
 }

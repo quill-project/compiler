@@ -24,6 +24,13 @@ pub fun Set::collect[T](from: mut Sequence[T]) -> mut Set[T] {
     return r
 }
 
+pub fun Set::clone[T](self: Set[T]) -> Set[T] 
+    = Set(
+        self.load_factor, 
+        self.size, 
+        self.buckets |> clone()
+    )
+
 // modification
 
 pub fun Set::set_load_factor[T](self: mut Set[T], load_factor: Float) {
@@ -90,13 +97,6 @@ pub fun Set::as_hash[T](self: Set[T]) -> Int = self
     |> map(T::as_hash)
     |> reduce(hash::combine_unord)
     |> unwrap_or(0)
-
-pub fun Set::clone[T](self: Set[T]) -> Set[T] 
-    = Set(
-        self.load_factor, 
-        self.size, 
-        self.buckets |> clone()
-    )
 
 pub fun Set::load_factor[T](self: Set[T]) -> Float = self.load_factor
 

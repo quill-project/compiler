@@ -1,7 +1,8 @@
 
 mod std
 
-ext fun Sequence::for_each_until[T](self: mut Sequence[T], f: Fun(T), end: Option[T]) = "
-    // TODO!
-    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
-"
+pub fun Sequence::for_each[T](self: mut Sequence[T], f: Fun(T)) {
+    for v: self {
+        f(v)
+    }
+}

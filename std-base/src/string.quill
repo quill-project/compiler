@@ -1,6 +1,15 @@
 
 mod std
 
+// ext fun String::slice_unchecked(self: String, start: Int, end: Int) -> String
+// ext fun String::slice_from_unchecked(self: String, start: Int) -> String
+// pub ext fun String::concat(low: String, high: String) -> String
+// pub ext fun String::length(self: String) -> Int
+// ext fun String::as_code_unchecked(self: String) -> Int
+// ext fun String::from_code_unchecked(code: Int) -> String
+// pub fun String::chars(self: String) -> mut Sequence[String]
+// pub fun String::chars_rep(self: String) -> mut Stream[String]
+
 pub fun String::as_string(self: String) -> String = self
 
 pub fun String::as_hash(self: String) -> Int = self
@@ -30,44 +39,98 @@ pub fun String::indices_rep(self: String) -> mut Stream[Int] {
 
 pub fun String::codes(self: String) -> mut Sequence[Int] = self
     |> chars()
-    |> map(String::as_code)
+    |> map(String::as_code_unchecked)
 
 pub fun String::codes_rep(self: String) -> mut Stream[Int] = self
     |> chars_rep()
-    |> map(String::as_code)
+    |> map(String::as_code_unchecked)
+
+pub fun String::from_code(code: Int) -> String {
+    if code >= 0 {
+        return String::from_code_unchecked(code)
+    }
+    return "Attempt to convert negative code _ to a string"
+        |> fmt(Int::as_string(code))
+        |> panic()
+}
+
+pub fun String::as_code(self: String) -> Int {
+    if (self |> length()) > 0 {
+        return self |> as_code_unchecked()
+    }
+    return panic("Attempt to turn empty string into code")
+}
 
 pub fun String::get(self: String, position: Int) -> Option[String] {
-    val l = self |> length()
-    val p = if position >= 0 { position } else { position + l }
-    return if p < 0 || p >= l { Option::None[String] }
-        else { Option::Some(self |> slice(p, p + 1)) }
+    val len: Int = self |> length()
+    val i: Int = if position >= 0 { position } else { len + position }
+    return if i < 0 || i >= len { Option::None[String] }
+        else { Option::Some(self |> slice_unchecked(i, i + 1)) }
 }
 
 pub fun String::at(self: String, position: Int) -> String = self 
     |> get(position) 
-    |> unwrap_or_else(|| panic("Position " 
-        |> concat(position |> as_string())
-        |> concat(" is out of bounds for a string of length ")
-        |> concat(self |> length() |> as_string())
-    ))
+    |> unwrap_or_else(
+        || "Attempt to read from string at position _, which is out of bounds for length _"
+        |> fmt(Int::as_string(position), Int::as_string(self |> length()))
+        |> panic()
+    )
 
-pub fun String::slice_from(self: String, start: Int) -> String
-    = self |> slice(start, self |> length())
+pub fun String::slice(self: String, start: Int, end: Int) -> String {
+    val len: Int = self |> length()
+    val s: Int = if start >= 0 { start } else { len + start }
+    val e: Int = if end >= 0 { end } else { len + end }
+    if s < 0 || s > len {
+        return "Attempt to slice string starting from position _, which is out of bounds for length _"
+            |> fmt(Int::as_string(start), Int::as_string(len))
+            |> panic()
+    }
+    if e < 0 || e > len {
+        return "Attempt to slice string up to position _, which is out of bounds for length _"
+            |> fmt(Int::as_string(end), Int::as_string(len))
+            |> panic()
+    }
+    if s > e {
+        return "Attempt to slice string from position _ up to position _, which is in descending order for length _"
+            |> fmt(Int::as_string(start), Int::as_string(end), Int::as_string(len))
+            |> panic()
+    }
+    return self |> slice_unchecked(s, e)
+}
 
-pub fun String::slice_to(self: String, end: Int) -> String
-    = self |> slice(0, end)
+pub fun String::slice_from(self: String, start: Int) -> String {
+    val len: Int = self |> length()
+    val s: Int = if start >= 0 { start } else { len + start }
+    if s < 0 || s > len {
+        return "Attempt to slice string starting from position _, which is out of bounds for length _"
+            |> fmt(Int::as_string(start), Int::as_string(len))
+            |> panic()
+    }
+    return self |> slice_from_unchecked(s)
+}
+
+pub fun String::slice_to(self: String, end: Int) -> String {
+    val len: Int = self |> length()
+    val e: Int = if end >= 0 { end } else { len + end }
+    if e < 0 || e > len {
+        return "Attempt to slice string up to position _, which is out of bounds for length _"
+            |> fmt(Int::as_string(end), Int::as_string(len))
+            |> panic()
+    }
+    return self |> slice_unchecked(0, e)
+}
 
 pub fun String::starts_with(self: String, prefix: String) -> Bool {
     val pl = prefix |> length()
     if pl > (self |> length()) { return false }
-    return prefix == (self |> slice_to(pl))
+    return prefix == (self |> slice_unchecked(0, pl))
 }
 
 pub fun String::ends_with(self: String, suffix: String) -> Bool {
     val l = self |> length()
     val sl = suffix |> length()
     if l < sl { return false }
-    return suffix == (self |> slice(l - sl, l))
+    return suffix == (self |> slice_unchecked(l - sl, l))
 }
 
 pub fun String::find(self: String, sub: String) -> mut Sequence[Int] {
@@ -77,7 +140,7 @@ pub fun String::find(self: String, sub: String) -> mut Sequence[Int] {
     mut i = 0
     return Sequence::new(|| {
         i = range_incl(i, l - sl)
-            |> find(|j| sub == (self |> slice(j, j + sl)))
+            |> find(|j| sub == (self |> slice_unchecked(j, j + sl)))
             |> unwrap_or(l)
         if i >= l { return Option::None }
         val r = i
@@ -91,7 +154,7 @@ pub fun String::find_all(self: String, sub: String) -> mut Sequence[Int] {
     val l = self |> length()
     val sl = sub |> length()
     return range_incl(0, l - sl)
-        |> filter(|i| sub == (self |> slice(i, i + sl)))
+        |> filter(|i| sub == (self |> slice_unchecked(i, i + sl)))
 }
 
 pub fun String::fmt(self: String, ...inserted: List[String]) -> String {
@@ -125,7 +188,7 @@ pub fun String::repeat_to(self: String, n: Int) -> String {
     }
     return self 
         |> repeat(n / l + 1)
-        |> slice_to(n)
+        |> slice_unchecked(0, n)
 }
 
 pub fun String::pad_begin(self: String, tgt_len: Int, padding: String) -> String {
@@ -154,7 +217,7 @@ pub fun String::split(self: String, delim: String) -> mut Sequence[String] {
     return Sequence::new(|| {
         if anchor > l { return Option::None }
         val next = splits |> next() |> unwrap_or(l)
-        val r = self |> slice(anchor, next)
+        val r = self |> slice_unchecked(anchor, next)
         anchor = next + dl
         return Option::Some(r)
     })

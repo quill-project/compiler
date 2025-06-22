@@ -1,5 +1,11 @@
 
 #include <quill.h>
+#include <stdio.h>
+#include <inttypes.h>
+
+#define PRIqd PRId64 // quill_int_t
+#define PRIqu PRIu64 // quill_uint_t
+#define PRIqf "%f"   // quill_float_t
 
 quill_int_t quill_point_encode_length(uint32_t point) {
     if(point <= 0x00007F) { return 1; }
@@ -124,4 +130,35 @@ quill_string_t quill_string_from_static_cstr(const char* cstr) {
         .length_bytes = length_bytes,
         .length_points = length_points
     };
+}
+
+quill_string_t quill_string_from_int(quill_int_t i) {
+    quill_int_t length_bytes = snprintf(NULL, 0, PRIqd, i);
+    size_t buffer_size = (size_t) (sizeof(uint8_t) * (length_bytes + 1));
+    quill_string_t res;
+    res.length_points = length_bytes; // snprintf will only output ASCII
+    res.length_bytes = length_bytes;
+    res.alloc = quill_malloc(buffer_size, NULL);
+    res.data = res.alloc->data;
+    snprintf(res.alloc->data, buffer_size, PRIqd, i);
+    return res;
+}
+
+quill_string_t quill_string_from_float(quill_float_t f) {
+    if(isnan(f)) { 
+        return quill_string_from_static_cstr("nan"); 
+    }
+    if(isinf(f)) { 
+        return f > 0? quill_string_from_static_cstr("inf")
+            : quill_string_from_static_cstr("-inf"); 
+    }
+    quill_int_t length_bytes = snprintf(NULL, 0, PRIqf, f);
+    size_t buffer_size = (size_t) (sizeof(uint8_t) * (length_bytes + 1));
+    quill_string_t res;
+    res.length_points = length_bytes; // snprintf will only output ASCII
+    res.length_bytes = length_bytes;
+    res.alloc = quill_malloc(buffer_size, NULL);
+    res.data = res.alloc->data;
+    snprintf(res.alloc->data, buffer_size, PRIqf, f);
+    return res;
 }

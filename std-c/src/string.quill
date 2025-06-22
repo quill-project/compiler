@@ -2,63 +2,106 @@
 mod std
 
 pub ext fun String::eq(lhs: String, rhs: String) -> Bool = "
-    // TODO!
-    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+    if(#var(lhs).length_bytes != #var(rhs).length_bytes) { 
+        return QUILL_FALSE; 
+    }
+    for(quill_int_t i = 0; i < #var(lhs).length_bytes; i += 1) {
+        if(#var(lhs).data[i] != #var(rhs).data[i]) { 
+            return QUILL_FALSE; 
+        }
+    }
+    return QUILL_TRUE;
 "
 
-pub ext fun String::not_eq(lhs: String, rhs: String) -> Bool = "
-    // TODO!
-    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+pub fun String::not_eq(lhs: String, rhs: String) -> Bool
+    = !String::eq(lhs, rhs)
+
+ext fun String::slice_unchecked(self: String, start: Int, end: Int) -> String = "
+    const uint8_t *slice_data = #var(self).data;
+    for(quill_int_t i = 0; i < #var(start); i += 1) {
+        slice_data += quill_point_decode_length(*slice_data);
+    }
+    quill_int_t length_bytes = 0;
+    for(quill_int_t i = #var(start); i < #var(end); i += 1) {
+        length_bytes += quill_point_decode_length(slice_data[length_bytes]);
+    }
+    quill_rc_add(#var(self).alloc);
+    return (quill_string_t) {
+        .alloc = #var(self).alloc,
+        .data = slice_data,
+        .length_points = #var(end) - #var(start),
+        .length_bytes = length_bytes
+    };
 "
 
-pub ext fun String::slice(self: String, start: Int, end: Int) -> String = "
-    // TODO!
-    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+ext fun String::slice_from_unchecked(self: String, start: Int) -> String = "
+    quill_int_t start_bytes = 0;
+    for(quill_int_t i = 0; i < #var(start); i += 1) {
+        start_bytes += quill_point_decode_length(#var(self).data[start_bytes]);
+    }
+    quill_rc_add(#var(self).alloc);
+    return (quill_string_t) {
+        .alloc = #var(self).alloc,
+        .data = #var(self).data + start_bytes,
+        .length_points = #var(self).length_points - #var(start),
+        .length_bytes = #var(self).length_bytes - start_bytes
+    };
 "
 
 pub ext fun String::concat(low: String, high: String) -> String = "
-    // TODO!
-    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+    quill_string_t res;
+    res.length_points = #var(low).length_points + #var(high).length_points;
+    res.length_bytes = #var(low).length_bytes + #var(high).length_bytes;
+    res.alloc = quill_malloc(sizeof(uint8_t) * res.length_bytes, NULL);
+    res.data = res.alloc->data;
+    for(quill_int_t i = 0; i < #var(low).length_bytes; i += 1) {
+        res.alloc->data[i] = #var(low).data[i];
+    }
+    for(quill_int_t i = #var(low).length_bytes; i < res.length_bytes; i += 1) {
+        res.alloc->data[i] = #var(high).data[i - #var(low).length_bytes];
+    }
+    return res;
 "
 
 pub ext fun String::length(self: String) -> Int = "
-    // TODO!
-    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+    return #var(self).length_points;
 "
 
-pub ext fun String::as_code(self: String) -> Int = "
-    // TODO!
-    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+ext fun String::as_code_unchecked(self: String) -> Int = "
+    uint32_t code = quill_point_decode(#var(self).data);
+    return (quill_int_t) code;
 "
 
-pub ext fun String::from_code(code: Int) -> String = "
-    // TODO!
-    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+ext fun String::from_code_unchecked(code: Int) -> String = "
+    quill_string_t res;
+    res.length_points = 1;
+    res.length_bytes = quill_point_encode_length((uint32_t) #var(code));
+    res.alloc = quill_malloc(sizeof(uint8_t) * res.length_bytes, NULL);
+    res.data = res.alloc->data;
+    quill_point_encode((uint32_t) #var(code), res.alloc->data);
+    return res;
 "
 
 pub fun String::chars(self: String) -> mut Sequence[String] {
-    mut r = self
+    mut rem: String = self
     return Sequence::new(|| {
-        val prev_l = r |> length()
-        if prev_l == 0 { return Option::None }
-        val char_l = if (r |> as_code()) > 65535 { 2 } else { 1 }
-        val char = r |> slice(0, char_l)
-        r = r |> slice(char_l, prev_l)
-        return Option::Some(char)
+        val rem_l: Int = rem |> length()
+        if rem_l == 0 { return Option::None }
+        val curr = rem |> slice_to(1)
+        rem = rem |> slice_from(1)
+        return Option::Some(curr)
     })
 }
 
 pub fun String::chars_rep(self: String) -> mut Stream[String] {
-    if 0 == (self |> length()) {
+    if (self |> length()) == 0 {
         return panic("Attempt to get char stream from empty string!")
     }
-    mut r = self
+    mut rem: String = self
     return Stream::new(|| {
-        val prev_l = r |> length()
-        val char_l = if (r |> as_code()) > 65535 { 2 } else { 1 }
-        val char = r |> slice(0, char_l)
-        r = r |> slice(char_l, prev_l)
-        if 0 == (r |> length()) { r = self }
-        return char
+        if (rem |> length()) == 0 { rem = self }
+        val curr = rem |> slice_to(1)
+        rem = rem |> slice_from(1)
+        return curr
     })
 }

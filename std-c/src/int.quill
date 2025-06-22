@@ -52,8 +52,7 @@ pub ext fun Int::u_minus(x: Int) -> Int = "
 "
 
 pub ext fun Int::as_string(self: Int) -> String = "
-    // TODO!
-    quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
+    return quill_string_from_int(#var(self));
 "
 
 pub ext fun Int::as_float(self: Int) -> Float = "
