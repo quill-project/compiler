@@ -1,0 +1,127 @@
+
+#include <quill.h>
+
+quill_int_t quill_point_encode_length(uint32_t point) {
+    if(point <= 0x00007F) { return 1; }
+    if(point <= 0x0007FF) { return 2; }
+    if(point >= 0x00D800 && point <= 0x00DFFF) {
+        quill_panic(quill_string_from_static_cstr(
+            "Attempt to encode surrogate surrogate codepoints"
+        ));
+    }
+    if(point <= 0x00FFFF) { return 3; }
+    if(point <= 0x10FFFF) { return 4; }
+    quill_panic(quill_string_from_static_cstr(
+        "Codepoint too large to encode"
+    ));
+    return 0;
+}
+
+quill_int_t quill_point_encode(uint32_t point, uint8_t *dest) {
+    if(point <= 0x00007F) {
+        dest[0] = (uint8_t) point;
+        return 1;
+    }
+    if(point <= 0x0007FF) {
+        dest[0] = 0xC0 /* 11000000 */ | ((point >>  6) & 0x1F /* 00011111 */);
+        dest[1] = 0x80 /* 10000000 */ | ((point >>  0) & 0x3F /* 00111111 */);
+        return 2;
+    }
+    if(point <= 0x00FFFF) {
+        dest[0] = 0xE0 /* 11100000 */ | ((point >> 12) & 0x0F /* 00001111 */);
+        dest[1] = 0x80 /* 10000000 */ | ((point >>  6) & 0x3F /* 00111111 */);
+        dest[2] = 0x80 /* 10000000 */ | ((point >>  0) & 0x3F /* 00111111 */);
+        return 3;
+    }
+    if(point <= 0x10FFFF) {
+        dest[0] = 0xF0 /* 11110000 */ | ((point >> 18) & 0x07 /* 00000111 */);
+        dest[1] = 0x80 /* 10000000 */ | ((point >> 12) & 0x3F /* 00111111 */);
+        dest[2] = 0x80 /* 10000000 */ | ((point >>  6) & 0x3F /* 00111111 */);
+        dest[3] = 0x80 /* 10000000 */ | ((point >>  0) & 0x3F /* 00111111 */);
+        return 4;
+    }
+    quill_panic(quill_string_from_static_cstr(
+        "Codepoint too large to encode"
+    ));
+    return 0;
+}
+
+quill_int_t quill_point_decode_length(uint8_t start) {
+    if((start & 0x80 /* 10000000 */) == 0x00 /* 00000000 */) { return 1; }
+    if((start & 0xE0 /* 11100000 */) == 0xC0 /* 11000000 */) { return 2; }
+    if((start & 0xF0 /* 11110000 */) == 0xE0 /* 11100000 */) { return 3; }
+    if((start & 0xF8 /* 11111000 */) == 0xF0 /* 11110000 */) { return 4; }
+    quill_panic(quill_string_from_static_cstr(
+        "String improperly encoded"
+    ));
+    return 0;
+}
+
+uint32_t quill_point_decode(const uint8_t *data) {
+    uint32_t point = 0;
+    if((data[0] & 0x80 /* 10000000 */) == 0x00 /* 00000000 */) {
+        point |= (data[0] & 0x7F /* 01111111 */) <<  0;
+        return point;
+    }
+    if((data[0] & 0xE0 /* 11100000 */) == 0xC0 /* 11000000 */) {
+        point |= (data[0] & 0x1F /* 00011111 */) <<  6;
+        point |= (data[1] & 0x3F /* 00111111 */) <<  0;
+        return point;
+    }
+    if((data[0] & 0xF0 /* 11110000 */) == 0xE0 /* 11100000 */) {
+        point |= (data[0] & 0x0F /* 00001111 */) << 12;
+        point |= (data[1] & 0x3F /* 00111111 */) <<  6;
+        point |= (data[2] & 0x3F /* 00111111 */) <<  0;
+        return point;
+    }
+    if((data[0] & 0xF8 /* 11111000 */) == 0xF0 /* 11110000 */) {
+        point |= (data[0] & 0x07 /* 00000111 */) << 18;
+        point |= (data[1] & 0x3F /* 00111111 */) << 12;
+        point |= (data[2] & 0x3F /* 00111111 */) <<  6;
+        point |= (data[3] & 0x3F /* 00111111 */) <<  0;
+        return point;
+    }
+    quill_panic(quill_string_from_static_cstr(
+        "String improperly encoded"
+    ));
+    return 0;
+}
+
+quill_string_t quill_string_from_points(
+    uint32_t *points, quill_int_t length_points
+) {
+    quill_int_t length_bytes = 0;
+    for(quill_int_t i = 0; i < length_points; i += 1) {
+        length_bytes += quill_point_encode_length(points[i]);
+    }
+    quill_alloc_t *alloc = quill_malloc(sizeof(uint8_t) * length_bytes, NULL);
+    uint8_t *data = (uint8_t *) alloc->data;
+    quill_int_t offset = 0;
+    for(quill_int_t i = 0; i < length_points; i += 1) {
+        offset += quill_point_encode(points[i], data + offset);
+    }
+    return (quill_string_t) {
+        .alloc = alloc,
+        .data = data,
+        .length_bytes = length_bytes,
+        .length_points = length_points
+    };
+}
+
+quill_string_t quill_string_from_static_cstr(const char* cstr) {
+    uint8_t *data = (uint8_t *) cstr;
+    quill_int_t length_bytes = 0;
+    quill_int_t length_points = 0;
+    for(;;) {
+        uint8_t current = data[length_bytes];
+        if(current == '\0') { break; }
+        length_bytes += quill_point_decode_length(current);
+        length_points += 1;
+    }
+    return (quill_string_t) {
+        .alloc = NULL,
+        .data = data,
+        .length_bytes = length_bytes,
+        .length_points = length_points
+    };
+}

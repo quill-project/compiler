@@ -221,63 +221,9 @@
           			</dict>
         		</dict>
 
-				<!-- function call (with type args) -->
-				<dict>
-					<key>begin</key> <string>\b([a-zA-Z_][a-zA-Z0-9_]*)\s*(?=\[.*?\]\s*\(|\()</string>
-          			<key>beginCaptures</key> <dict>
-            			<key>1</key> <dict>
-              				<key>name</key> <string>entity.name.function.quill</string>
-            			</dict>
-          			</dict>
-          			<key>patterns</key> <array> 
-						<dict>
-              				<key>include</key> <string>#types</string>
-            			</dict>
-           			</array>
-          			<key>end</key> <string>(\]|\()</string>
-          			<key>endCaptures</key> <dict>
-            			<key>1</key> <dict>
-              				<key>name</key> <string>punctuation.brackets.quill</string>
-            			</dict>
-          			</dict>
-        		</dict>
-
-				<!-- variable / function ref (with type args) -->
-				<dict>
-					<key>begin</key> <string>\b([a-zA-Z_][a-zA-Z0-9_]*)(?=\[.*?\])</string>
-          			<key>beginCaptures</key> <dict>
-            			<key>1</key> <dict>
-              				<key>name</key> <string>variable.other.quill</string>
-            			</dict>
-          			</dict>
-          			<key>patterns</key> <array> 
-						<dict>
-              				<key>include</key> <string>#types</string>
-            			</dict>
-           			</array>
-          			<key>end</key> <string>(\])</string>
-          			<key>endCaptures</key> <dict>
-            			<key>1</key> <dict>
-              				<key>name</key> <string>punctuation.brackets.quill</string>
-            			</dict>
-          			</dict>
-        		</dict>
-
-				<dict>
-          			<key>match</key> <string>\b([a-zA-Z_][a-zA-Z0-9_]*)\s*(\()</string>
-          			<key>captures</key> <dict>
-						<key>1</key> <dict>
-							<key>name</key> <string>entity.name.function.quill</string>
-						</dict>
-            			<key>2</key> <dict>
-              				<key>name</key> <string>punctuation.brackets.quill</string>
-            			</dict>
-          			</dict>
-        		</dict>
-
 				<!-- keyword -->
         		<dict>
-					<key>match</key> <string>\b(if|else|return|match)\b</string>
+					<key>match</key> <string>\b(if|else|return|match|while|for|continue|break)\b</string>
           			<key>name</key> <string>keyword.control.quill</string>
         		</dict>
 				<dict>
@@ -337,6 +283,60 @@
           			</dict>
         		</dict>
 
+				<!-- function call (with type args) -->
+				<dict>
+					<key>begin</key> <string>\b([a-zA-Z_][a-zA-Z0-9_]*)\s*(?=\[.*?\]\s*\(|\()</string>
+          			<key>beginCaptures</key> <dict>
+            			<key>1</key> <dict>
+              				<key>name</key> <string>entity.name.function.quill</string>
+            			</dict>
+          			</dict>
+          			<key>patterns</key> <array> 
+						<dict>
+              				<key>include</key> <string>#types</string>
+            			</dict>
+           			</array>
+          			<key>end</key> <string>(\]|\()</string>
+          			<key>endCaptures</key> <dict>
+            			<key>1</key> <dict>
+              				<key>name</key> <string>punctuation.brackets.quill</string>
+            			</dict>
+          			</dict>
+        		</dict>
+
+				<!-- variable / function ref (with type args) -->
+				<dict>
+					<key>begin</key> <string>\b([a-zA-Z_][a-zA-Z0-9_]*)(?=\[.*?\])</string>
+          			<key>beginCaptures</key> <dict>
+            			<key>1</key> <dict>
+              				<key>name</key> <string>variable.other.quill</string>
+            			</dict>
+          			</dict>
+          			<key>patterns</key> <array> 
+						<dict>
+              				<key>include</key> <string>#types</string>
+            			</dict>
+           			</array>
+          			<key>end</key> <string>(\])</string>
+          			<key>endCaptures</key> <dict>
+            			<key>1</key> <dict>
+              				<key>name</key> <string>punctuation.brackets.quill</string>
+            			</dict>
+          			</dict>
+        		</dict>
+
+				<dict>
+          			<key>match</key> <string>\b([a-zA-Z_][a-zA-Z0-9_]*)\s*(\()</string>
+          			<key>captures</key> <dict>
+						<key>1</key> <dict>
+							<key>name</key> <string>entity.name.function.quill</string>
+						</dict>
+            			<key>2</key> <dict>
+              				<key>name</key> <string>punctuation.brackets.quill</string>
+            			</dict>
+          			</dict>
+        		</dict>
+
 				<!-- variables -->
 				<dict>
           			<key>match</key> <string>([a-zA-Z_][a-zA-Z0-9_]*\b(?!\:\:))</string>
@@ -364,3 +364,4 @@
   	</dict>
 </dict>
 </plist>
+

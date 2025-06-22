@@ -316,8 +316,18 @@ pub fun expand_external_body(
             }
             return emit_type(checked.type)
         })
+        |> expand_macro("#rc_add", |t| {
+            // TODO! expand to mangled path of a function that takes 'T'
+            // and increments the RC (if has any)
+            return panic("not yet implemented")
+        })
+        |> expand_macro("#rc_dec", |t| {
+            // TODO! expand to mangled path of a function that takes 'T'
+            // and decrements the RC (if has any)
+            return panic("not yet implemented")
+        })
         |> expand_macro("#fun(", |f| {
-            // TODO!
+            // TODO! expand to the full mangled path of the function
             return panic("not yet implemented")
         })
 }

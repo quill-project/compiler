@@ -1,6 +1,55 @@
 
 mod std
 
+ext fun List::deconstruct[T](self: mut List[T]) = "
+    quill_list_layout_t *data = (quill_list_layout_t *) #var(self)->data;
+    if(data->buffer == NULL) { return QUILL_UNIT; }
+    #type(T) *values = (#type(T) *) data->buffer;
+    for(quill_int_t i = 0; i < data->length; i += 1) {
+        #rc_dec(T)(values[i]);
+    }
+    free(data->buffer);
+    return QUILL_UNIT;
+"
+
+fun List::deconstruct[T](self: mut List[T]) {
+    while (self |> length()) != 0 {
+        self |> pop_unchecked()
+    }
+    self |> deallocate()
+}
+
+ext fun List::pop_unchecked[T](self: mut List[T]) = "
+    quill_list_layout_t *data = (quill_list_layout_t *) #var(self)->data;
+    #type(T) *values = (#type(T) *) data->buffer;
+    #type(T) value = values[data->length];
+    data->length -= 1;
+    return value;
+"
+
+ext fun List::grow[T](self: mut List[T], n: Int) = "
+    quill_list_layout_t *data = (quill_list_layout_t *) #var(self)->data;
+    size_t size_bytes = sizeof(#type(T)) * #var(n);
+    data->buffer 
+        = #var(n) <= data->capacity? data->buffer
+        : data->buffer == NULL? malloc(size_bytes)
+        : realloc(data->buffer, size_bytes);
+    data->capacity = #var(n);
+    return QUILL_UNIT;
+"
+
+pub ext fun List::push[T](self: mut List[T], value: T) = "
+    quill_list_layout_t *data = (quill_list_layout_t *) #var(self)->data;
+    if(data->length == data->capacity) {
+        #fun(List::grow[T])(#var(self), data->capacity * 2);
+    }
+    #type(T) *values = (#type(T) *) data->buffer;
+    #rc_add(T)(#var(value));
+    values[data->length] = #var(value);
+    data->length += 1;
+    return QUILL_UNIT;
+"
+
 pub ext fun List::concat[T](low: List[T], high: List[T]) -> mut List[T] = "
     // TODO!
     quill_panic((quill_string_t) { .alloc = NULL, .data = \"not yet implemented\", .length_bytes = 19, .length_points = 19 });
