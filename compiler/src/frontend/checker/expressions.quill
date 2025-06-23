@@ -725,6 +725,23 @@ pub fun Checker::check_invocation(
                         |> expect("was inserted earlier")
                     )
                     |> List::collect()
+                if exp_varargs {
+                    val va_list_tn: TypedNode = symbol_c 
+                        |> check_annotation(exp_arg_t |> at(-1))
+                    val va_list_t: Type = va_list_tn.type
+                    val get_va_elem_t: Fun() -> Type = || { match va_list_t.value {
+                        List(e) { return e }
+                        _ { return Type(
+                            Variant::Invalid, !IS_MUTABLE, node.source
+                        ) }
+                    } }
+                    val va_elem_t: Type = get_va_elem_t()
+                    val destruct_inst: SymbolInstance = SymbolInstance(
+                        List::of("std", "List", "destruct"),
+                        List::of(va_elem_t)
+                    )
+                    self.dependencies |> push(destruct_inst)
+                }
                 val instance: SymbolInstance 
                     = SymbolInstance(path, final_type_args)
                 self.dependencies |> push(instance)

@@ -66,7 +66,8 @@ pub ext fun Float::acosh(self: Float) -> Float = "return acosh(#var(self));"
 pub ext fun Float::asin(self: Float) -> Float = "return asin(#var(self));"
 pub ext fun Float::asinh(self: Float) -> Float = "return asinh(#var(self));"
 pub ext fun Float::atan(self: Float) -> Float = "return atan(#var(self));"
-pub ext fun Float::atan2(self: Float) -> Float = "return atan2(#var(self));"
+pub ext fun Float::atan2(x: Float, y: Float) -> Float 
+    = "return atan2(#var(x), #var(y));"
 pub ext fun Float::atanh(self: Float) -> Float = "return atanh(#var(self));"
 pub ext fun Float::cbrt(self: Float) -> Float = "return cbrt(#var(self));"
 pub ext fun Float::ceil(self: Float) -> Float = "return ceil(#var(self));"
@@ -75,19 +76,16 @@ pub ext fun Float::cosh(self: Float) -> Float = "return cosh(#var(self));"
 pub ext fun Float::exp(self: Float) -> Float = "return exp(#var(self));"
 pub ext fun Float::expm1(self: Float) -> Float = "return expm1(#var(self));"
 pub ext fun Float::floor(self: Float) -> Float = "return floor(#var(self));"
-pub ext fun Float::hypot(a: Float, b: Float) -> Float = "
-    return hypot(#var(a), #var(b));
-"
+pub ext fun Float::hypot(a: Float, b: Float) -> Float
+    = "return hypot(#var(a), #var(b));"
 pub ext fun Float::log(self: Float) -> Float = "return log(#var(self));"
 pub ext fun Float::log10(self: Float) -> Float = "return log10(#var(self));"
 pub ext fun Float::log1p(self: Float) -> Float = "return log1p(#var(self));"
 pub ext fun Float::log2(self: Float) -> Float = "return log2(#var(self));"
-pub ext fun Float::powi(self: Float, n: Int) -> Float = "
-    return pow(#var(self), (quill_float_t) #var(n));
-"
-pub ext fun Float::powf(self: Float, n: Float) -> Float = "
-    return pow(#var(self), #var(n));
-"
+pub ext fun Float::powi(self: Float, n: Int) -> Float 
+    = "return pow(#var(self), (quill_float_t) #var(n));"
+pub ext fun Float::powf(self: Float, n: Float) -> Float 
+    = "return pow(#var(self), #var(n));"
 pub ext fun Float::round(self: Float) -> Float = "return round(#var(self));"
 pub ext fun Float::sin(self: Float) -> Float = "return sin(#var(self));"
 pub ext fun Float::sinh(self: Float) -> Float = "return sinh(#var(self));"

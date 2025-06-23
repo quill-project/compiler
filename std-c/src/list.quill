@@ -13,7 +13,7 @@ ext fun List::grow[T](self: mut List[T], n: Int) = "
 "
 
 pub ext fun List::of_length[T](length: Int, value: T) -> mut List[T] = "
-    quill_list_t *res = quill_malloc(
+    quill_list_t res = quill_malloc(
         sizeof(quill_list_layout_t),
         &#fun(List::deconstruct[T])
     );
@@ -33,11 +33,11 @@ pub ext fun List::of_length[T](length: Int, value: T) -> mut List[T] = "
 pub ext fun List::concat[T](low: List[T], high: List[T]) -> mut List[T] = "
     quill_list_layout_t *low_data = (quill_list_layout_t *) #var(low)->data;
     quill_list_layout_t *high_data = (quill_list_layout_t *) #var(high)->data;
-    quill_list_t *res = quill_malloc(
+    quill_list_t res = quill_malloc(
         sizeof(quill_list_layout_t), 
         &#fun(List::deconstruct[T])
     );
-    quill_list_layout_t *res_data = (quill_list_layout *) res->data;
+    quill_list_layout_t *res_data = (quill_list_layout_t *) res->data;
     res_data->buffer = NULL;
     res_data->capacity = 0;
     res_data->length = low_data->length + high_data->length;
@@ -60,7 +60,7 @@ pub ext fun List::concat[T](low: List[T], high: List[T]) -> mut List[T] = "
 
 ext fun List::slice_unchecked[T](self: List[T], start: Int, end: Int) -> mut List[T] = "
     quill_list_layout_t *src_data = (quill_list_layout_t *) #var(self)->data;
-    quill_list_t *res = quill_malloc(
+    quill_list_t res = quill_malloc(
         sizeof(quill_list_layout_t),
         &#fun(List::deconstruct[T])
     );
@@ -120,7 +120,7 @@ ext fun List::get_unchecked[T](self: List[T], position: Int) -> T = "
 "
 
 ext fun List::splice_unchecked[T](self: mut List[T], start: Int, end: Int) -> mut List[T] = "
-    quill_list_t *res = #fun(List::slice_unchecked[T])(#var(self), #var(start), #var(end));
+    quill_list_t res = #fun(List::slice_unchecked[T])(#var(self), #var(start), #var(end));
     quill_list_layout_t *data = (quill_list_layout_t *) #var(self)->data;
     #type(T) *values = (#type(T) *) data->buffer;
     quill_int_t removed = #var(end) - #var(start);
@@ -134,7 +134,7 @@ ext fun List::splice_unchecked[T](self: mut List[T], start: Int, end: Int) -> mu
     return res;
 "
 
-ext fun List::deconstruct[T](self: mut List[T]) = "
+ext fun List::destruct[T](self: mut List[T]) = "
     quill_list_layout_t *data = (quill_list_layout_t *) #var(self)->data;
     if(data->buffer == NULL) { return QUILL_UNIT; }
     #type(T) *values = (#type(T) *) data->buffer;

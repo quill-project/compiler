@@ -89,7 +89,7 @@ pub fun Checker::check_annotation(self: mut Checker, node: UntypedNode) -> Typed
                             path |> at(-1), node.source
                         ))
                     }
-                    if 1 != (g_t_args |> length()) {
+                    if (g_t_args |> length()) != 1 {
                         self.messages |> push(Message::wrong_type_arg_c(
                             List::of("std", "List"), 1, 
                             g_t_args |> length(), node.source

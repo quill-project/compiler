@@ -5,6 +5,6 @@ use quill::*
 
 fun main() {
     for i: range(0, 100) {
-        println(i)
+        "i = _" |> fmt(i |> as_string()) |> println()
     }
 }
