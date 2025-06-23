@@ -3,6 +3,7 @@ mod quill::checker
 
 use quill::*
 use quill::types::*
+use quill::codegen::pragma
 use quill::ast::UntypedNode
 
 // Checks the given annotation node and determines its type according to the
@@ -297,6 +298,28 @@ pub fun Checker::check_declaration(
             }
             val return_type_t: Option[TypedNode] = return_type
                 |> map(|n| self |> check_annotation(n))
+            val pragma_parse_type: Fun(String) -> String = |t| {
+                pragma::parse_operand_type(
+                    t, self.type_args, self.context, self.symbols, 
+                    self.dependencies, Option::Some(self.messages)
+                )
+                return ""
+            }
+            // the main purpose of this is to make sure that the referenced 
+            // types and symbols are instantiated during type checking
+            // (and that type errors don't occur during codegen)
+            body
+                // |> pragma::expand_all("var", |n| {}) // nothing to do
+                |> pragma::expand_all("type", pragma_parse_type)
+                |> pragma::expand_all("rc_add", pragma_parse_type)
+                |> pragma::expand_all("rc_dec", pragma_parse_type)
+                |> pragma::expand_all("fun", |f| {
+                    pragma::parse_operand_symbol_ref(
+                        f, self.type_args, self.context, self.symbols, 
+                        self.dependencies, Option::Some(self.messages)
+                    )
+                    return ""
+                })
             return make_node(ast::Variant::ExternalFunction(
                 ast::ExternalFunction(
                     List::concat(self.context.module, path), 

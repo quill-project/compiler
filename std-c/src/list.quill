@@ -15,7 +15,7 @@ ext fun List::grow[T](self: mut List[T], n: Int) = "
 pub ext fun List::of_length[T](length: Int, value: T) -> mut List[T] = "
     quill_list_t res = quill_malloc(
         sizeof(quill_list_layout_t),
-        &#fun(List::deconstruct[T])
+        &#fun(List::destruct[T])
     );
     quill_list_layout_t *res_data = (quill_list_layout_t *) res->data;
     res_data->buffer = NULL;
@@ -35,7 +35,7 @@ pub ext fun List::concat[T](low: List[T], high: List[T]) -> mut List[T] = "
     quill_list_layout_t *high_data = (quill_list_layout_t *) #var(high)->data;
     quill_list_t res = quill_malloc(
         sizeof(quill_list_layout_t), 
-        &#fun(List::deconstruct[T])
+        &#fun(List::destruct[T])
     );
     quill_list_layout_t *res_data = (quill_list_layout_t *) res->data;
     res_data->buffer = NULL;
@@ -62,7 +62,7 @@ ext fun List::slice_unchecked[T](self: List[T], start: Int, end: Int) -> mut Lis
     quill_list_layout_t *src_data = (quill_list_layout_t *) #var(self)->data;
     quill_list_t res = quill_malloc(
         sizeof(quill_list_layout_t),
-        &#fun(List::deconstruct[T])
+        &#fun(List::destruct[T])
     );
     quill_list_layout_t *res_data = (quill_list_layout_t *) res->data;
     res_data->buffer = NULL;
