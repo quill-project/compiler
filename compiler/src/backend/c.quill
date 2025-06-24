@@ -403,6 +403,28 @@ pub fun emit_func_implementations(g: mut Generator) -> String
         ) |> join("")
     ) |> join("")
 
+// Emits a function with the given name that initializes all global variables 
+// in the given table.
+pub fun emit_global_inits(g: mut Generator, f_name: String) -> String {
+    val gen = Generator::under(g)
+    g.table.symbols |> values() |> for_each(
+        |s| s.instances |> values() |> for_each(
+            |i| { match i.first.value {
+                GlobalVariable(ast::GlobalVariable(path, _, _, _, value)) {
+                    val dest: String = mangle_path(path, i.second)
+                    gen |> emit_expression(value, dest)
+                }
+                _ {}
+            } }
+        )
+    )
+    return "static void _(void) {\n" |> fmt(f_name)
+        |> concat(gen.start)
+        |> concat(gen.body)
+        |> concat(gen.end)
+        |> concat("}\n\n")
+}
+
 // Stores the state and context required for the emission of a single function.
 pub struct Generator(
     start: String,
@@ -1073,10 +1095,12 @@ pub fun emit(table: SymbolTable, main: List[String]) -> String {
 
     val g = Generator::new(table)
     val func_decls: String = emit_func_implementations(g)
+    val global_inits: String = emit_global_inits(g, "quill_init_globals")
     return HEADER
         |> concat(emit_declarations(table))
         |> concat(emit_type_destructors(table))
         |> concat(g.closure_destr |> values() |> join(""))
         |> concat(g.closure_bodies.value)
         |> concat(func_decls)
+        |> concat(global_inits)
 }

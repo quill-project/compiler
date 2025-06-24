@@ -1048,6 +1048,7 @@ pub fun Checker::check_piped_invocation(
 // If a function is found, it is instantiated and a call to the function is returned.
 // If no function is found, an invalid AST node is returned and an error is reported.
 // If a function is found but the argument types don't match, an error is reported.
+// Outputs a 'NamedCall' typed AST node.
 pub fun Checker::infer_overloaded_operator(
     self: mut Checker, node: UntypedNode, name: String,
     operands: List[UntypedNode]
