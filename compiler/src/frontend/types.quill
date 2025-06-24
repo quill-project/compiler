@@ -389,7 +389,7 @@ fun SymbolTable::collect_names(nodes: List[UntypedNode]) -> Set[List[String]] {
         match node.value {
             Module(path) { module = path }
 
-            GlobalVariable(ast::GlobalVariable(path, _, _, _, _)) |
+            GlobalVariable(ast::GlobalVariable(path, _, _, _, _, _)) |
             Function(ast::Function(path, _, _, _, _, _, _, _)) |
             ExternalFunction(ast::ExternalFunction(path, _, _, _, _, _, _)) |
             Structure(ast::CustomType(path, _, _, _)) |
@@ -463,7 +463,7 @@ fun SymbolTable::collect_symbols(
                 |> for_each(|a| SymbolTable::process_alias(a, aliases, names))
             }
 
-            GlobalVariable(ast::GlobalVariable(path, _, _, _, _)) {
+            GlobalVariable(ast::GlobalVariable(path, _, _, _, _, _)) {
                 val abs_path: List[String] = List::concat(context.module, path)
                 val symbol = Symbol(
                     node, List::empty(), context, Map::empty(), 0

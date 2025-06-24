@@ -861,7 +861,7 @@ pub fun parse_declaration(s: mut Parser) -> UntypedNode {
             val value: UntypedNode = parse_expression(s, Int::MAX)
             return UntypedNode(
                 ast::Variant::GlobalVariable(ast::GlobalVariable(
-                    path, public, mutable, type, value
+                    path, public, mutable, type, value, List::empty()
                 )),
                 Source::range(start.source, value.source)
             )

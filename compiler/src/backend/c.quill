@@ -403,25 +403,59 @@ pub fun emit_func_implementations(g: mut Generator) -> String
         ) |> join("")
     ) |> join("")
 
+// Emits a singular global variable and all of its dependencies.
+fun emit_global(
+    path: List[String], 
+    emitted: mut Set[List[String]], 
+    g: mut Generator,
+    out: mut Box[String]
+) {
+    if emitted |> has(path) { return unit }
+    val instance: Triplet[TypedNode, Int, List[Type]] 
+        = find_instance_with(path, List::empty(), g.table)
+    match instance.first.value {
+        GlobalVariable(ast::GlobalVariable(
+            _, _, _, _, value, var_deps
+        )) {
+            var_deps |> values() |> for_each(|dep| {
+                emit_global(dep, emitted, g, out)
+            })
+            if emitted |> has(path) {
+                // TODO! better error
+                return panic("cyclic reference in global variables detected")
+            }
+            val gen = Generator::under(g)
+            val dest: String = mangle_path(path, instance.second)
+            gen |> emit_expression(value, dest)
+            out.value = out.value
+                |> concat(gen.start)
+                |> concat(gen.body)
+                |> concat(gen.end)
+        }
+        _ {
+            return panic("called 'emit_global' on non-global path")
+        }
+    }
+
+}
+
 // Emits a function with the given name that initializes all global variables 
 // in the given table.
 pub fun emit_global_inits(g: mut Generator, f_name: String) -> String {
-    val gen = Generator::under(g)
+    val content = Box("")
+    val emitted: mut Set[List[String]] = Set::empty()
     g.table.symbols |> values() |> for_each(
         |s| s.instances |> values() |> for_each(
             |i| { match i.first.value {
-                GlobalVariable(ast::GlobalVariable(path, _, _, _, value)) {
-                    val dest: String = mangle_path(path, i.second)
-                    gen |> emit_expression(value, dest)
+                GlobalVariable(ast::GlobalVariable(path, _, _, _, _, _)) {
+                    emit_global(path, emitted, g, content)
                 }
                 _ {}
             } }
         )
     )
     return "static void _(void) {\n" |> fmt(f_name)
-        |> concat(gen.start)
-        |> concat(gen.body)
-        |> concat(gen.end)
+        |> concat(content.value)
         |> concat("}\n\n")
 }
 

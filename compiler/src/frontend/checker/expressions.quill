@@ -429,7 +429,7 @@ pub fun Checker::check_path_ref(
     match self.symbols.symbols |> get(path) {
         Some(s) { match s.node.value {
             GlobalVariable(ast::GlobalVariable(
-                _, public, _, type, _
+                _, public, _, type, _, _
             )) {
                 check_public(public, s)
                 if t_args |> is_some() {

@@ -52,7 +52,8 @@ pub struct PatternCapture(
 )
 
 pub struct GlobalVariable[N](
-    path: List[String], public: Bool, mutable: Bool, type: N, value: N
+    path: List[String], public: Bool, mutable: Bool, type: N, value: N,
+    var_deps: List[List[String]]
 )
 pub struct Function[N](
     path: List[String], public: Bool,
@@ -310,7 +311,7 @@ pub fun Variant::as_string[N](self: Variant[N]) -> String {
                 )
                 |> concat(")")
         }
-        Variant::GlobalVariable(GlobalVariable(path, public, mutable, type, value)) {
+        Variant::GlobalVariable(GlobalVariable(path, public, mutable, type, value, _)) {
             return "__ _: _ = _" |> fmt(
                 if public { "pub " } else { "" },
                 if mutable { "mut" } else { "val" },

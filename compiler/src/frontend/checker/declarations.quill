@@ -220,13 +220,26 @@ pub fun Checker::check_declaration(
         Module(path) { return make_node(ast::Variant::Module(path)) }
         Usages(aliases) { return make_node(ast::Variant::Usages(aliases)) }
         GlobalVariable(ast::GlobalVariable(
-            path, public, mutable, type, value
+            path, public, mutable, type, value, _
         )) {
             val t_type: TypedNode = self |> check_annotation(type)
             val t_value: TypedNode = self |> check(value, t_type.type)
+            val deps: List[List[String]] = self.dependencies
+                |> values()
+                |> map[SymbolInstance, List[String]](|s| s.path)
+                |> filter(|p| {
+                    match self.symbols.symbols |> get(p) {
+                        Some(Symbol(
+                            UntypedNode(ast::Variant::GlobalVariable(_), _), 
+                            _, _, _, _
+                        )) { return true }
+                        _ { return false }
+                    }
+                })
+                |> List::collect()
             return make_node(ast::Variant::GlobalVariable(ast::GlobalVariable(
                 List::concat(self.context.module, path), 
-                public, mutable, t_type, t_value
+                public, mutable, t_type, t_value, deps
             )))
         }
         ast::Variant::Function(ast::Function(
