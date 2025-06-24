@@ -168,7 +168,7 @@ pub fun Message::no_type_args_builtin(name: String, at: Source) -> Message
 pub fun Message::wrong_type_arg_c(path: List[String], exp_c: Int, got_c: Int, at: Source) -> Message
     = Message(List::of(
         Message::Section::Error(
-            "Type '_' expects _ type argument_, but _ _ provided" |> fmt(
+            "'_' expects _ type argument_, but _ _ provided" |> fmt(
                 path |> values() |> join("::"),
                 exp_c |> as_string(),
                 if exp_c == 1 { "" } else { "s" },
@@ -571,4 +571,14 @@ pub fun Message::missing_operator_impl(
                 name
             )
         )
+    ))
+
+pub fun Message::cyclic_global_variables(
+    path: List[String], at: Source
+) -> Message = Message(List::of(
+        Message::Section::Error(
+            "The global variable '_' depends on itself"
+                |> fmt(path |> values() |> join("::"))
+        ),
+        Message::Section::Code(at)
     ))

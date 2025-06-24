@@ -26,7 +26,6 @@ pub fun expand_all(input: String, pragma_name: String, f: Fun(String) -> String)
 // Given the value passed as the pragma operand, this function
 // attempts to fully parse it as a quill type, given the required context to do
 // so.
-// Errors will result in all generated messages being printed 
 // to stdout if no message list is provided.
 // If successful, the parsed and checked type is returned.
 pub fun parse_operand_type(
@@ -35,35 +34,23 @@ pub fun parse_operand_type(
     context: types::ModuleContext,
     table: types::SymbolTable,
     dependencies: mut List[types::SymbolInstance],
-    messages: Option[mut List[Message]]
+    messages: mut List[Message]
 ) -> Option[types::Type] {
     val file: String = "ext_pragma.quill"
-    val sources: Map[String, String] = Map::of(Pair(file, value))
-    val msgs: mut List[Message] = messages |> unwrap_or(List::empty())
-    val tokens: mut Stream[token::Token] = lexer::tokenize(file, value, msgs)
-    val node: ast::UntypedNode = parser::Parser::from(tokens, msgs)
+    val tokens: mut Stream[token::Token] = lexer::tokenize(file, value, messages)
+    val node: ast::UntypedNode = parser::Parser::from(tokens, messages)
         |> parser::parse_type()
     val checker = checker::Checker(
-        List::empty(), t_args, table, context, dependencies, msgs
+        List::empty(), t_args, table, context, dependencies, messages
     )
     val checked: types::TypedNode = checker 
         |> checker::Checker::check_annotation(node)
-    if messages |> is_none() {
-        msgs |> values() 
-            |> map[Message, String](|m| m |> display(sources) |> concat("\n")) 
-            |> for_each(println)
-        if msgs |> values() |> any(Message::is_error) {
-            return Option::None
-        }
-    }
     return Option::Some(checked.type)
 }
 
 // Given the value passed as the pragma operand, this function
 // attempts to parse it as a reference to a known symbol in the formats
 // 'a::b::c' and 'a::b::c[A, B, C]'.
-// Errors will result in all generated messages being printed 
-// to stdout if no message list is provided.
 // If successful, the referenced symbol is added as an instance to 
 // the dependencies list, and the referenced instance is returned.
 pub fun parse_operand_symbol_ref(
@@ -72,21 +59,20 @@ pub fun parse_operand_symbol_ref(
     context: types::ModuleContext,
     table: types::SymbolTable,
     dependencies: mut List[types::SymbolInstance],
-    messages: Option[mut List[Message]]
+    messages: mut List[Message]
 ) -> Option[types::SymbolInstance] {
     val file: String = "ext_pragma.quill"
-    val sources: Map[String, String] = Map::of(Pair(file, value))
-    val msgs: mut List[Message] = messages |> unwrap_or(List::empty())
-    val tokens: mut Stream[token::Token] = lexer::tokenize(file, value, msgs)
-    val parser: mut parser::Parser = parser::Parser::from(tokens, msgs)
-    val raw_path: List[String] = parser::parse_path(parser).first
+    val tokens: mut Stream[token::Token] = lexer::tokenize(file, value, messages)
+    val parser: mut parser::Parser = parser::Parser::from(tokens, messages)
+    val raw_path: Pair[List[String], Source] = parser::parse_path(parser)
     val g_t_args_u: List[ast::UntypedNode] 
         = parser::parse_given_type_args(parser)
         |> unwrap_or(List::empty())
     val checker = checker::Checker(
-        List::empty(), t_args, table, context, dependencies, msgs
+        List::empty(), t_args, table, context, dependencies, messages
     )
-    val path: List[String] = checker |> checker::Checker::expand_path(raw_path)
+    val path: List[String] = checker 
+        |> checker::Checker::expand_path(raw_path.first)
     val g_t_args: List[types::Type] = g_t_args_u
         |> values()
         |> map[ast::UntypedNode, types::Type](
@@ -95,31 +81,21 @@ pub fun parse_operand_symbol_ref(
         |> List::collect()
     match table.symbols |> get(path) {
         None {
-            "Path '_' referenced using external pragma does not exist"
-                |> fmt(path |> values() |> join("::"))
-                |> println()
+            messages |> push(Message::unknown_path(
+                path, 
+                raw_path.second
+            ))
             return Option::None
         }
         Some(symbol) {
             if (g_t_args |> length()) != (symbol.type_args |> length()) {
-                "Symbol '_' expects _ type argument(s), but got _ (in external pragma)"
-                    |> fmt(
-                        path |> values() |> join("::"), 
-                        symbol.type_args |> length() |> as_string(),
-                        g_t_args |> length() |> as_string()
-                    )
-                    |> println()
+                messages |> push(Message::wrong_type_arg_c(
+                    path, 
+                    symbol.type_args |> length(),
+                    g_t_args |> length(),
+                    raw_path.second
+                ))
                 return Option::None
-            }
-            if messages |> is_none() {
-                msgs |> values() 
-                    |> map[Message, String](
-                        |m| m |> display(sources) |> concat("\n")
-                    ) 
-                    |> for_each(println)
-                if msgs |> values() |> any(Message::is_error) {
-                    return Option::None
-                }
             }
             val instance: types::SymbolInstance 
                 = types::SymbolInstance(path, g_t_args)

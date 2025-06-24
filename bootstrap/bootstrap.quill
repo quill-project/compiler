@@ -34,11 +34,25 @@ pub fun compile(source_files: List[SourceFile], main: String) -> String {
                 |> expect("stream should've ended")
             types::SymbolTable::check_symbol(table, i, q, messages)
         })
-    // report messages
-    messages |> values() 
-        |> map[Message, String](|m| m |> display(sources) |> concat("\n")) 
-        |> for_each(println)
+    // report messages if has any
+    if messages |> values() |> any(Message::is_error) {
+        messages |> values() 
+            |> map[Message, String](|m| m |> display(sources) |> concat("\n")) 
+            |> for_each(println)
+        return ""
+    }
     // emit code
-    if messages |> values() |> any(Message::is_error) { return "" }
-    return codegen::c::emit(table, main |> split("::") |> List::collect())
+    val output: String = codegen::c::emit(
+        table, 
+        main |> split("::") |> List::collect(), 
+        messages
+    )
+    // report messages if has any
+    if messages |> values() |> any(Message::is_error) {
+        messages |> values() 
+            |> map[Message, String](|m| m |> display(sources) |> concat("\n")) 
+            |> for_each(println)
+        return ""
+    }
+    return output
 }
