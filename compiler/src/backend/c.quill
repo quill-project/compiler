@@ -233,8 +233,10 @@ pub fun emit_capture_value(type: Type) -> String {
 // this function are responsible for this.
 pub fun emit_type_destructors(table: SymbolTable) -> String {
     val emit_decl: Fun(String, String) -> String
-        = |path, body| "static __(_ *alloc) {\n_}\n\n"
-            |> fmt(path, "_destruct", "quill_alloc_t", body)
+        = |path, body| "static _ __(_ *alloc) {\n_return _;\n}\n\n" |> fmt(
+            "quill_unit_t", path, "_destruct", "quill_alloc_t", body, 
+            "QUILL_UNIT"
+        )
     return all_instances_of(table)
         |> map[Triplet[TypedNode, Int, List[Type]], String](|i| { match i.first.value {
             Structure(ast::CustomType(path, _, _, members)) {
@@ -1000,8 +1002,6 @@ pub fun emit_expression(gen: mut Generator, node: TypedNode, into: String) {
                 val dest: String = "((_ *) _.alloc->data)[_]"
                     |> fmt("quill_capture_t", into, capt_i |> as_string())
                 val capt_name: String = captures |> at(capt_i)
-                val capt_type: Type = capture_types |> get(capt_name)
-                    |> expect("capture name came from the capture types map")
                 val value: String = gen.locals_capt |> get(capt_name) 
                     |> expect("checker produced capture of unknown variable")
                 gen |> in_body("_(_);\n" |> fmt("quill_rc_add", value))

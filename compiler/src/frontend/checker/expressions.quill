@@ -14,7 +14,8 @@ use quill::ast::UntypedNode
 fun infer_anno_t_args(
     decl_c: mut Checker,
     anno: UntypedNode,
-    given: Type
+    given: Type,
+    combination: Fun(Type, Type) -> Option[Type]
 ) -> Bool {
     match given.value {
         Invalid { return false }
@@ -32,7 +33,7 @@ fun infer_anno_t_args(
                 return decl_c.type_args 
                     |> get(arg_name)
                     |> expect("branch depends on map to have type")
-                    |> Type::join(given)
+                    |> combination(given)
                     |> map[Type, Unit](|t| {
                         decl_c.type_args |> set(arg_name, t)
                     })
@@ -47,7 +48,8 @@ fun infer_anno_t_args(
                         infer_anno_t_args(
                             decl_c, 
                             exp_t_args |> expect("length > 0") |> at(i), 
-                            given_t_args |> at(i)
+                            given_t_args |> at(i),
+                            combination
                         ) && acc
                     )
                 }
@@ -56,7 +58,8 @@ fun infer_anno_t_args(
                     return infer_anno_t_args(
                         decl_c,
                         exp_t_args |> expect("length == 0") |> at(0),
-                        given_t_arg
+                        given_t_arg,
+                        combination
                     )
                 }
                 _ {}
@@ -70,13 +73,15 @@ fun infer_anno_t_args(
                     if exp_arg_c != got_arg_c { return false }
                     val args: Bool = got_args_t |> indices() |> fold(true, |acc, i|
                         infer_anno_t_args(
-                            decl_c, exp_args_t |> at(i), got_args_t |> at(i)
+                            decl_c, exp_args_t |> at(i), got_args_t |> at(i),
+                            combination
                         ) && acc
                     )
                     match exp_ret_t {
                         Some(e_ret_t) {
-                            return infer_anno_t_args(decl_c, e_ret_t, got_ret_t)
-                                && args
+                            return infer_anno_t_args(
+                                decl_c, e_ret_t, got_ret_t, combination
+                            ) && args
                         }
                         None { return args }
                     }
@@ -119,7 +124,7 @@ fun infer_call_t_args(
     val old_call_msgs: mut List[Message] = call_c.messages
     call_c.messages = List::empty()
     exp_ret_type |> map[Type, Unit](|ret_t| {
-        infer_anno_t_args(decl_c, given_ret_type, ret_t)
+        infer_anno_t_args(decl_c, given_ret_type, ret_t, Type::meet)
     })
     val exp_arg_c: Int = exp_arg_types |> length()
     val checked_args: mut List[Option[TypedNode]] = given_args 
@@ -147,7 +152,7 @@ fun infer_call_t_args(
                     val given_t: TypedNode = call_c 
                         |> check(arg_val, exp_t.type)
                     val success: Bool = infer_anno_t_args(
-                        decl_c, exp_arg_type, given_t.type
+                        decl_c, exp_arg_type, given_t.type, Type::join
                     )
                     if !success { return unit }
                     checked_args |> set(i, Option::Some(given_t))
@@ -173,30 +178,17 @@ fun infer_call_t_args(
             Message::failed_t_arg_inference(call_site, t)
         )
     })
-    val r_args: List[TypedNode] = checked_args
-        |> values()
-        |> map[Option[TypedNode], TypedNode](|a| a |> unwrap_or_else(
-            || TypedNode(
-                ast::Variant::Invalid, call_site, 
-                Type(Variant::Invalid, !IS_MUTABLE, call_site)
-            )            
-        ))
-        |> List::collect()
-    r_args |> indices() |> for_each(|i| {
-        val arg_t: TypedNode = r_args |> at(i)
-        val ei = Int::min(exp_arg_c - 1, i)
+    return given_args |> indices() |> map[Int, TypedNode](|i| {
+        val ei = Int::min(i, exp_arg_c - 1)
         val is_varargs = exp_varargs && i >= exp_arg_c - 1
         val raw_exp_arg_type: UntypedNode = exp_arg_types |> at(ei)
         val exp_arg_type = if !is_varargs { raw_exp_arg_type }
             else { get_va_list_type(raw_exp_arg_type) }
         val exp_t: TypedNode = decl_c 
             |> check_annotation(exp_arg_type)
-        if Type::matches(exp_t.type, arg_t.type) { return unit }
-        call_c.messages |> push(
-            Message::unexpected_type(exp_t.type, arg_t.type)
-        )
-    })
-    return r_args
+        val given_arg: UntypedNode = given_args |> at(i)
+        return call_c |> check(given_arg, exp_t.type)
+    }) |> List::collect()
 }
 
 // Ensures both of the given concrete types to be of the same numeric type.
@@ -970,7 +962,7 @@ pub fun Checker::check_piped_invocation(
                     List::empty(), List::empty() 
                 )
                 infer_anno_t_args(
-                    symbol_c, receiver_ann, receiver_t.type
+                    symbol_c, receiver_ann, receiver_t.type, Type::join
                 )
                 val receiver_ann_t: TypedNode = symbol_c
                     |> check_annotation(receiver_ann)
@@ -1016,7 +1008,16 @@ pub fun Checker::check_piped_invocation(
                 |> Set::collect()
             val candidate_c: Int = candidates |> size()
             if candidate_c == 0 {
-                return self |> check_invocation(node, invoked, raw_args, exp)
+                if self |> find_variable(raw_path |> at(-1)) |> is_some() {
+                    return self |> check_invocation(node, invoked, raw_args, exp)
+                }
+                self.messages |> push(Message::unknown_pipe(
+                    receiver_t.type, raw_path, node.source
+                ))
+                return TypedNode(
+                    ast::Variant::Invalid, node.source,
+                    Type(Variant::Invalid, !IS_MUTABLE, node.source)
+                )
             }
             if candidate_c > 1 {
                 self.messages |> push(Message::ambiguous_pipe(
@@ -1100,7 +1101,8 @@ pub fun Checker::infer_overloaded_operator(
                     infer_anno_t_args(
                         symbol_c, 
                         (args |> at(i)).second, 
-                        got_t
+                        got_t, 
+                        Type::join
                     )
                     val exp_t: TypedNode = symbol_c 
                         |> check_annotation((args |> at(i)).second)

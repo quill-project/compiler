@@ -504,6 +504,17 @@ pub fun Message::ambiguous_pipe(receiver: Type, candidates: Set[List[String]], a
         )
     ))
 
+pub fun Message::unknown_pipe(receiver: Type, path: List[String], at: Source) -> Message
+    = Message(List::of(
+        Message::Section::Error(
+            "Cannot find any functions '_' with receiver '_' in the current scope" |> fmt(
+                path |> values() |> join("::"), 
+                Type::as_string(receiver)
+            )
+        ),
+        Message::Section::Code(at)
+    ))
+
 pub fun Message::va_into_non_list(got: Type, at: Source) -> Message
     = Message(List::of(
         Message::Section::Error(

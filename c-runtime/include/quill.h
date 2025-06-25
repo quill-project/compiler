@@ -87,6 +87,10 @@ typedef quill_alloc_t *quill_list_t;
 #define QUILL_NULL_LIST QUILL_NULL_ALLOC
 
 
+void quill_println(quill_string_t line);
+void quill_panic(quill_string_t reason);
+
+
 static quill_alloc_t *quill_malloc(size_t n, quill_destructor_t destructor) {
     if(n == 0) { return NULL; }
     quill_alloc_t *alloc = malloc(sizeof(quill_alloc_t) + n);
@@ -130,10 +134,6 @@ static void quill_float_rc_dec(quill_float_t v) { (void) v; }
 static void quill_bool_rc_dec(quill_bool_t v) { (void) v; }
 static void quill_string_rc_dec(quill_string_t v) { quill_rc_dec(v.alloc); }
 static void quill_closure_rc_dec(quill_closure_t v) { quill_rc_dec(v.alloc); }
-
-
-void quill_println(quill_string_t line);
-void quill_panic(quill_string_t reason);
 
 
 quill_int_t quill_point_encode_length(uint32_t point);
