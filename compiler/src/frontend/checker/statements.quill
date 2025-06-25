@@ -149,30 +149,49 @@ pub fun Checker::check_match_pattern(
     }
     match node.value {
         PathRef(ast::PathRef(ref_path, ref_t_args)) {
-            if (ref_path |> length()) != 1 { return default_check() }
-            val name: String = ref_path |> at(0)
-            if enum_has_member(name) {
-                val repl = UntypedNode(
-                    ast::Variant::PathRef(ast::PathRef(
-                        exp_enum_path() 
-                            |> expect("required by 'enum_has_member'")
-                            |> concat(List::of(name)),
-                        ref_t_args
-                    )),
-                    node.source
-                )
-                return self 
-                    |> check_match_pattern(repl, exp, pattern, path)
+            val name: String = ref_path |> at(-1)
+            match exp_enum_path() {
+                Some(enum_path) {
+                    val raw_enum_path: List[String] = self 
+                        |> expand_path(ref_path |> slice_to(-1))
+                    val path_matches: Bool = raw_enum_path == enum_path
+                        || enum_has_member(name)
+                    if path_matches {
+                        val repl = UntypedNode(
+                            ast::Variant::Call(ast::Invocation(
+                                UntypedNode(
+                                    ast::Variant::PathRef(ast::PathRef(
+                                        enum_path |> concat(List::of(name)),
+                                        ref_t_args
+                                    )),
+                                    node.source
+                                ),
+                                List::of(UntypedNode(
+                                    ast::Variant::PathRef(ast::PathRef(
+                                        List::of("_"), Option::None  
+                                    )),
+                                    node.source
+                                ))
+                            )),
+                            node.source
+                        )
+                        return self 
+                            |> check_match_pattern(repl, exp, pattern, path)
+                    }
+                }
+                None {}
             }
-            val local: Option[Variable] = self |> find_variable(name)
-            if local |> is_none() {
-                val n: Option[String] = if name != "_" { Option::Some(name) } 
-                    else { Option::None[String] }
-                val capture: PatternCapture = PatternCapture(n, path, exp)
-                pattern.captures |> push(capture)
-                return TypedNode(
-                    ast::Variant::VariableRef(name), node.source, exp
-                )
+            if (ref_path |> length()) == 1 {
+                val local: Option[Variable] = self |> find_variable(name)
+                if local |> is_none() {
+                    val n: Option[String] = if name != "_" { Option::Some(name) } 
+                        else { Option::None[String] }
+                    val capture: PatternCapture = PatternCapture(n, path, exp)
+                    pattern.captures |> push(capture)
+                    return TypedNode(
+                        ast::Variant::VariableRef(name), node.source, exp
+                    )
+                }
             }
             return default_check()
         }
