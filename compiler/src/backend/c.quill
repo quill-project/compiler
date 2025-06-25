@@ -803,7 +803,10 @@ pub fun emit_statement(gen: mut Generator, node: TypedNode) {
                         |> values()
                         |> map(emit_cond)
                         |> join("&&")
-                    gen |> in_body("if(_) {\n" |> fmt(conds))
+                    gen |> in_body("if(_) {\n" |> fmt(
+                        if (conds |> length()) >= 1 { conds } 
+                            else { "QUILL_TRUE" }
+                    ))
                     pattern.captures |> values() |> for_each(|capture| {
                         if capture.name |> is_none() { return unit }
                         val name: String = capture.name 
