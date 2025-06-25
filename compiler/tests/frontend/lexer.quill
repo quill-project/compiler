@@ -95,6 +95,15 @@ fun TToken::as_string(self: TToken) -> String
         self.start |> as_string(), self.end |> as_string()
     )
 
+pub fun TToken::eq(lhs: TToken, rhs: TToken) -> Bool
+    = lhs.type == rhs.type
+    && lhs.content == rhs.content
+    && lhs.start == rhs.start
+    && lhs.end == rhs.end
+
+pub fun TToken::not_eq(lhs: TToken, rhs: TToken) -> Bool
+    = !TToken::eq(lhs, rhs)
+
 fun assert_tokens(content: String, ...expected: List[TToken]) {
     val messages: mut List[Message] = List::empty()
     val output: List[TToken] 

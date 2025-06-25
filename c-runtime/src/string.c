@@ -5,7 +5,7 @@
 
 #define PRIqd PRId64 // quill_int_t
 #define PRIqu PRIu64 // quill_uint_t
-#define PRIqf "%f"   // quill_float_t
+#define PRIqf "f"   // quill_float_t
 
 quill_int_t quill_point_encode_length(uint32_t point) {
     if(point <= 0x00007F) { return 1; }
@@ -133,15 +133,28 @@ quill_string_t quill_string_from_static_cstr(const char* cstr) {
 }
 
 quill_string_t quill_string_from_int(quill_int_t i) {
-    quill_int_t length_bytes = snprintf(NULL, 0, PRIqd, i);
+    quill_int_t length_bytes = snprintf(NULL, 0, "%" PRIqd, i);
     size_t buffer_size = (size_t) (sizeof(uint8_t) * (length_bytes + 1));
     quill_string_t res;
     res.length_points = length_bytes; // snprintf will only output ASCII
     res.length_bytes = length_bytes;
     res.alloc = quill_malloc(buffer_size, NULL);
     res.data = res.alloc->data;
-    snprintf(res.alloc->data, buffer_size, PRIqd, i);
+    snprintf(res.alloc->data, buffer_size, "%" PRIqd, i);
     return res;
+}
+
+static quill_int_t trimmed_float_str_length(
+    const uint8_t *data, quill_int_t og_length
+) {
+    quill_int_t new_length = og_length;
+    while(new_length > 1 && data[new_length - 1] == '0') {
+        new_length -= 1;
+    }
+    if(new_length > 1 && data[new_length - 1] == '.') {
+        new_length -= 1;
+    }
+    return new_length;
 }
 
 quill_string_t quill_string_from_float(quill_float_t f) {
@@ -152,13 +165,14 @@ quill_string_t quill_string_from_float(quill_float_t f) {
         return f > 0? quill_string_from_static_cstr("inf")
             : quill_string_from_static_cstr("-inf"); 
     }
-    quill_int_t length_bytes = snprintf(NULL, 0, PRIqf, f);
+    quill_int_t length_bytes = snprintf(NULL, 0, "%" PRIqf, f);
     size_t buffer_size = (size_t) (sizeof(uint8_t) * (length_bytes + 1));
     quill_string_t res;
-    res.length_points = length_bytes; // snprintf will only output ASCII
-    res.length_bytes = length_bytes;
     res.alloc = quill_malloc(buffer_size, NULL);
     res.data = res.alloc->data;
-    snprintf(res.alloc->data, buffer_size, PRIqf, f);
+    snprintf(res.alloc->data, buffer_size, "%" PRIqf, f);
+    quill_int_t length_trim = trimmed_float_str_length(res.data, length_bytes);
+    res.length_points = length_trim; // snprintf will only output ASCII
+    res.length_bytes = length_trim;
     return res;
 }

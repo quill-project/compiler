@@ -5,14 +5,6 @@ use quill::*
 use quill::types::*
 use quill::codegen::*
 
-pub val HEADER: String = "
-// C code generated from Quill source code by the Quill compiler
-// https://github.com/schwalbe-t/quill
-
-#include <quill.h>
-
-"
-
 // Returns a list of all instances of all symbols in the given symbol table.
 fun all_instances_of(table: SymbolTable) -> mut Sequence[Triplet[TypedNode, Int, List[Type]]]
     = table.symbols 
@@ -383,7 +375,7 @@ pub fun emit_func_implementations(g: mut Generator) -> String
                         |> unwrap_or_else(
                             || Type(Variant::Unit, !IS_MUTABLE, i.first.source)
                         )
-                    val gen = Generator::under(g)
+                    val gen = Generator::in_context_of(g)
                     gen |> setup_return(ret_type)
                     args |> indices() |> for_each(|arg_i| {
                         val arg: Pair[String, TypedNode] = args |> at(arg_i)
@@ -445,13 +437,13 @@ fun emit_global(
             var_deps |> values() |> for_each(|dep| {
                 emit_global(dep, queued, emitted, g, out)
             })
-            val gen = Generator::under(g)
+            val gen = Generator::in_context_of(g)
             val dest: String = mangle_path(path, instance.second)
             gen |> emit_expression(value, dest)
             out.value = out.value
-                |> concat(gen.start)
-                |> concat(gen.body)
-                |> concat(gen.end)
+                |> concat(gen.start.value)
+                |> concat(gen.body.value)
+                |> concat(gen.end.value)
             emitted |> add(path)
         }
         _ {
@@ -484,9 +476,9 @@ pub fun emit_global_inits(g: mut Generator, f_name: String) -> String {
 
 // Stores the state and context required for the emission of a single function.
 pub struct Generator(
-    start: String,
-    body: String,
-    end: String,
+    start: mut Box[String],
+    body: mut Box[String],
+    end: mut Box[String],
     locals: mut Map[String, String],
     locals_capt: mut Map[String, String],
     table: SymbolTable,
@@ -501,7 +493,7 @@ pub struct Generator(
 // Creates a new generator state from scratch.
 pub fun Generator::new(table: SymbolTable, messages: mut List[Message]) -> mut Generator
     = Generator(
-        "", "", "",
+        Box(""), Box(""), Box(""),
         Map::empty(), Map::empty(), 
         table,
         Box(0), Box(""), Box(0), Map::empty(), Box(0),
@@ -511,9 +503,9 @@ pub fun Generator::new(table: SymbolTable, messages: mut List[Message]) -> mut G
 // Creates a new generator in a new function inside the function of the 
 // given exisiting generator. Symbols and 
 // local variable indices are shared with the parent scope.
-pub fun Generator::under(existing: Generator) -> mut Generator
+pub fun Generator::in_context_of(existing: Generator) -> mut Generator
     = Generator(
-        "", "", "", 
+        Box(""), Box(""), Box(""), 
         Map::empty(), Map::empty(),
         existing.table,
         existing.next_local_id, existing.closure_bodies, 
@@ -522,23 +514,37 @@ pub fun Generator::under(existing: Generator) -> mut Generator
         existing.messages
     )
 
+// Creates a new generator in a new function inside the function of the
+// given existing generator, but in a new variable scope.
+// Symbols, local variable indices and the like are shared with the parent scope.
+pub fun Generator::in_scope_under(existing: Generator) -> mut Generator
+    = Generator(
+        existing.start, existing.body, existing.end,
+        existing.locals |> clone(), existing.locals_capt |> clone(),
+        existing.table,
+        existing.next_local_id, existing.closure_bodies,
+        existing.next_closure_id, existing.closure_destr,
+        existing.next_match_id,
+        existing.messages
+    )
+
 // Inserts the given text in the beginning section of the generator scope.
 // The beginning section is used to create and set up local variables.
 pub fun Generator::at_start(self: mut Generator, s: String) {
-    self.start = self.start |> concat(s)
+    self.start.value = self.start.value |> concat(s)
 }
 
 // Inserts the given text in the body section of the generator scope.
 // The body section is used to execute code.
 pub fun Generator::in_body(self: mut Generator, s: String) {
-    self.body = self.body |> concat(s)
+    self.body.value = self.body.value |> concat(s)
 }
 
 // Inserts the given text at the end of the generator scope.
 // The end section is ALWAYS invoked before returning from the function,
 // making it cruical for the proper handling of reference counts of references.
 pub fun Generator::at_end(self: mut Generator, s: String) {
-    self.end = self.end |> concat(s)
+    self.end.value = self.end.value |> concat(s)
 }
 
 // Set up a local variable in the scope that allows for returning of 
@@ -612,10 +618,10 @@ pub fun Generator::assign_to(
 // when it wants to return (to invoke all code in the 'end' section) and to
 // actually return.
 pub fun Generator::output(self: Generator) -> String
-    = self.start
-    |> concat(self.body)
+    = self.start.value
+    |> concat(self.body.value)
     |> concat("ret:;\n")
-    |> concat(self.end)
+    |> concat(self.end.value)
     |> concat("return ret_val;\n")
 
 // Emits the given expression after the given pattern path.
@@ -867,8 +873,10 @@ pub fun emit_statement(gen: mut Generator, node: TypedNode) {
 
 // Emits the entire given statement list as the equivalent C code, NOT including
 // opening and closing braces.
-pub fun emit_statement_list(gen: mut Generator, nodes: List[TypedNode])
-    = nodes |> values() |> for_each(|n| gen |> emit_statement(n))
+pub fun emit_statement_list(parent: mut Generator, nodes: List[TypedNode]) {
+    val gen: mut Generator = Generator::in_scope_under(parent)
+    return nodes |> values() |> for_each(|n| gen |> emit_statement(n))
+}
 
 // Emits the equivalent lowered C code for the given expression.
 pub fun emit_expression(gen: mut Generator, node: TypedNode, into: String) {
@@ -953,7 +961,7 @@ pub fun emit_expression(gen: mut Generator, node: TypedNode, into: String) {
                 "quill_alloc_t *alloc",
                 body_args_s
             )
-            val body_gen = Generator::under(gen)
+            val body_gen = Generator::in_context_of(gen)
             body_gen |> setup_return(signature.second)
             captures |> indices() |> for_each(|capt_i| {
                 val capt_n: String = captures |> at(capt_i)
@@ -1122,9 +1130,15 @@ pub fun emit_expression(gen: mut Generator, node: TypedNode, into: String) {
                     val arg: TypedNode = args |> at(non_va_c + i)
                     val dest: String = "_[_]" 
                         |> fmt(values, i |> as_string())
+                    gen |> in_body("_ = _;\n" |> fmt(
+                        dest, emit_default_value(arg.type)
+                    ))
                     gen |> emit_expression(arg, dest)
                 })
             }
+            // no need to increase the RC after assigning to 'into',
+            // the called function makes sure the returned object's RC stays at
+            // relative +1
             gen |> in_body(emit_rc_dec(into, node.type))
             gen |> in_body("_ = _(___);\n" |> fmt(
                 into, called, 
@@ -1159,14 +1173,12 @@ pub fun emit_expression(gen: mut Generator, node: TypedNode, into: String) {
                 val arg: TypedNode = args |> at(arg_i)
                 val arg_into: String = "((_ *) _->data)->m__" 
                     |> fmt(layout, r, "_", member_names |> at(arg_i))
+                gen |> in_body("_ = _;\n" |> fmt(
+                    arg_into, emit_default_value(arg.type)
+                ))
                 gen |> emit_expression(arg, arg_into)
             })
-            // We don't want to use 'assign_to' here since it increases
-            // the reference count of whatever we assign. 
-            // On creation, 'quill_malloc' returns an allocation with RC=1,
-            // so we only want to decrease the RC of whatever is replaced.
-            gen |> in_body(emit_rc_dec(into, node.type))
-            gen |> in_body("_ = _;\n" |> fmt(into, r))
+            gen |> assign_to(into, node.type, r)
         }
         EnumInit(ast::PathInvocation(inv_path, args, t_n_args)) {
             val path = inv_path |> slice_to(-1)
@@ -1202,13 +1214,11 @@ pub fun emit_expression(gen: mut Generator, node: TypedNode, into: String) {
             val value: TypedNode = args |> at(0)
             val value_into: String = "((_ *) _->data)->value.m__"
                 |> fmt(layout, r, "_", name)
+            gen |> in_body("_ = _;\n" |> fmt(
+                value_into, emit_default_value(value.type)
+            ))
             gen |> emit_expression(value, value_into)
-            // We don't want to use 'assign_to' here since it increases
-            // the reference count of whatever we assign. 
-            // On creation, 'quill_malloc' returns an allocation with RC=1,
-            // so we only want to decrease the RC of whatever is replaced.
-            gen |> in_body(emit_rc_dec(into, node.type))
-            gen |> in_body("_ = _;\n" |> fmt(into, r))
+            gen |> assign_to(into, node.type, r)
         }
         IfExpr(ast::IfExpr(cond, if_val, else_val)) {
             val c: String = gen |> alloc(cond.type)
@@ -1269,24 +1279,63 @@ pub fun emit_assignable(gen: mut Generator, node: TypedNode) -> String {
     }
 }
 
+// Optionally emits the mangled name of the function at the given path,
+// under the condition that it is a valid main function.
+fun emit_main_reference(
+    table: SymbolTable, main: List[String], messages: mut List[Message]
+) -> Option[String] {
+    match table.symbols |> get(main) {
+        Some(Symbol(
+            node,
+            List::empty(), 
+            _, _, _
+        )) { match node.value {
+            ast::Variant::Function(ast::Function(
+                _, _, _, args, false,
+                _, _, _
+            )) {
+                if (args |> length()) == 0 {
+                    val main_instance: Triplet[TypedNode, Int, List[Type]] 
+                        = find_instance_with(main, List::empty(), table)
+                    return Option::Some(mangle_path(main, main_instance.second))
+                }
+            }
+            _ {}
+        } }
+        _ {}
+    }
+    messages |> push(Message::invalid_main(main))
+    return Option::None
+}
+
+pub val HEADER: String = "
+// C code generated from Quill source code by the Quill compiler
+// https://github.com/schwalbe-t/quill
+
+#include <quill.h>
+
+"
+
+pub val GLOBALS_INIT: String = "quill_init_globals"
+
+pub val MAIN: String = "
+int main(void) {
+    _();
+    _
+}
+"
+
 // Emits all symbols defined by the given symbol table as a complete C file
 // dependent on the Quill C runtime.
 pub fun emit(
     table: SymbolTable, main: List[String], messages: mut List[Message]
 ) -> String {
-    // 1. struct / enum layouts,
-    //    (external?) function pre-declarations,
-    //    global variable declarations,
-    //    closure capture data layouts
-    // 2. struct / enum free handler implementations,
-    //    closure capture free handlers
-    // 3. (external?) function implementations
-    // 4. global variable initialization function
-    // 5. main function (calls globals init and quill main)
-
+    val main_call: String = emit_main_reference(table, main, messages)
+        |> map[String, String](|r| r |> concat("();"))
+        |> unwrap_or("")
     val g = Generator::new(table, messages)
     val func_decls: String = emit_func_implementations(g)
-    val global_inits: String = emit_global_inits(g, "quill_init_globals")
+    val global_inits: String = emit_global_inits(g, GLOBALS_INIT)
     return HEADER
         |> concat(emit_declarations(table))
         |> concat(emit_type_destructors(table))
@@ -1294,4 +1343,5 @@ pub fun emit(
         |> concat(g.closure_bodies.value)
         |> concat(func_decls)
         |> concat(global_inits)
+        |> concat(MAIN |> fmt(GLOBALS_INIT, main_call))
 }

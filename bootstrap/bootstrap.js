@@ -2,6 +2,7 @@
 const fs = require("fs");
 const path = require('path');
 const quill = require("./compiler.js");
+const { exec } = require("child_process");
 
 function collectFiles(dir, ext) {
     let files = [];
@@ -47,7 +48,9 @@ const qiqFiles = [
     ...collectFiles("./std-base/src", ".quill"),
     ...collectFiles("./std-c/src", ".quill"),
     ...collectFiles("./compiler/src", ".quill"),
-    ...collectFiles("./cli/src", ".quill")
+    ...collectFiles("./cli/src", ".quill"),
+
+    ...collectFiles("./compiler/tests", ".quill")
 ];
 const qiqSrcFiles = [];
 for(const file of qiqFiles) {
@@ -60,3 +63,6 @@ const result = bootstrapped(qiqSrcFiles, "quill::cli::main");
 const qiqEnd = Date.now();
 console.log(`QIQ took ${qiqEnd - qiqStart}ms to compile QIQ`);
 fs.writeFileSync("bootstrap/build.c", result);
+
+// compile the output of QIQ compiling itself using any C compiler
+exec("cc bootstrap/build.c c-runtime/src/io.c c-runtime/src/string.c -I c-runtime/include -lm -o bootstrap/build -g")

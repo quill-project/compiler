@@ -1,21 +1,58 @@
 
 mod quill::cli
 
-use quill::*
+use quill::tests::*
+
+fun lexer_all() {
+    lexer::is_alphabetic()
+    lexer::is_numeric()
+    lexer::is_alphanumeric()
+    lexer::is_whitespace()
+    lexer::parse_hex_digit()
+    lexer::parse_hex_number()
+    lexer::int_literals()
+    lexer::float_literals()
+    lexer::keyword_literals()
+    lexer::string_literals()
+    lexer::symbols()
+    lexer::symbol_merging()
+    lexer::keywords()
+    lexer::identifiers()
+    println("All lexer tests passed :)")
+}
+
+fun parser_all() {
+    parser::literals()
+    parser::unary()
+    parser::binary()
+    parser::types()
+    parser::variables()
+    parser::control_flow()
+    parser::declarations()
+    println("All parser tests passed :)")
+}
+
+fun types_all() {
+    types::collection()
+    types::aliases()
+    types::hoisting()
+    println("All types tests passed :)")
+}
+
+fun checker_all() {
+    checker::declarations()
+    checker::numeric()
+    checker::structs()
+    checker::generics()
+    checker::patterns()
+    checker::matching()
+    checker::closure_captures()
+    println("All checker tests passed :)")
+}
 
 fun main() {
-    for i: range(0, 20) {
-        match Option::Some(i) {
-            Some( 3) { println("Fizz") }
-            Some( 5) { println("Buzz") }
-            Some( 6) { println("Fizz") }
-            Some( 9) { println("Fizz") }
-            Some(10) { println("Buzz") }
-            Some(12) { println("Fizz") }
-            Some(15) { println("FizzBuzz") }
-            Some(18) { println("Fizz") }
-            Some(n) { println(n) }
-            None { println("wtf") }
-        }
-    }
+    lexer_all()
+    parser_all()
+    types_all()
+    checker_all()
 }

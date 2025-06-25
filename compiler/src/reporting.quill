@@ -583,16 +583,6 @@ pub fun Message::missing_operator_impl(
         )
     ))
 
-pub fun Message::cyclic_global_variables(
-    path: List[String], at: Source
-) -> Message = Message(List::of(
-        Message::Section::Error(
-            "The global variable '_' depends on itself"
-                |> fmt(path |> values() |> join("::"))
-        ),
-        Message::Section::Code(at)
-    ))
-
 pub fun Message::invalid_match_eq_ret(
     path: List[String], ret_t: types::Type, at: Source
 ) -> Message = Message(List::of(
@@ -603,4 +593,28 @@ pub fun Message::invalid_match_eq_ret(
             )
         ),
         Message::Section::Code(at)
+    ))
+
+// Codegen
+
+pub fun Message::cyclic_global_variables(
+    path: List[String], at: Source
+) -> Message = Message(List::of(
+        Message::Section::Error(
+            "The global variable '_' depends on itself"
+                |> fmt(path |> values() |> join("::"))
+        ),
+        Message::Section::Code(at)
+    ))
+
+
+pub fun Message::invalid_main(path: List[String]) -> Message
+    = Message(List::of(
+        Message::Section::Error(
+            "'_' is not a valid main function"
+                |> fmt(path |> values() |> join("::"))
+        ),
+        Message::Section::Info(
+            "The main function path needs to be the full path of a non-external function without any arguments or type arguments."
+        )
     ))

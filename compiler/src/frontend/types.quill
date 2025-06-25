@@ -510,7 +510,10 @@ pub fun SymbolTable::check_symbol(
     val instance_key: String = instance |> key()
     val symbol: mut Symbol = self.symbols 
         |> get(instance.path) 
-        |> expect("Requested instances must be for existing symbols")
+        |> unwrap_or_else(|| "Requested instance '_' does not refer to a known symbol"
+            |> fmt(instance.path |> values() |> join("::"))
+            |> panic()
+        )
     if symbol.instances |> has(instance_key) { return unit }
     val named_t_args: mut Map[String, Type] = instance.type_args 
         |> indices()

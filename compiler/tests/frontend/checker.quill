@@ -117,11 +117,12 @@ fun sum[T](of: std::List[T]) {}
     )
 }
 
-pub val ARITHMETICS = "
+pub val BUILTIN: String = "
 pub ext fun std::Int::plus(lhs: Int, rhs: Int) -> Int = \"\"
 pub ext fun std::Int::minus(lhs: Int, rhs: Int) -> Int = \"\"
 pub ext fun std::Int::times(lhs: Int, rhs: Int) -> Int = \"\"
 pub ext fun std::Int::div(lhs: Int, rhs: Int) -> Int = \"\"
+pub ext fun std::Int::eq(lhs: Int, rhs: Int) -> Bool = \"\"
 pub ext fun std::Float::plus(lhs: Float, rhs: Float) -> Float = \"\"
 pub ext fun std::Float::minus(lhs: Float, rhs: Float) -> Float = \"\"
 pub ext fun std::Float::times(lhs: Float, rhs: Float) -> Float = \"\"
@@ -129,10 +130,13 @@ pub ext fun std::Float::div(lhs: Float, rhs: Float) -> Float = \"\"
 pub ext fun std::Float::rem(lhs: Float, rhs: Float) -> Float = \"\"
 pub ext fun std::Float::lt(lhs: Float, rhs: Float) -> Bool = \"\"
 pub ext fun std::Float::u_minus(x: Float) -> Float = \"\"
+pub ext fun std::Float::eq(lhs: Float, rhs: Float) -> Bool = \"\"
+pub ext fun std::String::eq(lhs: String, rhs: String) -> Bool = \"\"
+pub ext fun std::Bool::eq(lhs: Bool, rhs: Bool) -> Bool = \"\"
 "
 
 pub fun numeric() {
-    val c = ARITHMETICS |> concat("
+    val c = BUILTIN |> concat("
 pub val FIVE_PLUS_TEN: Int = 5 + 10
 
 fun test() -> Float {
@@ -158,7 +162,7 @@ return (fun@std::Float::plus[](2.5 (=Float), (fun@std::Float::rem[]((fun@std::Fl
 }
 
 pub fun structs() {
-    val c = ARITHMETICS |> concat("
+    val c = BUILTIN |> concat("
 mod pet
 pub struct Cat(name: String, hunger: Float)
 pub val NO_HUNGER: Float = 0.0
@@ -179,7 +183,7 @@ pub fun mate(a: Cat, b: Cat) -> mut Cat
     val s = Source("test.quill", 0, 0)
     assert_symbol(t, c, 
         "pet::Cat", List::empty(), 
-        "pub struct pet::Cat[](name: type@String (=String), hunger: type@std::Float (=Float)) (=Unit)"
+        "pub struct pet::Cat[](name: type@std::String (=String), hunger: type@std::Float (=Float)) (=Unit)"
     )
     assert_symbol(t, c,
         "pet::feed", List::empty(),
@@ -187,7 +191,7 @@ pub fun mate(a: Cat, b: Cat) -> mut Cat
     )
     assert_symbol(t, c,
         "pet::rebirth", List::empty(),
-        "pub fun pet::rebirth[](c: type+mut@pet::Cat (=mut pet::Cat), name: type@String (=String)) { \
+        "pub fun pet::rebirth[](c: type+mut@pet::Cat (=mut pet::Cat), name: type@std::String (=String)) { \
 (var@c (=mut pet::Cat) .name) (=String) = var@name (=String) (=Unit); \
 (var@c (=mut pet::Cat) .hunger) (=Float) = pet::NO_HUNGER (=Float) (=Unit) \
 } (=Unit)"
@@ -206,6 +210,7 @@ return (struct@pet::Cat[](\
 pub fun generics() {
     val c = "
 mod std
+pub ext fun List::destruct[T](self: mut List[T]) = \"\"
 pub ext fun Int::as_float(self: Int) -> Float = \"\"
 pub ext fun Float::as_string(self: Float) -> String = \"\"
 pub ext fun sum[T](...values: List[T]) -> T = \"\"
@@ -316,7 +321,7 @@ pub struct BoolPair(a: Bool, b: Bool)
             Pattern::Tuple(PatternTuple(
                 List::of("BoolPair"), List::empty(),
                 List::of(
-                    Pattern::Bool(true)
+                    Pattern::Bool(true),
                     Pattern::Bool(false)
                 )
             )),
@@ -327,7 +332,7 @@ pub struct BoolPair(a: Bool, b: Bool)
 }
 
 pub fun matching() {
-    val c = ARITHMETICS |> concat("
+    val c = BUILTIN |> concat("
 mod std
 pub struct Vec2(x: Int, y: Int)
 pub struct Box[T](value: T)
@@ -384,7 +389,7 @@ var@_ (=Int) () -> {  } \
     )
     assert_symbol(t, c,
         "test::structs", List::empty(),
-        "pub fun test::structs[](pos: type@std::Vec2 (=std::Vec2), double: type@std::Box[type@Bool (=Bool)] (=std::Box[Bool])) { \
+        "pub fun test::structs[](pos: type@std::Vec2 (=std::Vec2), double: type@std::Box[type@std::Bool (=Bool)] (=std::Box[Bool])) { \
 match var@pos (=std::Vec2) { \
 (struct@std::Vec2[](0 (=Int), 0 (=Int))) (=std::Vec2) () -> {  } \
 (struct@std::Vec2[](var@x (=Int), 0 (=Int))) (=std::Vec2) (x: Int) -> {  } \
@@ -399,20 +404,20 @@ match var@double (=std::Box[Bool]) { \
     )
     assert_symbol(t, c,
         "test::enums", List::empty(),
-        "pub fun test::enums[](name: type@std::Option[type@String (=String)] (=std::Option[String])) { \
+        "pub fun test::enums[](name: type@std::Option[type@std::String (=String)] (=std::Option[String])) { \
 match var@name (=std::Option[String]) { \
 (enum@std::Option::Some[!INVALID! (=String)](\"Maria\" (=String))) (=std::Option[String]) () -> {  } \
 (enum@std::Option::Some[!INVALID! (=String)](\"Bob\" (=String))) (=std::Option[String]) () -> {  } \
 (enum@std::Option::Some[!INVALID! (=String)](\"Chris\" (=String))) (=std::Option[String]) () -> {  } \
 (enum@std::Option::Some[!INVALID! (=String)](var@_ (=String))) (=std::Option[String]) () -> {  } \
-(enum@std::Option::None[!INVALID! (=String)](unit (=Unit))) (=std::Option[String]) () -> {  } \
+(enum@std::Option::None[!INVALID! (=String)](var@_ (=Unit))) (=std::Option[String]) () -> {  } \
 } (=Unit) \
 } (=Unit)"
     )
 }
 
 pub fun closure_captures() {
-    val c = ARITHMETICS |> concat("
+    val c = BUILTIN |> concat("
 pub ext fun println[T](v: T) = \"\"
 
 fun capturing() {
@@ -457,7 +462,7 @@ mut b: type@std::Int (=Int) (captured) = 10 (=Int) (=Unit); \
 val c: type@std::Float (=Float) = 3.14 (=Float) (=Unit); \
 val f: (Fun()) (=Fun() -> Unit) = || [a, b] { \
 (fun@println[!INVALID! (=Int)](var@a (=Int))) (=Unit); \
-val d: type@String (=String) (captured) = \"Hello\" (=String) (=Unit); \
+val d: type@std::String (=String) (captured) = \"Hello\" (=String) (=Unit); \
 val g: (Fun()) (=Fun() -> Unit) = || [b, d] { \
 var@b (=Int) = (fun@std::Int::plus[](var@b (=Int), 1 (=Int))) (=Int) (=Unit); \
 val e: type@std::Int (=Int) = 10 (=Int) (=Unit); \
