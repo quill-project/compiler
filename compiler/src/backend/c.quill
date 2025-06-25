@@ -516,7 +516,7 @@ pub fun Generator::under(existing: Generator) -> mut Generator
         existing.table,
         existing.next_local_id, existing.closure_bodies, 
         existing.next_closure_id, existing.closure_destr,
-        existing-next_match_id,
+        existing.next_match_id,
         existing.messages
     )
 
@@ -762,7 +762,7 @@ pub fun emit_statement(gen: mut Generator, node: TypedNode) {
                 branch_captures |> push(capture_values)
                 branch_ids |> push(branch_id)
                 branch.patterns |> values() |> for_each(|pattern| {
-                    val emit_cond: Fun(Pair[List[PatternLoc], PatternCond[N]]) -> String = |cond| {
+                    val emit_cond: Fun(Pair[List[ast::PatternLoc], ast::PatternCond[TypedNode]]) -> String = |cond| {
                         val v: String = emit_pattern_path(
                             matched_v, cond.first, gen
                         )
@@ -782,7 +782,7 @@ pub fun emit_statement(gen: mut Generator, node: TypedNode) {
                                 val members = enum_members()
                                 val member_i: String 
                                     = members |> indices()
-                                    |> find(|i (members |> at(i)).first == name)
+                                    |> find(|i| (members |> at(i)).first == name)
                                     |> map(Int::as_string)
                                     |> unwrap_or("INVALID")
                                 return "(((_ *) (_)->data)->tag == _)"

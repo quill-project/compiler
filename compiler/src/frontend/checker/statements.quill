@@ -333,6 +333,13 @@ pub fun Checker::check_match_pattern(
                         |> List::collect()
                     val instance: SymbolInstance 
                         = SymbolInstance(enum_path, final_type_args)
+                    // IMPORTANT! NEEDS TO BE ADDED TO THE CONDITIONS LIST
+                    // BEFORE THOSE OF THE CHILDREN!
+                    val cond: Pair[List[PatternLoc], PatternCond[TypedNode]] 
+                        = Pair(path, PatternCond::EnumVariant(Pair(
+                            member_name, instance
+                        )))
+                    pattern.conditions |> push(cond)
                     val args_t: List[TypedNode] = member 
                         |> and_then[Pair[String, UntypedNode], TypedNode](|m|
                             args |> get(0) |> map[UntypedNode, TypedNode](|a| {
@@ -349,11 +356,6 @@ pub fun Checker::check_match_pattern(
                         )
                         |> as_seq()
                         |> List::collect()
-                    val cond: Pair[List[PatternLoc], PatternCond[TypedNode]] 
-                        = Pair(path, PatternCond::EnumVariant(Pair(
-                            member_name, instance
-                        )))
-                    pattern.conditions |> push(cond)
                     return TypedNode(
                         ast::Variant::EnumInit(ast::PathInvocation(
                             List::concat(enum_path, List::of(member_name)), 

@@ -4,7 +4,18 @@ mod quill::cli
 use quill::*
 
 fun main() {
-    for i: range(0, 100) {
-        "i = _" |> fmt(i |> as_string()) |> println()
+    for i: range(0, 20) {
+        match Option::Some(i) {
+            Some( 3) { println("Fizz") }
+            Some( 5) { println("Buzz") }
+            Some( 6) { println("Fizz") }
+            Some( 9) { println("Fizz") }
+            Some(10) { println("Buzz") }
+            Some(12) { println("Fizz") }
+            Some(15) { println("FizzBuzz") }
+            Some(18) { println("Fizz") }
+            Some(n) { println(n) }
+            None { println("wtf") }
+        }
     }
 }
