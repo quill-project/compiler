@@ -265,12 +265,22 @@ pub fun Checker::check_match_pattern(
                         self.symbols, s.context,
                         List::empty(), List::empty() 
                     )
+                    val final_type_args: List[Type] = t.t_args
+                        |> values()
+                        |> map[String, Type](|n| decl_c.type_args
+                            |> get(n)
+                            |> expect("inserted by 'make_full_t_args'")
+                        )
+                        |> List::collect()
+                    val instance: SymbolInstance 
+                        = SymbolInstance(struct_path, final_type_args)
                     val args_t: List[TypedNode] 
                         = range(0, Int::min(t.members |> length(), got_arg_c))
                         |> map[Int, TypedNode](|arg_i| {
                             val member = t.members |> at(arg_i)
-                            val loc: PatternLoc 
-                                = PatternLoc::StructMember(member.first)
+                            val loc: PatternLoc = PatternLoc::StructMember(Pair(
+                                member.first, instance
+                            ))
                             val exp_t: TypedNode = decl_c 
                                 |> check_annotation(member.second)
                             return self |> check_match_pattern(
@@ -278,13 +288,6 @@ pub fun Checker::check_match_pattern(
                                 pattern, List::concat(path, List::of(loc))
                             )
                         })
-                        |> List::collect()
-                    val final_type_args: List[Type] = t.t_args
-                        |> values()
-                        |> map[String, Type](|n| decl_c.type_args
-                            |> get(n)
-                            |> expect("inserted by 'make_full_t_args'")
-                        )
                         |> List::collect()
                     return TypedNode(
                         ast::Variant::StructInit(ast::PathInvocation(
@@ -321,11 +324,21 @@ pub fun Checker::check_match_pattern(
                             enum_path, member_name, node.source, s.node.source
                         ))
                     }
+                    val final_type_args: List[Type] = t.t_args
+                        |> values()
+                        |> map[String, Type](|n| decl_c.type_args
+                            |> get(n)
+                            |> expect("inserted by 'make_full_t_args'")
+                        )
+                        |> List::collect()
+                    val instance: SymbolInstance 
+                        = SymbolInstance(enum_path, final_type_args)
                     val args_t: List[TypedNode] = member 
                         |> and_then[Pair[String, UntypedNode], TypedNode](|m|
                             args |> get(0) |> map[UntypedNode, TypedNode](|a| {
-                                val loc: PatternLoc 
-                                    = PatternLoc::EnumMember(member_name)
+                                val loc: PatternLoc = PatternLoc::EnumMember(Pair(
+                                    member_name, instance
+                                ))
                                 val exp_t: TypedNode = decl_c 
                                     |> check_annotation(m.second)
                                 return self |> check_match_pattern(
@@ -336,15 +349,10 @@ pub fun Checker::check_match_pattern(
                         )
                         |> as_seq()
                         |> List::collect()
-                    val final_type_args: List[Type] = t.t_args
-                        |> values()
-                        |> map[String, Type](|n| decl_c.type_args
-                            |> get(n)
-                            |> expect("inserted by 'make_full_t_args'")
-                        )
-                        |> List::collect()
                     val cond: Pair[List[PatternLoc], PatternCond[TypedNode]] 
-                        = Pair(path, PatternCond::EnumVariant(member_name))
+                        = Pair(path, PatternCond::EnumVariant(Pair(
+                            member_name, instance
+                        )))
                     pattern.conditions |> push(cond)
                     return TypedNode(
                         ast::Variant::EnumInit(ast::PathInvocation(

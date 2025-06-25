@@ -40,11 +40,11 @@ pub struct MatchPattern[N](
     conditions: mut List[Pair[List[PatternLoc], PatternCond[N]]]
 )
 pub enum PatternLoc(
-    StructMember: String,
-    EnumMember: String
+    StructMember: Pair[String, types::SymbolInstance],
+    EnumMember: Pair[String, types::SymbolInstance]
 )
 pub enum PatternCond[N](
-    EnumVariant: String,
+    EnumVariant: Pair[String, types::SymbolInstance],
     Value: Pair[types::SymbolInstance, N]
 )
 pub struct PatternCapture(

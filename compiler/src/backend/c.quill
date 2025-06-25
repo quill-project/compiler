@@ -492,6 +492,7 @@ pub struct Generator(
     closure_bodies: mut Box[String],
     next_closure_id: mut Box[Int],
     closure_destr: mut Map[Int, String],
+    next_match_id: mut Box[Int],
     messages: mut List[Message]
 )
 
@@ -501,7 +502,7 @@ pub fun Generator::new(table: SymbolTable, messages: mut List[Message]) -> mut G
         "", "", "",
         Map::empty(), Map::empty(), 
         table,
-        Box(0), Box(""), Box(0), Map::empty(),
+        Box(0), Box(""), Box(0), Map::empty(), Box(0),
         messages
     )
 
@@ -515,6 +516,7 @@ pub fun Generator::under(existing: Generator) -> mut Generator
         existing.table,
         existing.next_local_id, existing.closure_bodies, 
         existing.next_closure_id, existing.closure_destr,
+        existing-next_match_id,
         existing.messages
     )
 
@@ -613,6 +615,31 @@ pub fun Generator::output(self: Generator) -> String
     |> concat("ret:;\n")
     |> concat(self.end)
     |> concat("return ret_val;\n")
+
+// Emits the given expression after the given pattern path.
+pub fun emit_pattern_path(
+    from: String, path: List[ast::PatternLoc], gen: mut Generator
+) -> String {
+    if (path |> length()) == 0 { return from }
+    match path |> at(0) {
+        StructMember(Pair(member, i)) {
+            val instance: Triplet[TypedNode, Int, List[Type]] 
+                = find_instance_with(i.path, i.type_args, gen.table)
+            val layout: String = mangle_path(i.path, instance.second)
+            return "((_ *) (_)->data)->m__"
+                |> fmt(layout, from, "_", member)
+                |> emit_pattern_path(path |> slice_from(1), gen)
+        }
+        EnumMember(Pair(member, i)) {
+            val instance: Triplet[TypedNode, Int, List[Type]] 
+                = find_instance_with(i.path, i.type_args, gen.table)
+            val layout: String = mangle_path(i.path, instance.second)
+            return "((_ *) (_)->data)->value.m__"
+                |> fmt(layout, from, "_", member)
+                |> emit_pattern_path(path |> slice_from(1), gen)
+        }
+    }
+}
 
 // Emits a local statement as the equivalent C code.
 pub fun emit_statement(gen: mut Generator, node: TypedNode) {
@@ -716,10 +743,111 @@ pub fun emit_statement(gen: mut Generator, node: TypedNode) {
             gen |> emit_statement_list(body)
             gen |> in_body("}\n")
         }
-        Match(_) {
-            // just abuse the 🦆 out of 'goto'
-
-            // TODO!
+        Match(ast::Match(matched, branches)) {
+            val matched_v: String = gen |> alloc(matched.type)
+            gen |> emit_expression(matched, matched_v)
+            val branch_captures: mut List[Map[String, String]] = List::empty()
+            val branch_ids: mut List[Int] = List::empty()
+            branches |> indices() |> for_each(|branch_i| {
+                val branch: ast::MatchBranch[TypedNode] = branches 
+                    |> at(branch_i)
+                val capture_values: Map[String, String] = branch.captures
+                    |> entries()
+                    |> map[Pair[String, Pair[Type, Box[Bool]]], Pair[String, String]](|c| {
+                        return Pair(c.first, gen |> alloc(c.second.first))
+                    })
+                    |> Map::collect()
+                val branch_id: Int = gen.next_match_id.value
+                gen.next_match_id.value = branch_id + 1
+                branch_captures |> push(capture_values)
+                branch_ids |> push(branch_id)
+                branch.patterns |> values() |> for_each(|pattern| {
+                    val emit_cond: Fun(Pair[List[PatternLoc], PatternCond[N]]) -> String = |cond| {
+                        val v: String = emit_pattern_path(
+                            matched_v, cond.first, gen
+                        )
+                        match cond.second {
+                            EnumVariant(Pair(name, i)) {
+                                val instance: Triplet[TypedNode, Int, List[Type]] 
+                                    = find_instance_with(i.path, i.type_args, gen.table)
+                                val layout: String = mangle_path(i.path, instance.second)
+                                val enum_members: Fun() -> List[Pair[String, TypedNode]] = || {
+                                    match instance.first.value {
+                                        Enumeration(ast::CustomType(
+                                            _, _, _, mems
+                                        )) { return mems }
+                                        _ { return List::empty() }
+                                    }
+                                }
+                                val members = enum_members()
+                                val member_i: String 
+                                    = members |> indices()
+                                    |> find(|i (members |> at(i)).first == name)
+                                    |> map(Int::as_string)
+                                    |> unwrap_or("INVALID")
+                                return "(((_ *) (_)->data)->tag == _)"
+                                    |> fmt(layout, v, member_i)
+                            }
+                            Value(Pair(eq_i, value)) {
+                                val eq_instance: Triplet[TypedNode, Int, List[Type]] 
+                                    = find_instance_with(eq_i.path, eq_i.type_args, gen.table)
+                                val eq_name: String = mangle_path(eq_i.path, eq_instance.second)
+                                val v_cmp: String = gen |> alloc(value.type)
+                                gen |> emit_expression(value, v_cmp)
+                                return "_(_, _)"
+                                    |> fmt(eq_name, v, v_cmp)
+                            }
+                        }
+                    }
+                    val conds: String = pattern.conditions
+                        |> values()
+                        |> map(emit_cond)
+                        |> join("&&")
+                    gen |> in_body("if(_) {\n" |> fmt(conds))
+                    pattern.captures |> values() |> for_each(|capture| {
+                        if capture.name |> is_none() { return unit }
+                        val name: String = capture.name 
+                            |> expect("filtered out above")
+                        val dest: String = capture_values 
+                            |> get(name)
+                            |> expect("capture exists within branch captures")
+                        val v: String = emit_pattern_path(
+                            matched_v, capture.path, gen
+                        )
+                        gen |> assign_to(dest, capture.type, v)
+                    })
+                    gen |> in_body("goto branch__;\n" |> fmt(
+                        "_", branch_id |> as_string()
+                    ))
+                    gen |> in_body("}\n")
+                })
+            })
+            val end_id: Int = gen.next_match_id.value
+            gen.next_match_id.value = end_id + 1
+            gen |> in_body("goto end__;\n" |> fmt("_", end_id |> as_string()))
+            branches |> indices() |> for_each(|branch_i| {
+                val branch: ast::MatchBranch[TypedNode] = branches 
+                    |> at(branch_i)
+                val capture_values: Map[String, String] = branch_captures
+                    |> at(branch_i)
+                val branch_id: Int = branch_ids |> at(branch_i)
+                gen |> in_body("branch__:;\n" |> fmt(
+                    "_", branch_id |> as_string()
+                ))
+                branch.captures |> entries() |> for_each(|c| {
+                    val value: String = capture_values |> get(c.first)
+                        |> expect("originates from branch capture map")
+                    val dest: String = gen |> alloc_named(
+                        c.first, c.second.first, c.second.second.value
+                    )
+                    gen |> assign_to(dest, c.second.first, value)
+                })
+                gen |> emit_statement_list(branch.body)
+                gen |> in_body("goto end__;\n" |> fmt(
+                    "_", end_id |> as_string()
+                ))
+            })
+            gen |> in_body("end__:;\n" |> fmt("_", end_id |> as_string()))
         }
         Invalid { 
             println("encountered invalid AST node!")
