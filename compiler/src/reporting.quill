@@ -549,14 +549,14 @@ pub fun Message::unmatched_values(vals: List[checker::Pattern], at: Source) -> M
 }
 
 pub fun Message::missing_operator_impl(
-    name: String, operands: List[types::TypedNode], at: Source
+    name: String, operands: List[types::Type], at: Source
 ) -> Message = Message(List::of(
         Message::Section::Error(
             "Operator '_' is not defined for operands _" |> fmt(
                 name,
                 operands |> values()
-                    |> map[types::TypedNode, String](|o| "'_'"
-                        |> fmt(types::Type::as_string(o.type))
+                    |> map[types::TypedNode, String](|t| "'_'"
+                        |> fmt(types::Type::as_string(t))
                     )
                     |> join(", ")
             )
@@ -579,6 +579,18 @@ pub fun Message::cyclic_global_variables(
         Message::Section::Error(
             "The global variable '_' depends on itself"
                 |> fmt(path |> values() |> join("::"))
+        ),
+        Message::Section::Code(at)
+    ))
+
+pub fun Message::invalid_match_eq_ret(
+    path: List[String], ret_t: types::Type, at: Source
+) -> Message = Message(List::of(
+        Message::Section::Error(
+            "'match' requires '_' to have return type 'Bool', but got '_'" |> fmt(
+                path |> values() |> join("::"), 
+                types::Type::as_string(ret_t)
+            )
         ),
         Message::Section::Code(at)
     ))

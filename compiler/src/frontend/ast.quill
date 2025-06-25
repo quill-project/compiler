@@ -45,7 +45,7 @@ pub enum PatternLoc(
 )
 pub enum PatternCond[N](
     EnumVariant: String,
-    Value: N
+    Value: Pair[types::SymbolInstance, N]
 )
 pub struct PatternCapture(
     name: Option[String], path: List[PatternLoc], type: types::Type

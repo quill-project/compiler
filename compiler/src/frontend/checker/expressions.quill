@@ -1051,14 +1051,10 @@ pub fun Checker::check_piped_invocation(
 // Outputs a 'NamedCall' typed AST node.
 pub fun Checker::infer_overloaded_operator(
     self: mut Checker, node: UntypedNode, name: String,
-    operands: List[UntypedNode]
+    operands: List[TypedNode], operand_types: List[Type]
 ) -> TypedNode {
-    val ch_operands: List[TypedNode] 
-        = operands |> values()
-        |> map[UntypedNode, TypedNode](|n| self |> infer(n))
-        |> List::collect()
-    val operand_c: Int = ch_operands |> length()
-    val receiver: Type = (ch_operands |> at(0)).type
+    val operand_c: Int = operand_types |> length()
+    val receiver: Type = operand_types |> at(0)
     if receiver.value == Variant::Invalid {
         return TypedNode(
             ast::Variant::Invalid, node.source,
@@ -1068,7 +1064,7 @@ pub fun Checker::infer_overloaded_operator(
     val path: List[String] = receiver |> as_path() |> concat(List::of(name))
     val missing_impl: Fun() -> TypedNode = || {
         self.messages |> push(
-            Message::missing_operator_impl(name, ch_operands, node.source)
+            Message::missing_operator_impl(name, operand_types, node.source)
         )
         return TypedNode(
             ast::Variant::Invalid, node.source,
@@ -1100,7 +1096,7 @@ pub fun Checker::infer_overloaded_operator(
                     List::empty(), List::empty() 
                 )
                 range(0, operand_c) |> for_each(|i| {
-                    val got_t: Type = (ch_operands |> at(i)).type
+                    val got_t: Type = operand_types |> at(i)
                     infer_anno_t_args(
                         symbol_c, 
                         (args |> at(i)).second, 
@@ -1131,7 +1127,7 @@ pub fun Checker::infer_overloaded_operator(
                     )
                 return TypedNode(
                     ast::Variant::NamedCall(ast::PathInvocation(
-                        path, ch_operands, 
+                        path, operands, 
                         Option::Some(wrap_types_nodes(final_type_args))
                     )),
                     node.source, result_type
@@ -1158,8 +1154,16 @@ pub fun Checker::check(
     }
     val check_overloaded_operator: Fun(String, List[UntypedNode]) -> TypedNode 
     = |name, operands| {
+        val ch_operands: List[TypedNode] 
+            = operands |> values()
+            |> map[UntypedNode, TypedNode](|n| self |> infer(n))
+            |> List::collect()
+        val operand_types: List[Type]
+            = ch_operands |> values()
+            |> map[TypedNode, Type](|t| t.type)
+            |> List::collect()
         val checked: TypedNode = self 
-            |> infer_overloaded_operator(node, name, operands)
+            |> infer_overloaded_operator(node, name, ch_operands, operand_types)
         if Type::matches(exp, checked.type) { return checked }
         self.messages |> push(
             Message::unexpected_type(exp, checked.type)
@@ -1326,6 +1330,19 @@ pub fun Checker::check(
 pub fun Checker::infer(
     self: mut Checker, node: UntypedNode
 ) -> TypedNode {
+    val infer_overloaded: Fun(String, List[UntypedNode]) -> TypedNode 
+    = |op, operands| {
+        val ch_operands: List[TypedNode] 
+            = operands |> values()
+            |> map[UntypedNode, TypedNode](|n| self |> infer(n))
+            |> List::collect()
+        val operand_types: List[Type]
+            = ch_operands |> values()
+            |> map[TypedNode, Type](|t| t.type)
+            |> List::collect()
+        return self 
+            |> infer_overloaded_operator(node, op, ch_operands, operand_types)
+    }
     match node.value {
         PathRef(ast::PathRef(path, t_args)) {
             return self |> check_path_ref(node, path, t_args, Option::None)
@@ -1364,56 +1381,43 @@ pub fun Checker::infer(
             return self |> check_closure(node, c, List::empty(), Option::None)
         }
         Add(Pair(lhs, rhs)) {
-            return self 
-                |> infer_overloaded_operator(node, "plus", List::of(lhs, rhs))
+            return infer_overloaded("plus", List::of(lhs, rhs))
         }
         Subtract(Pair(lhs, rhs)) {
-            return self 
-                |> infer_overloaded_operator(node, "minus", List::of(lhs, rhs))
+            return infer_overloaded("minus", List::of(lhs, rhs))
         }
         Multiply(Pair(lhs, rhs)) {
-            return self 
-                |> infer_overloaded_operator(node, "times", List::of(lhs, rhs))
+            return infer_overloaded("times", List::of(lhs, rhs))
         }
         Divide(Pair(lhs, rhs)) {
-            return self 
-                |> infer_overloaded_operator(node, "div", List::of(lhs, rhs))
+            return infer_overloaded("div", List::of(lhs, rhs))
         }
         Remainder(Pair(lhs, rhs)) {
-            return self
-                |> infer_overloaded_operator(node, "rem", List::of(lhs, rhs))
+            return infer_overloaded("rem", List::of(lhs, rhs))
         }
         LessThan(Pair(lhs, rhs)) {
-            return self 
-                |> infer_overloaded_operator(node, "lt", List::of(lhs, rhs))
+            return infer_overloaded("lt", List::of(lhs, rhs))
         }
         GreaterThan(Pair(lhs, rhs)) {
-            return self 
-                |> infer_overloaded_operator(node, "gt", List::of(lhs, rhs))
+            return infer_overloaded("gt", List::of(lhs, rhs))
         }
         LessThanEqual(Pair(lhs, rhs)) {
-            return self 
-                |> infer_overloaded_operator(node, "lt_eq", List::of(lhs, rhs))
+            return infer_overloaded("lt_eq", List::of(lhs, rhs))
         }
         GreaterThanEqual(Pair(lhs, rhs)) {
-            return self 
-                |> infer_overloaded_operator(node, "gt_eq", List::of(lhs, rhs))
+            return infer_overloaded("gt_eq", List::of(lhs, rhs))
         }
         Equal(Pair(lhs, rhs)) {
-            return self 
-                |> infer_overloaded_operator(node, "eq", List::of(lhs, rhs))
+            return infer_overloaded("eq", List::of(lhs, rhs))
         }
         NotEqual(Pair(lhs, rhs)) {
-            return self 
-                |> infer_overloaded_operator(node, "not_eq", List::of(lhs, rhs))
+            return infer_overloaded("not_eq", List::of(lhs, rhs))
         }
         Negate(value) {
-            return self
-                |> infer_overloaded_operator(node, "u_minus", List::of(value))
+            return infer_overloaded("u_minus", List::of(value))
         }
         Not(value) {
-            return self
-                |> infer_overloaded_operator(node, "not", List::of(value))
+            return infer_overloaded("not", List::of(value))
         }
         Member(Pair(accessed, mem_name)) {
             return self |> check_member(node, accessed, mem_name)

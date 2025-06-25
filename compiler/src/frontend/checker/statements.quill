@@ -119,9 +119,32 @@ pub fun Checker::check_match_pattern(
         |> is_some()
     val default_check: Fun() -> TypedNode = || {
         val typed: TypedNode = self |> check(node, exp)
-        val cond: Pair[List[PatternLoc], PatternCond[TypedNode]] 
-            = Pair(path, PatternCond::Value(typed))
-        pattern.conditions |> push(cond)
+        val comp_call: TypedNode = self |> infer_overloaded_operator(
+            node, "eq", List::empty(), List::of(exp.type, typed.type)
+        )
+        match comp_call.value {
+            NamedCall(ast::PathInvocation(eq_path, _, eq_t_args)) {
+                match comp_call.type.value {
+                    Boolean {}
+                    _ { self.messages |> push(Message::invalid_match_eq_ret(
+                        eq_path, comp_call.type, node.source
+                    )) }
+                }
+                val t_args: List[Type] = eq_t_args
+                    |> unwrap_or(List::empty())
+                    |> values()
+                    |> map[TypedNode, Type](|t| t.type)
+                    |> List::collect()
+                val instance: SymbolInstance = SymbolInstance(eq_path, t_args)
+                val cond: Pair[List[PatternLoc], PatternCond[TypedNode]] 
+                    = Pair(path, PatternCond::Value(Pair(instance, typed)))
+                pattern.conditions |> push(cond)
+            }
+            Invalid {}
+            _ {
+                return panic("'infer_overloaded_operator' returned non-call node")
+            }
+        }
         return typed
     }
     match node.value {
@@ -138,7 +161,8 @@ pub fun Checker::check_match_pattern(
                     )),
                     node.source
                 )
-                return self |> check_match_pattern(repl, exp, pattern, path)
+                return self 
+                    |> check_match_pattern(repl, exp, pattern, path)
             }
             val local: Option[Variable] = self |> find_variable(name)
             if local |> is_none() {
@@ -300,6 +324,9 @@ pub fun Checker::check_match_pattern(
                             |> expect("inserted by 'make_full_t_args'")
                         )
                         |> List::collect()
+                    val cond: Pair[List[PatternLoc], PatternCond[TypedNode]] 
+                        = Pair(path, PatternCond::EnumVariant(member_name))
+                    pattern.conditions |> push(cond)
                     return TypedNode(
                         ast::Variant::EnumInit(ast::PathInvocation(
                             List::concat(enum_path, List::of(member_name)), 
