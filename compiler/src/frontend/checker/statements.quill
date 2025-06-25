@@ -120,7 +120,7 @@ pub fun Checker::check_match_pattern(
     val default_check: Fun() -> TypedNode = || {
         val typed: TypedNode = self |> check(node, exp)
         val comp_call: TypedNode = self |> infer_overloaded_operator(
-            node, "eq", List::empty(), List::of(exp.type, typed.type)
+            node, "eq", List::empty(), List::of(exp, typed.type)
         )
         match comp_call.value {
             NamedCall(ast::PathInvocation(eq_path, _, eq_t_args)) {

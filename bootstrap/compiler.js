@@ -3127,13 +3127,7 @@ function quill$$eq(a, b) {
         };
     }
 
-    function manglePath(path, source, state) {
-        if(!path) {
-            throw message.from(
-                message.error(`Path missing ('manglePath' received undefined)`),
-                message.code(source)
-            );
-        }
+    function manglePath(path) {
         return path.split("::").join("$");
     }
 
@@ -3149,10 +3143,22 @@ function quill$$eq(a, b) {
                     state.scope().output += `${into} = ${value};\n`;
                     return into;
                 }
-                let r = manglePath(node.fullPath, node, state);
                 const s = state.checker.symbols[node.fullPath];
+                if(!node.fullPath) {
+                    throw message.from(
+                        message.error(`Path missing on AST node`),
+                        message.code(node)
+                    );
+                }
+                let r = manglePath(node.fullPath);
                 if(s.node.type === NodeType.Function) {
                     const inst = s.instances[node.instanceKey];
+                    if(!inst) {
+                        throw message.from(
+                            message.error(`Instance ${node.instanceKey} of ${node.fullPath} not found`),
+                            message.code(node)
+                        );
+                    }
                     r += `$$${inst.instanceI}`;
                 }
                 if(into === null) { return r; }
@@ -3291,7 +3297,7 @@ function quill$$eq(a, b) {
                 if(node.isExternal) { return null; }
                 if(state.isBase()) {
                     const value = generateCode(node.value, state);
-                    state.scope().output += `let ${manglePath(node.fullPath, node, state)} = ${value};\n`;
+                    state.scope().output += `let ${manglePath(node.fullPath)} = ${value};\n`;
                 } else {
                     const to = state.alloc();
                     const value = generateCode(node.value, state);
@@ -3475,7 +3481,7 @@ function quill$$eq(a, b) {
                             impl = "\n" + vars + body;
                         }
                         state.scope().output
-                            += `function ${manglePath(node.fullPath, node, state)}`
+                            += `function ${manglePath(node.fullPath)}`
                             + `$$${inst.instanceI}`
                             + `(${args}) {`
                             + impl

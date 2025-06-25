@@ -549,15 +549,13 @@ pub fun Message::unmatched_values(vals: List[checker::Pattern], at: Source) -> M
 }
 
 pub fun Message::missing_operator_impl(
-    name: String, operands: List[types::Type], at: Source
+    name: String, operands: List[Type], at: Source
 ) -> Message = Message(List::of(
         Message::Section::Error(
             "Operator '_' is not defined for operands _" |> fmt(
                 name,
                 operands |> values()
-                    |> map[types::TypedNode, String](|t| "'_'"
-                        |> fmt(types::Type::as_string(t))
-                    )
+                    |> map[Type, String](|t| "'_'" |> fmt(Type::as_string(t)))
                     |> join(", ")
             )
         ),
@@ -566,7 +564,8 @@ pub fun Message::missing_operator_impl(
             "To implement it, a function taking _ argument_ must be defined under the path '_::_'" |> fmt(
                 operands |> length() |> as_string(),
                 if (operands |> length()) != 1 { "s" } else { "" },
-                types::Type::as_path((operands |> at(0)).type)
+                operands |> at(0) 
+                    |> Type::as_path()
                     |> values() |> join("::"), 
                 name
             )
