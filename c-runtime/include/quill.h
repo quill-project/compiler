@@ -91,9 +91,6 @@ void quill_println(quill_string_t line);
 void quill_panic(quill_string_t reason);
 
 
-// #include <stdio.h>
-// #include <inttypes.h>
-
 static quill_alloc_t *quill_malloc(size_t n, quill_destructor_t destructor) {
     if(n == 0) { return NULL; }
     quill_alloc_t *alloc = malloc(sizeof(quill_alloc_t) + n);
@@ -107,14 +104,12 @@ static quill_alloc_t *quill_malloc(size_t n, quill_destructor_t destructor) {
     }
     alloc->rc = 1;
     alloc->destructor = destructor;
-    // printf("%p created\n", alloc);
     return alloc;
 }
 
 static void quill_rc_add(quill_alloc_t *alloc) {
     if(alloc == NULL) { return; }
     alloc->rc += 1;
-    // printf("%p rc++ (now %" PRIu64 ")\n", alloc, alloc->rc);
 }
 
 static void quill_unit_rc_add(quill_unit_t v) { (void) v; }
@@ -126,17 +121,11 @@ static void quill_closure_rc_add(quill_closure_t v) { quill_rc_add(v.alloc); }
 
 static void quill_rc_dec(quill_alloc_t *alloc) {
     if(alloc == NULL) { return; }
-    // if(alloc->rc == 0) {
-    //     printf("%p rc-- USE AFTER FREE\n", alloc);
-    //     *((int* ) NULL) = 69;
-    // }
     alloc->rc -= 1;
-    // printf("%p rc-- (now %" PRIu64 ")\n", alloc, alloc->rc);
     if(alloc->rc > 0) { return; }
     quill_destructor_t destructor = alloc->destructor;
     if(destructor != NULL) { destructor(alloc); }
     free(alloc);
-    // printf("%p destroyed\n", alloc);
 }
 
 static void quill_unit_rc_dec(quill_unit_t v) { (void) v; }
