@@ -7,7 +7,7 @@ pub fun read_dir_rec(path: String) -> List[String]
     = fs::read_dir(path) 
     |> unwrap()
     |> values()
-    |> map(|name| {
+    |> map[String, List[String]](|name| {
         val full: String = fs::path::join(path, name)
         return if fs::is_dir(full) { read_dir_rec(full) }
             else { List::of(full) }
@@ -26,7 +26,7 @@ val EXT_SOURCE_DIRS: List[String] = List::of(
     "os/src-c"
 )
 val ENTRY_POINT: String = "quill::cli::main"
-val OUTPUT_PATH: String = "output.c"
+val OUTPUT_PATH: String = "bootstrap/build.c"
 
 use quill::*
 
@@ -44,7 +44,7 @@ fun main() {
     // parse all source files
     val nodes: List[ast::UntypedNode] = sources
         |> entries()
-        |> map(|s| {
+        |> map[Pair[String, String], List[ast::UntypedNode]](|s| {
             val tokens: mut Stream[token::Token]
                 = lexer::tokenize(s.first, s.second, messages)
             val parser = parser::Parser::from(tokens, messages)
@@ -92,7 +92,7 @@ fun main() {
         |> unwrap_or_else(List::empty)
     val ext_sources: String = ext_source_paths
         |> values()
-        |> map(|path| fs::read_file(path) |> unwrap())
+        |> map[String, String](|path| fs::read_file(path) |> unwrap())
         |> join("")
     ext_sources |> concat(output) 
         |> fs::write_file(OUTPUT_PATH) 

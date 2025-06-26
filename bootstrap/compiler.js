@@ -3375,6 +3375,12 @@ function quill$$eq(a, b) {
                             }
                         };
                         out += `if(`;
+                        if(pattern.conditions === undefined) {
+                            throw message.from(
+                                message.error(`Branch [${branchI}] pattern conditions undefined`),
+                                message.code(node)
+                            );
+                        }
                         if(pattern.conditions.length >= 1) {
                             for(const condI in pattern.conditions) {
                                 if(condI > 0) { out += " && "; }

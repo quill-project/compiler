@@ -13,14 +13,11 @@ use quill::ast::UntypedNode
 // checker to be of type 'Int'.
 fun infer_anno_t_args(
     decl_c: mut Checker,
+    unknown: mut Set[String],
     anno: UntypedNode,
     given: Type,
     combination: Fun(Type, Type) -> Option[Type]
-) -> Bool {
-    match given.value {
-        Invalid { return false }
-        _ {}
-    }
+) {
     match anno.value {
         TypeRef(Pair(_, ast::PathRef(exp_path, exp_t_args))) {
             val exp_t_arg_c: Int = exp_t_args
@@ -30,33 +27,35 @@ fun infer_anno_t_args(
                 && (decl_c.type_args |> has(exp_path |> at(0)))
             if is_t_arg {
                 val arg_name: String = exp_path |> at(0)
-                return decl_c.type_args 
+                val existing: Type = decl_c.type_args 
                     |> get(arg_name)
                     |> expect("branch depends on map to have type")
-                    |> combination(given)
-                    |> map[Type, Unit](|t| {
+                match combination(existing, given) {
+                    Some(t) {
                         decl_c.type_args |> set(arg_name, t)
-                    })
-                    |> is_some()
+                        unknown |> remove(arg_name)
+                    }
+                    _ {}
+                }
             }
             match given.value {
                 Struct(Pair(_, given_t_args)) |
                 Enum(Pair(_, given_t_args)) {
                     val got_t_arg_c: Int = given_t_args |> length()
-                    if exp_t_arg_c != got_t_arg_c { return false }
-                    return given_t_args |> indices() |> fold(true, |acc, i|
+                    if exp_t_arg_c != got_t_arg_c { return unit }
+                    given_t_args |> indices() |> for_each(|i|
                         infer_anno_t_args(
-                            decl_c, 
+                            decl_c, unknown,
                             exp_t_args |> expect("length > 0") |> at(i), 
                             given_t_args |> at(i),
                             combination
-                        ) && acc
+                        )
                     )
                 }
                 List(given_t_arg) {
-                    if exp_t_arg_c != 1 { return false }
-                    return infer_anno_t_args(
-                        decl_c,
+                    if exp_t_arg_c == 0 { return unit }
+                    infer_anno_t_args(
+                        decl_c, unknown,
                         exp_t_args |> expect("length == 0") |> at(0),
                         given_t_arg,
                         combination
@@ -70,20 +69,21 @@ fun infer_anno_t_args(
                 Variant::Function(Pair(got_args_t, got_ret_t)) {
                     val exp_arg_c: Int = exp_args_t |> length()
                     val got_arg_c: Int = got_args_t |> length()
-                    if exp_arg_c != got_arg_c { return false }
-                    val args: Bool = got_args_t |> indices() |> fold(true, |acc, i|
+                    if exp_arg_c != got_arg_c { return unit }
+                    got_args_t |> indices() |> for_each(|i|
                         infer_anno_t_args(
-                            decl_c, exp_args_t |> at(i), got_args_t |> at(i),
+                            decl_c, unknown,
+                            exp_args_t |> at(i), got_args_t |> at(i),
                             combination
-                        ) && acc
+                        )
                     )
                     match exp_ret_t {
                         Some(e_ret_t) {
-                            return infer_anno_t_args(
-                                decl_c, e_ret_t, got_ret_t, combination
-                            ) && args
+                            infer_anno_t_args(
+                                decl_c, unknown, e_ret_t, got_ret_t, combination
+                            )
                         }
-                        None { return args }
+                        None {}
                     }
                 }
                 _ {}
@@ -91,7 +91,6 @@ fun infer_anno_t_args(
         }
         _ {}
     }
-    return true
 }
 
 // Given a call site checker state, a list of value nodes, an optional
@@ -112,6 +111,62 @@ fun infer_call_t_args(
     exp_arg_types: List[UntypedNode],
     exp_varargs: Bool,
     given_ret_type: UntypedNode
+) {
+    val get_va_list_type: Fun(UntypedNode) -> UntypedNode = |n| { match n.value {
+        TypeRef(Pair(_, ast::PathRef(List::of("std", "List"), o_e))) |
+        TypeRef(Pair(_, ast::PathRef(List::of("List"), o_e))) { return o_e
+            |> and_then[List[UntypedNode], UntypedNode](|l_e| l_e |> get(0))
+            |> unwrap_or_else(|| UntypedNode(ast::Variant::Invalid, n.source))
+        }
+        _ { return UntypedNode(ast::Variant::Invalid, n.source) }
+    } }
+    val unknown: mut Set[String] = decl_c.type_args 
+        |> keys()
+        |> Set::collect()
+    val og_messages: mut List[Message] = call_c.messages
+    val og_deps: mut List[SymbolInstance] = call_c.dependencies
+    call_c.messages = List::empty()
+    call_c.dependencies = List::empty()
+    val given_args_t: List[TypedNode] = given_args
+        |> values()
+        |> map[UntypedNode, TypedNode](|n| call_c |> infer(n))
+        |> List::collect()
+    call_c.messages = og_messages
+    call_c.dependencies = og_deps
+    exp_ret_type |> map[Type, Unit](|ret_t| {
+        infer_anno_t_args(decl_c, unknown, given_ret_type, ret_t, Type::meet)
+    })
+    val exp_arg_c: Int = exp_arg_types |> length()
+    given_args_t |> indices() |> for_each(|g_arg_i| {
+        val given_t: TypedNode = given_args_t |> at(g_arg_i)
+        val ei = Int::min(exp_arg_c - 1, g_arg_i)
+        val is_varargs = exp_varargs && g_arg_i >= exp_arg_c - 1
+        val raw_exp_arg_type: UntypedNode = exp_arg_types |> at(ei)
+        val exp_arg_type = if !is_varargs { raw_exp_arg_type }
+            else { get_va_list_type(raw_exp_arg_type) }
+        infer_anno_t_args(
+            decl_c, unknown, exp_arg_type, given_t.type, Type::join
+        )
+    })
+    unknown |> values() |> for_each(|t| {
+        call_c.messages |> push(
+            Message::failed_t_arg_inference(call_site, t)
+        )
+    })
+}
+
+// Given a call site checker state, a list of value nodes, 
+// a declaration site checker, a list of argument type annotations 
+// and a result value type annotation, this function
+// uses the type arguments already in the given declaration site checker
+// to check the given argument values against the expected types.
+fun check_call_args(
+    call_c: mut Checker,
+    given_args: List[UntypedNode],
+
+    decl_c: mut Checker,
+    exp_arg_types: List[UntypedNode],
+    exp_varargs: Bool
 ) -> List[TypedNode] {
     val get_va_list_type: Fun(UntypedNode) -> UntypedNode = |n| { match n.value {
         TypeRef(Pair(_, ast::PathRef(List::of("std", "List"), o_e))) |
@@ -121,74 +176,21 @@ fun infer_call_t_args(
         }
         _ { return UntypedNode(ast::Variant::Invalid, n.source) }
     } }
-    val old_call_msgs: mut List[Message] = call_c.messages
-    call_c.messages = List::empty()
-    exp_ret_type |> map[Type, Unit](|ret_t| {
-        infer_anno_t_args(decl_c, given_ret_type, ret_t, Type::meet)
-    })
     val exp_arg_c: Int = exp_arg_types |> length()
-    val checked_args: mut List[Option[TypedNode]] = given_args 
-        |> indices()
-        |> map[Int, Option[TypedNode]](|_| Option::None)
+    return given_args 
+        |> indices() 
+        |> map[Int, TypedNode](|g_arg_i| {
+            val given: UntypedNode = given_args |> at(g_arg_i)
+            val ei = Int::min(exp_arg_c - 1, g_arg_i)
+            val is_varargs = exp_varargs && g_arg_i >= exp_arg_c - 1
+            val raw_exp_arg_type: UntypedNode = exp_arg_types |> at(ei)
+            val exp_arg_type = if !is_varargs { raw_exp_arg_type }
+                else { get_va_list_type(raw_exp_arg_type) }
+            val exp_t: TypedNode = decl_c 
+                |> check_annotation(exp_arg_type)
+            return call_c |> check(given, exp_t.type)
+        })
         |> List::collect()
-    mut had_success: Bool = true
-    Stream::new[List[Option[TypedNode]]](|| checked_args)
-        |> take_while(|c| c |> values() |> any(|n| n |> is_none()))
-        |> take_while(|_| had_success)
-        |> for_each(|checked| {
-            had_success = false
-            call_c.messages = List::empty()
-            given_args |> indices()
-                |> filter(|i| checked_args |> at(i) |> is_none())
-                |> for_each(|i| {
-                    val arg_val: UntypedNode = given_args |> at(i)
-                    val ei = Int::min(exp_arg_c - 1, i)
-                    val is_varargs = exp_varargs && i >= exp_arg_c - 1
-                    val raw_exp_arg_type: UntypedNode = exp_arg_types |> at(ei)
-                    val exp_arg_type = if !is_varargs { raw_exp_arg_type }
-                        else { get_va_list_type(raw_exp_arg_type) }
-                    val exp_t: TypedNode = decl_c 
-                        |> check_annotation(exp_arg_type)
-                    val given_t: TypedNode = call_c 
-                        |> check(arg_val, exp_t.type)
-                    val success: Bool = infer_anno_t_args(
-                        decl_c, exp_arg_type, given_t.type, Type::join
-                    )
-                    if !success { return unit }
-                    checked_args |> set(i, Option::Some(given_t))
-                    had_success = true
-                })
-        })
-    val added_msgs: List[Message] = call_c.messages
-    call_c.messages = old_call_msgs
-    if !had_success {
-        added_msgs |> values() |> for_each(|m| { call_c.messages |> push(m) })
-    }
-    val unknown: mut Sequence[String] = decl_c.type_args 
-        |> entries()
-        |> filter(|t| {
-            match t.second.value {
-                Invalid { return true }
-                _ { return false }
-            }
-        })
-        |> map[Pair[String, Type], String](|t| t.first)
-    unknown |> for_each(|t| {
-        call_c.messages |> push(
-            Message::failed_t_arg_inference(call_site, t)
-        )
-    })
-    return given_args |> indices() |> map[Int, TypedNode](|i| {
-        val ei = Int::min(i, exp_arg_c - 1)
-        val is_varargs = exp_varargs && i >= exp_arg_c - 1
-        val raw_exp_arg_type: UntypedNode = exp_arg_types |> at(ei)
-        val exp_arg_type = if !is_varargs { raw_exp_arg_type }
-            else { get_va_list_type(raw_exp_arg_type) }
-        val exp_t: TypedNode = decl_c 
-            |> check_annotation(exp_arg_type)
-        val given_arg: UntypedNode = given_args |> at(i)
-        return call_c |> check(given_arg, exp_t.type)
-    }) |> List::collect()
 }
 
 // Ensures both of the given concrete types to be of the same numeric type.
@@ -588,9 +590,15 @@ pub fun Checker::check_path_ref(
                     self.symbols, s.context,
                     List::empty(), List::empty() 
                 )
-                val values_t: List[TypedNode] = infer_call_t_args(
-                    self, List::of(value), exp, node.source,
-                    enum_c, List::of(member), false, result
+                if t_args |> is_none() {
+                    infer_call_t_args(
+                        self, List::of(value), exp, node.source,
+                        enum_c, List::of(member), false, result
+                    )
+                }
+                val values_t: List[TypedNode] = check_call_args(
+                    self, List::of(value),
+                    enum_c, List::of(member), false
                 )
                 val final_type_args: List[Type] = t_t_args |> values()
                     |> map[String, Type](|t| enum_c.type_args 
@@ -707,9 +715,15 @@ pub fun Checker::check_invocation(
                     self.symbols, symbol.context,
                     List::empty(), List::empty() 
                 )
-                val args_t: List[TypedNode] = infer_call_t_args(
-                    self, final_args, exp, node.source,
-                    symbol_c, exp_arg_t, exp_varargs, got_ret_t
+                if t_args |> is_none() {
+                    infer_call_t_args(
+                        self, final_args, exp, node.source,
+                        symbol_c, exp_arg_t, exp_varargs, got_ret_t
+                    )
+                }
+                val args_t: List[TypedNode] = check_call_args(
+                    self, final_args,
+                    symbol_c, exp_arg_t, exp_varargs
                 )
                 val final_type_args: List[Type] = decl_t_args |> values()
                     |> map[String, Type](|t| symbol_c.type_args
@@ -962,7 +976,8 @@ pub fun Checker::check_piped_invocation(
                     List::empty(), List::empty() 
                 )
                 infer_anno_t_args(
-                    symbol_c, receiver_ann, receiver_t.type, Type::join
+                    symbol_c, Set::empty[String](), 
+                    receiver_ann, receiver_t.type, Type::join
                 )
                 val receiver_ann_t: TypedNode = symbol_c
                     |> check_annotation(receiver_ann)
@@ -1099,7 +1114,7 @@ pub fun Checker::infer_overloaded_operator(
                 range(0, operand_c) |> for_each(|i| {
                     val got_t: Type = operand_types |> at(i)
                     infer_anno_t_args(
-                        symbol_c, 
+                        symbol_c, Set::empty[String](),
                         (args |> at(i)).second, 
                         got_t, 
                         Type::join
