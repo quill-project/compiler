@@ -9,23 +9,70 @@ fun make_ok[T](value: T) -> Result[T, os::Error] {
     return Result::Ok(value)
 }
 
-val FILE_SEP: String = "" // TODO!
-val PATH_SEP: String = "" // TODO!
+ext fun get_file_sep() -> String = "
+    #ifdef _WIN32
+        return quill_string_from_static_cstr(\"\\\\\");
+    #else
+        return quill_string_from_static_cstr(\"/\");
+    #endif
+"
+val FILE_SEP: String = get_file_sep()
+
+ext fun get_path_sep() -> String = "
+    #ifdef _WIN32
+        return quill_string_from_static_cstr(\";\");
+    #else
+        return quill_string_from_static_cstr(\":\");
+    #endif
+"
+val PATH_SEP: String = get_path_sep()
 
 pub ext fun set_cwd(path: String) -> Result[Unit, os::Error] = "
-    // TODO!
+    #ifdef _WIN32
+        QUILL_FS_STRING_AS_WIN_WIDE(#var(path), path_w, #fun(make_err[String]))
+        if(!SetCurrentDirectoryW(path_w)) {
+            return #fun(make_err[Unit])((quill_int_t) EINVAL);
+        }
+    #else
+        QUILL_FS_STRING_AS_NT(#var(path), path_nt)
+        if(chdir(path_nt) != 1) {
+            return #fun(make_err[Unit])((quill_int_t) errno);
+        }
+    #endif
+    return #fun(make_ok[Unit])(QUILL_UNIT);
 "
+
+pub fun get_cwd() -> String 
+    = canonicalize(".") 
+    |> expect("Failed to canonicalize current path")
 
 pub ext fun canonicalize(path: String) -> Result[String, os::Error] = "
     // TODO!
 "
 
 pub ext fun file_exists(path: String) -> Bool = "
-    // TODO!
+    #ifdef _WIN32
+        QUILL_FS_STRING_AS_WIN_WIDE(#var(path), path_w, QUILL_FS_ERR_RET_FALSE)
+        return GetFileAttributesW(path_w) != INVALID_FILE_ATTRIBUTES;
+    #else
+        QUILL_FS_STRING_AS_NT(path, path_nt)
+        struct stat st;
+        return stat(path_nt, &st) != -1;
+    #endif
 "
 
 pub ext fun is_file(path: String) -> Bool = "
-    // TODO!
+    #ifdef _WIN32
+        QUILL_FS_STRING_AS_WIN_WIDE(#var(path), path_w, QUILL_FS_ERR_RET_FALSE)
+        DWORD attr = GetFileAttributesW(path_w);
+        if(attr == INVALID_FILE_ATTRIBUTES) { return QUILL_FALSE; }
+        return (attr & FILE_ATTRIBUTE_DIRECTORY) == 0;
+    #else
+        QUILL_FS_STRING_AS_NT(path, path_nt);
+        struct stat st;
+        if(stat(path_nt, &st) == -1) { return QUILL_FALSE; }
+        return S_ISREG(st.st_mode);
+    #endif
 "
 
 pub ext fun write_file(content: String, path: String) -> Result[Unit, os::Error] = "
@@ -35,45 +82,15 @@ pub ext fun write_file(content: String, path: String) -> Result[Unit, os::Error]
 pub ext fun read_file(path: String) -> Result[String, os::Error] = "
     FILE *f = NULL;
     #ifdef _WIN32
-        int path_w_length_bytes = MultiByteToWideChar(
-            CP_UTF8, 0, #var(path).data, (int) #var(path).length_bytes, NULL, 0
-        );
-        if(path_w_length_bytes == 0) {
-            return #fun(make_err[String])(EINVAL);
-        }
-        wchar_t *path_w = (wchar_t *) malloc(
-            sizeof(wchar_t) * (path_w_length_bytes + 1)
-        );
-        if(path_w == NULL) {
-            return #fun(make_err[String])(ENOMEM);
-        }
-        if(MultiByteToWideChar(
-            CP_UTF8, 0, #var(path).data, (int) #var(path).length_bytes, 
-            path_w, path_w_length_bytes
-        ) == 0) {
-            free(path_w);
-            return #fun(make_err[String])(EINVAL);
-        }
-        path_w[path_w_length_bytes] = L'\\0';
+        QUILL_FS_STRING_AS_WIN_WIDE(#var(path), path_w, #fun(make_err[String]))
         f = _wfopen(path_w, L\"rb\");
-        if(f == NULL) {
-            quill_int_t e = (quill_int_t) errno;
-            free(path_w);
-            return #fun(make_err[String])(e);
-        }
-        free(path_w);
     #else 
-        char *path_nt = malloc(#var(path).length_bytes + 1);
-        memcpy(path_nt, #var(path).data, #var(path).length_bytes);
-        path_nt[#var(path).length_bytes] = '\\0';
+        QUILL_FS_STRING_AS_NT(#var(path), path_nt)
         f = fopen(path_nt, \"rb\");
-        if(f == NULL) {
-            quill_int_t e = (quill_int_t) errno;
-            free(path_nt);
-            return #fun(make_err[String])(e);
-        }
-        free(path_nt);
     #endif
+    if(f == NULL) {
+        return #fun(make_err[String])((quill_int_t) errno);
+    }
     if(fseek(f, 0, SEEK_END) != 0) {
         quill_int_t e = (quill_int_t) errno;
         fclose(f);
@@ -111,11 +128,35 @@ pub ext fun read_file(path: String) -> Result[String, os::Error] = "
 "
 
 pub ext fun is_dir(path: String) -> Bool = "
-    // TODO!
+    #ifdef _WIN32
+        QUILL_FS_STRING_AS_WIN_WIDE(#var(path), path_w, QUILL_FS_ERR_RET_FALSE)
+        DWORD attr = GetFileAttributesW(path_w);
+        if(attr == INVALID_FILE_ATTRIBUTES) { return QUILL_FALSE; }
+        return (attr & FILE_ATTRIBUTE_DIRECTORY) != 0;
+    #else
+        QUILL_FS_STRING_AS_NT(path, path_nt);
+        struct stat st;
+        if(stat(path_nt, &st) == -1) { return QUILL_FALSE; }
+        return S_ISDIR(st.st_mode);
+    #endif
 "
 
 pub ext fun create_dir(path: String) -> Result[Unit, os::Error] = "
-    // TODO!
+    #ifdef _WIN32
+        QUILL_FS_STRING_AS_WIN_WIDE(#var(path), path_w, QUILL_FS_ERR_RET_FALSE)
+        if(!CreateDirectoryW(path_w, NULL)) {
+            return #fun(make_err[Unit])((quill_int_t) EINVAL);
+        }
+    #else
+        QUILL_FS_STRING_AS_NT(path, path_nt);
+        struct stat st;
+        if(stat(path_nt, &st) == -1) {
+            if(mkdir(path_nt, DEFAULT_DIR_MODE) == -1) {
+                return #fun(make_err[Unit])((quill_int_t) errno);
+            }
+        }
+    #endif
+    return #fun(make_ok[Unit])(QUILL_UNIT);
 "
 
 pub ext fun read_dir(path: String) -> Result[List[String], os::Error] = "
