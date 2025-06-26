@@ -18,6 +18,10 @@ fun infer_anno_t_args(
     given: Type,
     combination: Fun(Type, Type) -> Option[Type]
 ) {
+    match given.value {
+        Invalid { return unit }
+        _ {}
+    }
     match anno.value {
         TypeRef(Pair(_, ast::PathRef(exp_path, exp_t_args))) {
             val exp_t_arg_c: Int = exp_t_args
@@ -101,6 +105,8 @@ fun infer_anno_t_args(
 // For example, if 'add' is defined as a 'fun add[T](a: T, b: T) -> T',
 // then providing the arguments 'add(5, 10)' and expecting a result type of 'Int'
 // will result in 'T' being inferred to be 'Int'.
+// The function returns a list, where each element optionally contains the
+// already fully checked argument.
 fun infer_call_t_args(
     call_c: mut Checker,
     given_args: List[UntypedNode],
@@ -111,7 +117,7 @@ fun infer_call_t_args(
     exp_arg_types: List[UntypedNode],
     exp_varargs: Bool,
     given_ret_type: UntypedNode
-) {
+) -> List[Option[TypedNode]] {
     val get_va_list_type: Fun(UntypedNode) -> UntypedNode = |n| { match n.value {
         TypeRef(Pair(_, ast::PathRef(List::of("std", "List"), o_e))) |
         TypeRef(Pair(_, ast::PathRef(List::of("List"), o_e))) { return o_e
@@ -125,11 +131,23 @@ fun infer_call_t_args(
         |> Set::collect()
     val og_messages: mut List[Message] = call_c.messages
     val og_deps: mut List[SymbolInstance] = call_c.dependencies
-    call_c.messages = List::empty()
-    call_c.dependencies = List::empty()
+    val known_args_t: mut List[Option[TypedNode]] = List::empty()
     val given_args_t: List[TypedNode] = given_args
         |> values()
-        |> map[UntypedNode, TypedNode](|n| call_c |> infer(n))
+        |> map[UntypedNode, TypedNode](|n| {
+            call_c.messages = List::empty()
+            call_c.dependencies = List::empty()
+            val arg_t: TypedNode = call_c |> infer(n)
+            if call_c.messages |> is_empty() {
+                call_c.dependencies |> values() |> for_each(|d| {
+                    og_deps |> push(d)
+                })
+                known_args_t |> push(Option::Some(arg_t))
+            } else {
+                known_args_t |> push(Option::None)
+            }
+            return arg_t
+        })
         |> List::collect()
     call_c.messages = og_messages
     call_c.dependencies = og_deps
@@ -153,6 +171,7 @@ fun infer_call_t_args(
             Message::failed_t_arg_inference(call_site, t)
         )
     })
+    return known_args_t
 }
 
 // Given a call site checker state, a list of value nodes, 
@@ -163,6 +182,7 @@ fun infer_call_t_args(
 fun check_call_args(
     call_c: mut Checker,
     given_args: List[UntypedNode],
+    known_args: List[Option[TypedNode]],
 
     decl_c: mut Checker,
     exp_arg_types: List[UntypedNode],
@@ -180,7 +200,6 @@ fun check_call_args(
     return given_args 
         |> indices() 
         |> map[Int, TypedNode](|g_arg_i| {
-            val given: UntypedNode = given_args |> at(g_arg_i)
             val ei = Int::min(exp_arg_c - 1, g_arg_i)
             val is_varargs = exp_varargs && g_arg_i >= exp_arg_c - 1
             val raw_exp_arg_type: UntypedNode = exp_arg_types |> at(ei)
@@ -188,7 +207,20 @@ fun check_call_args(
                 else { get_va_list_type(raw_exp_arg_type) }
             val exp_t: TypedNode = decl_c 
                 |> check_annotation(exp_arg_type)
-            return call_c |> check(given, exp_t.type)
+            match known_args |> get(g_arg_i) |> flatten() {
+                Some(k) { 
+                    if !Type::matches(exp_t.type, k.type) {
+                        call_c.messages |> push(
+                            Message::unexpected_type(exp_t.type, k.type)
+                        )
+                    }
+                    return k 
+                }
+                _ {
+                    val given: UntypedNode = given_args |> at(g_arg_i)
+                    return call_c |> check(given, exp_t.type)
+                }
+            }
         })
         |> List::collect()
 }
@@ -590,14 +622,15 @@ pub fun Checker::check_path_ref(
                     self.symbols, s.context,
                     List::empty(), List::empty() 
                 )
+                mut inferred_args_t: List[Option[TypedNode]] = List::empty()
                 if t_args |> is_none() {
-                    infer_call_t_args(
+                    inferred_args_t = infer_call_t_args(
                         self, List::of(value), exp, node.source,
                         enum_c, List::of(member), false, result
                     )
                 }
                 val values_t: List[TypedNode] = check_call_args(
-                    self, List::of(value),
+                    self, List::of(value), inferred_args_t,
                     enum_c, List::of(member), false
                 )
                 val final_type_args: List[Type] = t_t_args |> values()
@@ -715,14 +748,15 @@ pub fun Checker::check_invocation(
                     self.symbols, symbol.context,
                     List::empty(), List::empty() 
                 )
+                mut inferred_args_t: List[Option[TypedNode]] = List::empty()
                 if t_args |> is_none() {
-                    infer_call_t_args(
+                    inferred_args_t = infer_call_t_args(
                         self, final_args, exp, node.source,
                         symbol_c, exp_arg_t, exp_varargs, got_ret_t
                     )
                 }
                 val args_t: List[TypedNode] = check_call_args(
-                    self, final_args,
+                    self, final_args, inferred_args_t,
                     symbol_c, exp_arg_t, exp_varargs
                 )
                 val final_type_args: List[Type] = decl_t_args |> values()
@@ -1393,6 +1427,11 @@ pub fun Checker::infer(
             if 0 != (c.args |> length()) {
                 self.messages |> push(
                     Message::insufficient_closure_context(node.source)
+                )
+                return TypedNode(
+                    ast::Variant::Invalid, 
+                    node.source, 
+                    Type(Variant::Invalid, !IS_MUTABLE, node.source)
                 )
             }
             return self |> check_closure(node, c, List::empty(), Option::None)
