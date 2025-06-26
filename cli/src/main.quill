@@ -3,13 +3,98 @@ mod quill::cli
 
 use os::fs
 
+pub fun read_dir_rec(path: String) -> List[String]
+    = fs::read_dir(path) 
+    |> unwrap()
+    |> values()
+    |> map(|name| {
+        val full: String = fs::path::join(path, name)
+        return if fs::is_dir(full) { read_dir_rec(full) }
+            else { List::of(full) }
+    })
+    |> reduce(List::concat)
+    |> unwrap_or(List::empty())
+
+val SOURCE_DIRS: List[String] = List::of(
+    "std-c/src",
+    "std-base/src",
+    "compiler/src",
+    "os/src",
+    "cli/src"
+)
+val EXT_SOURCE_DIRS: List[String] = List::of(
+    "os/src-c"
+)
+val ENTRY_POINT: String = "quill::cli::main"
+val OUTPUT_PATH: String = "output.c"
+
+use quill::*
+
 fun main() {
-    match fs::read_file("README.md") {
-        Ok(content) {
-            println(content)
-        }
-        Err(e) { 
-            println(e) 
-        }
+    val source_paths: List[String] = SOURCE_DIRS
+        |> values()
+        |> map(read_dir_rec)
+        |> reduce(List::concat)
+        |> unwrap_or_else(List::empty)
+    val sources: Map[String, String] = source_paths
+        |> values()
+        |> map(|path| Pair(path, fs::read_file(path) |> unwrap()))
+        |> Map::collect()
+    val messages: mut List[Message] = List::empty()
+    // parse all source files
+    val nodes: List[ast::UntypedNode] = sources
+        |> entries()
+        |> map(|s| {
+            val tokens: mut Stream[token::Token]
+                = lexer::tokenize(s.first, s.second, messages)
+            val parser = parser::Parser::from(tokens, messages)
+            return parser::parse_file(parser)
+        })
+        |> reduce(List::concat)
+        |> unwrap_or_else(List::empty)
+    // build a symbol table and check all symbols
+    val table = types::SymbolTable::from(nodes, messages)
+    val unchecked: mut List[types::SymbolInstance] 
+        = types::SymbolTable::base_instances(table)
+    Stream::new[mut List[types::SymbolInstance]](|| unchecked)
+        |> take_while(|q| (q |> length()) != 0)
+        |> for_each(|q| {
+            val i: types::SymbolInstance 
+                = q |> pop() 
+                |> expect("stream should've ended")
+            types::SymbolTable::check_symbol(table, i, q, messages)
+        })
+    // report messages and exit if has any
+    if messages |> values() |> any(Message::is_error) {
+        messages |> values() 
+            |> map[Message, String](|m| m |> display(sources) |> concat("\n")) 
+            |> for_each(println)
+        return unit
     }
+    // emit code
+    val output: String = codegen::c::emit(
+        table, 
+        ENTRY_POINT |> split("::") |> List::collect(), 
+        messages
+    )
+    // report messages and exit if has any
+    if messages |> values() |> any(Message::is_error) {
+        messages |> values() 
+            |> map[Message, String](|m| m |> display(sources) |> concat("\n")) 
+            |> for_each(println)
+        return unit
+    }
+    // write output
+    val ext_source_paths: List[String] = EXT_SOURCE_DIRS
+        |> values()
+        |> map(read_dir_rec)
+        |> reduce(List::concat)
+        |> unwrap_or_else(List::empty)
+    val ext_sources: String = ext_source_paths
+        |> values()
+        |> map(|path| fs::read_file(path) |> unwrap())
+        |> join("")
+    ext_sources |> concat(output) 
+        |> fs::write_file(OUTPUT_PATH) 
+        |> unwrap()
 }

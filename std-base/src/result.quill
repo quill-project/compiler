@@ -63,6 +63,13 @@ pub fun Result::or_else[O, I, E](self: Result[O, I], f: Fun(I) -> Result[O, E]) 
     }
 }
 
+pub fun Result::unwrap[O, E](self: Result[O, E]) -> O {
+    match self {
+        Ok(value) { return value }
+        Err(err) { return panic(E::as_string(err)) }
+    }
+}
+
 pub fun Result::expect[O, E](self: Result[O, E], reason: String) -> O {
     match self {
         Ok(value) { return value }

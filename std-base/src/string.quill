@@ -37,6 +37,16 @@ pub fun String::indices_rep(self: String) -> mut Stream[Int] {
         |> map(|i| i % (self |> length()))
 }
 
+pub fun String::indices_rev(self: String) -> mut Sequence[Int] {
+    mut i = (self |> length()) - 1
+    return Sequence::new[Int](|| {
+        if i < 0 { return Option::None }
+        val n: Int = i
+        i = i - 1
+        return Option::Some(n)
+    })
+}
+
 pub fun String::codes(self: String) -> mut Sequence[Int] = self
     |> chars()
     |> map(String::as_code_unchecked)
@@ -207,19 +217,31 @@ pub fun String::pad_end(self: String, tgt_len: Int, padding: String) -> String {
 }
 
 pub fun String::split(self: String, delim: String) -> mut Sequence[String] {
-    val l = self |> length()
     val dl = delim |> length()
     if dl == 0 {
         return panic("Attempt to split a string with an empty delimiter!")
     }
-    val splits = self |> find(delim)
-    mut anchor = 0
+    mut rem: String = self
+    mut ended: Bool = false
     return Sequence::new(|| {
-        if anchor > l { return Option::None }
-        val next = splits |> next() |> unwrap_or(l)
-        val r = self |> slice_unchecked(anchor, next)
-        anchor = next + dl
-        return Option::Some(r)
+        if ended { return Option::None }
+        val rem_before: String = rem
+        val rem_before_l: Int = rem |> length()
+        Stream::new[String](|| rem)
+            |> take_while(|r| (r |> length()) > 0)
+            |> take_until(|r| r |> starts_with(delim))
+            |> for_each(|r| {
+                rem = r |> slice_from(1)
+            })
+        val rem_l: Int = rem |> length()
+        val sliced_l: Int = rem_before_l - rem_l
+        val sliced: String = rem_before |> slice_to(sliced_l)
+        if rem_l > 0 {
+            rem = rem |> slice_from(dl)
+        } else {
+            ended = true
+        }
+        return Option::Some(sliced)
     })
 }
 
