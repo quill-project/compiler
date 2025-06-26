@@ -155,6 +155,7 @@ quill_string_t quill_string_from_points(
     uint32_t *points, quill_int_t length_points
 );
 quill_string_t quill_string_from_static_cstr(const char* cstr);
+quill_string_t quill_string_from_temp_cstr(const char *cstr);
 quill_string_t quill_string_from_int(quill_int_t i);
 quill_string_t quill_string_from_float(quill_float_t f);
 

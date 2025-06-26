@@ -2,6 +2,7 @@
 #include <quill.h>
 #include <stdio.h>
 #include <inttypes.h>
+#include <string.h>
 
 #define PRIqd PRId64 // quill_int_t
 #define PRIqu PRIu64 // quill_uint_t
@@ -114,7 +115,7 @@ quill_string_t quill_string_from_points(
     };
 }
 
-quill_string_t quill_string_from_static_cstr(const char* cstr) {
+quill_string_t quill_string_from_static_cstr(const char *cstr) {
     uint8_t *data = (uint8_t *) cstr;
     quill_int_t length_bytes = 0;
     quill_int_t length_points = 0;
@@ -130,6 +131,23 @@ quill_string_t quill_string_from_static_cstr(const char* cstr) {
         .length_bytes = length_bytes,
         .length_points = length_points
     };
+}
+
+quill_string_t quill_string_from_temp_cstr(const char *cstr) {
+    uint8_t *data = (uint8_t *) cstr;
+    quill_string_t res;
+    res.length_bytes = 0;
+    res.length_points = 0;
+    for(;;) {
+        uint8_t current = data[res.length_bytes];
+        if(current == '\0') { break; }
+        res.length_bytes += quill_point_decode_length(current);
+        res.length_points += 1;
+    }
+    res.alloc = quill_malloc(sizeof(uint8_t) * res.length_bytes, NULL);
+    res.data = res.alloc->data;
+    memcpy(res.alloc->data, data, sizeof(uint8_t) * res.length_bytes);
+    return res;
 }
 
 quill_string_t quill_string_from_int(quill_int_t i) {

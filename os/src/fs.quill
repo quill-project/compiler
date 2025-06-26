@@ -1,0 +1,123 @@
+
+mod os::fs
+
+fun make_err[T](code: Int) -> Result[T, os::Error] {
+    return Result::Err(os::Error::unsafe_from_code(code))
+}
+
+fun make_ok[T](value: T) -> Result[T, os::Error] {
+    return Result::Ok(value)
+}
+
+val FILE_SEP: String = "" // TODO!
+val PATH_SEP: String = "" // TODO!
+
+pub ext fun set_cwd(path: String) -> Result[Unit, os::Error] = "
+    // TODO!
+"
+
+pub ext fun canonicalize(path: String) -> Result[String, os::Error] = "
+    // TODO!
+"
+
+pub ext fun file_exists(path: String) -> Bool = "
+    // TODO!
+"
+
+pub ext fun is_file(path: String) -> Bool = "
+    // TODO!
+"
+
+pub ext fun write_file(content: String, path: String) -> Result[Unit, os::Error] = "
+    // TODO!
+"
+
+pub ext fun read_file(path: String) -> Result[String, os::Error] = "
+    FILE *f = NULL;
+    #ifdef _WIN32
+        int path_w_length_bytes = MultiByteToWideChar(
+            CP_UTF8, 0, #var(path).data, (int) #var(path).length_bytes, NULL, 0
+        );
+        if(path_w_length_bytes == 0) {
+            return #fun(make_err[String])(EINVAL);
+        }
+        wchar_t *path_w = (wchar_t *) malloc(
+            sizeof(wchar_t) * (path_w_length_bytes + 1)
+        );
+        if(path_w == NULL) {
+            return #fun(make_err[String])(ENOMEM);
+        }
+        if(MultiByteToWideChar(
+            CP_UTF8, 0, #var(path).data, (int) #var(path).length_bytes, 
+            path_w, path_w_length_bytes
+        ) == 0) {
+            free(path_w);
+            return #fun(make_err[String])(EINVAL);
+        }
+        path_w[path_w_length_bytes] = L'\\0';
+        f = _wfopen(path_w, L\"rb\");
+        if(f == NULL) {
+            quill_int_t e = (quill_int_t) errno;
+            free(path_w);
+            return #fun(make_err[String])(e);
+        }
+        free(path_w);
+    #else 
+        char *path_nt = malloc(#var(path).length_bytes + 1);
+        memcpy(path_nt, #var(path).data, #var(path).length_bytes);
+        path_nt[#var(path).length_bytes] = '\\0';
+        f = fopen(path_nt, \"rb\");
+        if(f == NULL) {
+            quill_int_t e = (quill_int_t) errno;
+            free(path_nt);
+            return #fun(make_err[String])(e);
+        }
+        free(path_nt);
+    #endif
+    if(fseek(f, 0, SEEK_END) != 0) {
+        quill_int_t e = (quill_int_t) errno;
+        fclose(f);
+        return #fun(make_err[String])(e);
+    }
+    quill_string_t res;
+    res.length_bytes = (quill_int_t) ftell(f);
+    if(res.length_bytes < 0) {
+        return #fun(make_err[String])((quill_int_t) errno);
+    }
+    res.length_points = 0;
+    res.alloc = quill_malloc(res.length_bytes, NULL);
+    res.data = res.alloc->data;
+    rewind(f);
+    quill_int_t read_bytes = fread(
+        res.alloc->data, 
+        1, (size_t) res.length_bytes, 
+        f
+    );
+    if(read_bytes != res.length_bytes) {
+        quill_int_t e = (quill_int_t) errno;
+        quill_rc_dec(res.alloc);
+        fclose(f);
+        return #fun(make_err[String])(e);
+    }
+    if(fclose(f) != 0) {
+        quill_int_t e = (quill_int_t) errno;
+        quill_rc_dec(res.alloc);
+        return #fun(make_err[String])(e);
+    }
+    for(quill_int_t o = 0; o < res.length_bytes; res.length_points += 1) {
+        o += quill_point_decode_length(res.data[o]);
+    }
+    return #fun(make_ok[String])(res);
+"
+
+pub ext fun is_dir(path: String) -> Bool = "
+    // TODO!
+"
+
+pub ext fun create_dir(path: String) -> Result[Unit, os::Error] = "
+    // TODO!
+"
+
+pub ext fun read_dir(path: String) -> Result[List[String], os::Error] = "
+    // TODO!
+"

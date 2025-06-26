@@ -1,0 +1,28 @@
+
+mod os
+
+struct Error(code: Int)
+
+pub fun Error::unsafe_from_code(code: Int) -> Error = Error(code)
+
+pub fun Error::eq(lhs: Error, rhs: Error) -> Bool = lhs.code == rhs.code
+
+pub fun Error::not_eq(lhs: Error, rhs: Error) -> Bool = lhs.code != rhs.code
+
+pub fun Error::as_hash(self: Error) -> Int = self.code
+
+pub fun Error::clone(self: Error) -> Error = self
+
+ext fun set_ascii_locale() = "
+    setlocale(LC_ALL, \"C\");
+"
+
+val configured_locale: Unit = set_ascii_locale()
+
+ext fun code_as_string(code: Int) -> String = "
+    const char *msg = strerror(#var(code));
+    return quill_string_from_temp_cstr(msg);
+"
+
+pub fun Error::as_string(self: Error) -> String 
+    = code_as_string(self.code)
