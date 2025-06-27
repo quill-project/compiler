@@ -1,6 +1,5 @@
 
-#include <stdint.h>
-#include <stdlib.h>
+#include <quill.h>
 #include <stddef.h>
 
 #ifdef _WIN32
@@ -39,6 +38,7 @@ typedef struct quill_slab quill_slab_t;
 
 typedef struct quill_slab_alloc {
     size_t slab_content_size;
+    quill_mutex_t lock;
     quill_slab_t *next_free;
     quill_region_t *first;
     quill_region_t *next;
@@ -47,6 +47,7 @@ typedef struct quill_slab_alloc {
 #define REGION_SLAB_COUNT 16384
 
 typedef struct quill_region {
+    quill_mutex_t lock;
     quill_region_t *next;
     size_t next_i;
     uint8_t data[];
@@ -81,6 +82,13 @@ quill_slab_alloc_t allocators[4] = {
     }
 };
 
+void quill_allocator_init(void) {
+    quill_mutex_init(&allocators[0].lock);
+    quill_mutex_init(&allocators[1].lock);
+    quill_mutex_init(&allocators[2].lock);
+    quill_mutex_init(&allocators[3].lock);
+}
+
 #define MAX_SLAB_ALLOC_SIZE 64
 size_t alloc_idx_of[MAX_SLAB_ALLOC_SIZE + 1] = {
     0,
@@ -106,9 +114,11 @@ void *quill_buffer_alloc(size_t n) {
     }
     size_t alloc_i = alloc_idx_of[n];
     quill_slab_alloc_t *alloc = &allocators[alloc_i];
+    quill_mutex_lock(&alloc->lock);
     quill_slab_t *free_slab = alloc->next_free;
     if(free_slab != NULL) {
         alloc->next_free = free_slab->next_free;
+        quill_mutex_unlock(&alloc->lock);
         return free_slab->data;
     }
     size_t slab_size = sizeof(quill_slab_t) + alloc->slab_content_size;
@@ -120,6 +130,7 @@ void *quill_buffer_alloc(size_t n) {
         );
         new_region->next = NULL;
         new_region->next_i = 0;
+        quill_mutex_init(&new_region->lock);
         if(region == NULL) {
             alloc->first = new_region;
         } else {
@@ -128,11 +139,14 @@ void *quill_buffer_alloc(size_t n) {
         alloc->next = new_region;
         region = new_region;
     }
+    quill_mutex_unlock(&alloc->lock);
+    quill_mutex_lock(&region->lock);
     quill_slab_t *slab = (quill_slab_t *) (
         region->data + (slab_size * region->next_i)
     );
     slab->owner = alloc;
     region->next_i += 1;
+    quill_mutex_unlock(&region->lock);
     return slab->data;
 }
 
@@ -145,6 +159,8 @@ void quill_buffer_free(void *buffer) {
         FALLBACK_FREE(slab);
         return;
     }
+    quill_mutex_lock(&alloc->lock);
     slab->next_free = alloc->next_free;
     alloc->next_free = slab;
+    quill_mutex_unlock(&alloc->lock);
 }

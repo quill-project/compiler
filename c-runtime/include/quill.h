@@ -36,12 +36,34 @@ typedef double quill_float_t;
 typedef uint8_t quill_bool_t;
 
 
+#ifdef __STDC_NO_ATOMICS__
+    #error "Atomic operations must be supported"
+#else
+    #include <stdatomic.h>
+#endif
+
+
+#ifdef _WIN32
+    #include <windows.h>
+    typedef CRITICAL_SECTION quill_mutex_t;
+#else
+    #include <pthread.h>
+    typedef pthread_mutex_t quill_mutex_t;
+#endif
+
+void quill_mutex_init(quill_mutex_t *m);
+void quill_mutex_lock(quill_mutex_t *m);
+quill_bool_t quill_mutex_try_lock(quill_mutex_t *m);
+void quill_mutex_unlock(quill_mutex_t *m);
+void quill_mutex_destroy(quill_mutex_t *m);
+
+
 typedef struct quill_alloc quill_alloc_t;
 
 typedef quill_unit_t (*quill_destructor_t)(quill_alloc_t *alloc);
 
 typedef struct quill_alloc {
-    uint64_t rc;
+    _Atomic(uint64_t) rc;
     quill_destructor_t destructor;
     uint8_t data[];
 } quill_alloc_t;
@@ -91,6 +113,7 @@ void quill_println(quill_string_t line);
 void quill_panic(quill_string_t reason);
 
 
+void quill_allocator_init(void);
 void *quill_buffer_alloc(size_t n);
 void quill_buffer_free(void *buffer);
 
@@ -112,7 +135,7 @@ static quill_alloc_t *quill_malloc(size_t n, quill_destructor_t destructor) {
 
 static void quill_rc_add(quill_alloc_t *alloc) {
     if(alloc == NULL) { return; }
-    alloc->rc += 1;
+    atomic_fetch_add_explicit(&alloc->rc, 1, memory_order_relaxed);
 }
 
 static void quill_unit_rc_add(quill_unit_t v) { (void) v; }
@@ -124,8 +147,11 @@ static void quill_closure_rc_add(quill_closure_t v) { quill_rc_add(v.alloc); }
 
 static void quill_rc_dec(quill_alloc_t *alloc) {
     if(alloc == NULL) { return; }
-    alloc->rc -= 1;
-    if(alloc->rc > 0) { return; }
+    // 'atomic_fetch_sub_explicit' returns the value before the subtraction
+    if(atomic_fetch_sub_explicit(&alloc->rc, 1, memory_order_acq_rel) != 1) { 
+        return; 
+    }
+    atomic_thread_fence(memory_order_acquire);
     quill_destructor_t destructor = alloc->destructor;
     if(destructor != NULL) { destructor(alloc); }
     quill_buffer_free(alloc);

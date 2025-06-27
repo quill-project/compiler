@@ -57,9 +57,9 @@ fun main() {
     val unchecked: mut List[types::SymbolInstance] 
         = types::SymbolTable::base_instances(table)
     while (unchecked |> length()) > 0 {
-        val i: types::SymbolInstance = q |> pop() 
+        val i: types::SymbolInstance = unchecked |> pop() 
             |> expect("loop should've stopped")
-        types::SymbolTable::check_symbol(table, i, q, messages)
+        types::SymbolTable::check_symbol(table, i, unchecked, messages)
     }
     // report messages and exit if has any
     if messages |> values() |> any(Message::is_error) {
