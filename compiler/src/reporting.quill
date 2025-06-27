@@ -5,6 +5,50 @@ use quill::token::(Token, TokenType)
 use quill::types::Type
 
 
+val RESET_STYLE: String = "\x1B[0m"
+val FG_BLACK: String = "\x1B[30m"
+val FG_RED: String = "\x1B[31m"
+val FG_GREEN: String = "\x1B[32m"
+val FG_YELLOW: String = "\x1B[33m"
+val FG_BLUE: String = "\x1B[34m"
+val FG_MAGENTA: String = "\x1B[35m"
+val FG_CYAN: String = "\x1B[36m"
+val FG_WHITE: String = "\x1B[37m"
+val FG_BRIGHT_BLACK: String = "\x1B[90m"
+val FG_BRIGHT_RED: String = "\x1B[91m"
+val FG_BRIGHT_GREEN: String = "\x1B[92m"
+val FG_BRIGHT_YELLOW: String = "\x1B[93m"
+val FG_BRIGHT_BLUE: String = "\x1B[94m"
+val FG_BRIGHT_MAGENTA: String = "\x1B[95m"
+val FG_BRIGHT_CYAN: String = "\x1B[96m"
+val FG_BRIGHT_WHITE: String = "\x1B[97m"
+
+val BG_BLACK: String = "\x1B[40m"
+val BG_RED: String = "\x1B[41m"
+val BG_GREEN: String = "\x1B[42m"
+val BG_YELLOW: String = "\x1B[43m"
+val BG_BLUE: String = "\x1B[44m"
+val BG_MAGENTA: String = "\x1B[45m"
+val BG_CYAN: String = "\x1B[46m"
+val BG_WHITE: String = "\x1B[47m"
+val BG_BRIGHT_BLACK: String = "\x1B[100m"
+val BG_BRIGHT_RED: String = "\x1B[101m"
+val BG_BRIGHT_GREEN: String = "\x1B[102m"
+val BG_BRIGHT_YELLOW: String = "\x1B[103m"
+val BG_BRIGHT_BLUE: String = "\x1B[104m"
+val BG_BRIGHT_MAGENTA: String = "\x1B[105m"
+val BG_BRIGHT_CYAN: String = "\x1B[106m"
+val BG_BRIGHT_WHITE: String = "\x1B[107m"
+
+fun line_of(file: String, offset: Int) -> Int
+    = file |> slice_to(offset) |> split("\n") |> length()
+
+fun column_of(file: String, offset: Int) -> Int {
+    val line: String = file |> slice_to(offset) 
+        |> split("\n") |> last() |> unwrap_or("")
+    return (line |> length()) + 1
+}
+
 pub struct Source(path: String, start: Int, end: Int)
 
 // Creates a new source starting at 'start' and ending at 'end'.
@@ -27,34 +71,86 @@ pub enum Message::Section(
     Code: Source
 )
 
-pub fun Message::Section::display(self: Message::Section, files: Map[String, String]) -> String {
+val MAX_DISP_LINES: Int = 5
+
+pub fun Message::Section::display(
+    self: Message::Section, files: Map[String, String], use_color: Bool
+) -> String {
     match self {
-        Error(msg) { return "! error ! " |> concat(msg) }
-        Warning(msg) { return "warning: " |> concat(msg) }
-        Info(msg) { return "info: " |> concat(msg) }
+        Error(msg) { 
+            if !use_color { return "! error ! " |> concat(msg) }
+            return BG_BRIGHT_RED |> concat(FG_BLACK) |> concat(" error ") 
+                |> concat(RESET_STYLE) |> concat(" ") 
+                |> concat(FG_BRIGHT_RED) |> concat(msg)
+                |> concat(RESET_STYLE)
+        }
+        Warning(msg) { 
+            if !use_color { return "warning: " |> concat(msg) }
+            return BG_BRIGHT_YELLOW |> concat(FG_BLACK) |> concat(" warning ") 
+                |> concat(RESET_STYLE) |> concat(" ") 
+                |> concat(FG_BRIGHT_YELLOW) |> concat(msg)
+                |> concat(RESET_STYLE)
+        }
+        Info(msg) { 
+            if !use_color { return "info: " |> concat(msg) }
+            return " info  " |> concat(msg)
+        }
         Code(at) { 
             val content: String = files
                 |> get(at.path) 
                 |> unwrap_or("<file not found>")
-            val line_at: Fun(Int) -> Int
-                = |i| content |> slice_to(i) 
-                |> chars() |> filter(|c| c == "\n") |> length()
-            return "at _:_.._" |> fmt(
-                at.path, 
-                (line_at(at.start) + 1) |> as_string(), 
-                (line_at(at.end) + 1) |> as_string()
+            val start_line: Int = line_of(content, at.start)
+            val start_column: Int = column_of(content, at.start)
+            val end_line: Int = line_of(content, at.end)
+            val end_column: Int = column_of(content, at.end)
+            val header: String = (if use_color { FG_BRIGHT_BLACK } else { "" })
+                |> concat("in _:_") |> fmt(at.path, Int::as_string(start_line))
+            val disp_line_c: Int = Int::min(
+                end_line - start_line, MAX_DISP_LINES
             )
+            val lines: List[String] = content 
+                |> split("\n") 
+                |> skip(start_line - 1)
+                |> take(disp_line_c)
+                |> List::collect()
+            val disp_line: Fun(Int) -> String = |rel_line_i| {
+                // input column is zero terminated
+                val is_marked: Fun(Int) -> Bool = |column_i| {
+                    val unmarked_l: Bool = rel_line_i == 0 
+                        && (column_i + 1) < start_column
+                    val unmarked_h: Bool = rel_line_i == (disp_line_c-1)
+                       && (column_i + 1) >= end_column
+                    return !unmarked_l && !unmarked_h
+                }
+                val line: String = lines |> at(rel_line_i)
+                val colored_line: String = line
+                    |> indices()
+                    |> map[Int, String](|column_i| {
+                        val color: String = if !use_color { "" }
+                            else if is_marked(column_i) { FG_WHITE }
+                            else { FG_BRIGHT_BLACK }
+                        return color |> concat(line |> at(column_i))
+                    })
+                    |> join("")
+                return colored_line
+            }
+            val code: String = lines 
+                |> indices() 
+                |> map(disp_line)
+                |> join("")
         }
     }
 }
 
 pub struct Message(sections: List[Message::Section])
 
-pub fun Message::display(self: Message, files: Map[String, String]) -> String
+pub fun Message::display(
+    self: Message, files: Map[String, String], use_color: Bool
+) -> String
     = self.sections 
     |> values()
     |> map[Message::Section, String](
-        |s| s |> Message::Section::display(files)
+        |s| s |> Message::Section::display(files, use_color)
     )
     |> join("\n")
 

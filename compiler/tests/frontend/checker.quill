@@ -20,7 +20,7 @@ fun check_symbols(content: String) -> mut SymbolTable {
     if messages |> values() |> any(Message::is_error) {
         val files = Map::of(Pair("test.quill", content))
         val msgs = messages 
-            |> values() |> map[Message, String](|m| m |> display(files)) 
+            |> values() |> map[Message, String](|m| m |> display(files, true)) 
             |> join("\n\n")
         return "Checking assertion failed:\n" |> concat(content)
             |> concat("\n\nReported message(s):\n") |> concat(msgs)
@@ -47,7 +47,7 @@ fun assert_symbol(
     if messages |> values() |> any(Message::is_error) {
         val files = Map::of(Pair("test.quill", content))
         val msgs = messages 
-            |> values() |> map[Message, String](|m| m |> display(files)) 
+            |> values() |> map[Message, String](|m| m |> display(files, true)) 
             |> join("\n\n")
         return "Checking assertion failed:\n" |> concat(content)
             |> concat("\n\nReported message(s):\n") |> concat(msgs)

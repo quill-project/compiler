@@ -37,7 +37,9 @@ pub fun compile(source_files: List[SourceFile], main: String) -> String {
     // report messages if has any
     if messages |> values() |> any(Message::is_error) {
         messages |> values() 
-            |> map[Message, String](|m| m |> display(sources) |> concat("\n")) 
+            |> map[Message, String](
+                |m| m |> display(sources, true) |> concat("\n")
+            ) 
             |> for_each(println)
         return ""
     }
@@ -50,7 +52,9 @@ pub fun compile(source_files: List[SourceFile], main: String) -> String {
     // report messages if has any
     if messages |> values() |> any(Message::is_error) {
         messages |> values() 
-            |> map[Message, String](|m| m |> display(sources) |> concat("\n")) 
+            |> map[Message, String](
+                |m| m |> display(sources, true) |> concat("\n")
+            ) 
             |> for_each(println)
         return ""
     }

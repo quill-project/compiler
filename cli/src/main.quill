@@ -67,7 +67,9 @@ fun main() {
     // report messages and exit if has any
     if messages |> values() |> any(Message::is_error) {
         messages |> values() 
-            |> map[Message, String](|m| m |> display(sources) |> concat("\n")) 
+            |> map[Message, String](
+                |m| m |> display(sources, true) |> concat("\n")
+            ) 
             |> for_each(println)
         return unit
     }
@@ -80,7 +82,9 @@ fun main() {
     // report messages and exit if has any
     if messages |> values() |> any(Message::is_error) {
         messages |> values() 
-            |> map[Message, String](|m| m |> display(sources) |> concat("\n")) 
+            |> map[Message, String](
+                |m| m |> display(sources, true) |> concat("\n")
+            ) 
             |> for_each(println)
         return unit
     }
