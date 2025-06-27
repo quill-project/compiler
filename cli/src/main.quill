@@ -56,14 +56,11 @@ fun main() {
     val table = types::SymbolTable::from(nodes, messages)
     val unchecked: mut List[types::SymbolInstance] 
         = types::SymbolTable::base_instances(table)
-    Stream::new[mut List[types::SymbolInstance]](|| unchecked)
-        |> take_while(|q| (q |> length()) != 0)
-        |> for_each(|q| {
-            val i: types::SymbolInstance 
-                = q |> pop() 
-                |> expect("stream should've ended")
-            types::SymbolTable::check_symbol(table, i, q, messages)
-        })
+    while (unchecked |> length()) > 0 {
+        val i: types::SymbolInstance = q |> pop() 
+            |> expect("loop should've stopped")
+        types::SymbolTable::check_symbol(table, i, q, messages)
+    }
     // report messages and exit if has any
     if messages |> values() |> any(Message::is_error) {
         messages |> values() 

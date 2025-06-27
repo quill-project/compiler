@@ -1,0 +1,91 @@
+
+mod conc
+
+struct Mutex[T]()
+
+// Creates a new mutex, containing the given value.
+pub ext fun Mutex::new[T](value: T) -> mut Mutex[T] = "
+    // TODO!
+"
+
+// Makes the calling thread wait until it acquires ownership of the mutex.
+// Getting ownership multiple times is required to be supported.
+ext fun Mutex::lock[T](self: mut Mutex[T]) = "
+    // TODO!
+"
+
+// If the calling thread can legally acquire the mutex without waiting,
+// the function acquires the mutex and otherwise simply returns.
+// The function returns true only if the mutex has been acquired.
+ext fun Mutex::try_lock[T](self: mut Mutex[T]) -> Bool = "
+    // TODO!
+"
+
+// Makes the calling thread release ownership over the mutex.
+// For the mutex to be released, this function must be called the same number
+// of times that 'Mutex::lock' has been called.
+ext fun Mutex::unlock[T](self: mut Mutex[T]) = "
+    // TODO!
+"
+
+// Returns the value protected by the mutex contained in a mutable box.
+ext fun Mutex::contained[T](self: mut Mutex[T]) -> mut Box[T] = "
+    // TODO!
+"
+
+ext fun Mutex::destruct[T](self: mut Mutex[T]) = "
+    // TODO!
+"
+
+// Waits until the calling thread has acquired the mutex and executes the given
+// function, passing a reference to the contained value.
+//
+// The reference to the contained value or a contained reference value 
+// must NEVER be stored OUTSIDE THE FUNCTION.
+// Doing so defeats the whole purpose of the mutex, since suddenly one does not
+// need ownership over the mutex to modify the value.
+// 
+// The provided function may freely acquire ownership over the mutex.
+// Ownership over the mutex is released after the provided function returns.
+pub fun Mutex::take[T](self: mut Mutex[T], f: Fun(mut Box[T])) {
+    self |> lock()
+    f(self |> contained())
+    self |> unlock()
+}
+
+// Acquires the given mutex and executes the given function, passing a reference
+// to the contained value ONLY IF the mutex can be acquired immediately.
+//
+// The reference to the contained value or a contained reference value 
+// must NEVER be stored OUTSIDE THE FUNCTION.
+// Doing so defeats the whole purpose of the mutex, since suddenly one does not
+// need ownership over the mutex to modify the value.
+// 
+// The provided function may freely acquire ownership over the mutex.
+// Ownership over the mutex is released after the provided function returns.
+// 
+// The function returns true if ownership was acquired and the function was
+// called, and otherwise returns false.
+pub fun Mutex::try_take[T](self: mut Mutex[T], f: Fun(mut Box[T])) -> Bool {
+    if !(self |> try_lock()) { return false }
+    f(self |> contained())
+    self |> unlock()
+})
+
+// Waits until the calling thread has acquired the mutex and executes the given
+// function, passing the contained value, and returns the result 
+// of the given function.
+//
+// The given function MUST NEVER return a contained reference value or store it
+// OUTSIDE THE FUNCTION.
+// Doing so defeats the whole purpose of the mutex, since suddenly one does not
+// need ownership over the mutex to modify the value.
+//
+// The provided function may freely acquire ownership over the mutex.
+// Ownership over the mutex is released after the provided function returns.
+pub fun Mutex::compute[T, R](self: mut Mutex[T], f: Fun(T) -> R) -> R {
+    self |> lock()
+    val result: R = f((self |> contained()).value)
+    self |> unlock()
+    return result
+}

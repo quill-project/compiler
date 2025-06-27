@@ -1,0 +1,25 @@
+
+mod conc
+
+struct Thread()
+
+// Creates a new thread that immediately beings executing the given function.
+// Returns a reference to the created thread.
+pub ext fun Thread::spawn(f: Fun()) -> Thread = "
+    // TODO!
+"
+
+// Makes the calling thread wait for the given thread to complete execution.
+// If the given thread has completed execution, the function returns immediately.
+pub ext fun Thread::join(other: Thread) = "
+    // TODO!
+"
+
+// Returns true if the given thread has completed execution, and otherwise false.
+pub ext fun Thread::is_done(self: Thread) -> Bool = "
+    // TODO!
+"
+
+ext fun Thread::destruct(self: mut Thread) = "
+    // TODO!
+"
