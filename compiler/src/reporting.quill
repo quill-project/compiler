@@ -93,28 +93,35 @@ pub fun Message::Section::display(
         }
         Info(msg) { 
             if !use_color { return "info: " |> concat(msg) }
-            return " info  " |> concat(msg)
+            return BG_BRIGHT_BLACK |> concat(FG_WHITE) |> concat(" info ") 
+                |> concat(RESET_STYLE) |> concat(" ") 
+                |> concat(msg)
         }
         Code(at) { 
+            val location_c: String = if use_color { FG_BRIGHT_BLACK } else { "" }
+            val marked_c: String = if use_color { FG_WHITE } else { "" }
+            val unmarked_c: String = if use_color { FG_BRIGHT_BLACK } else { "" }
             val content: String = files
                 |> get(at.path) 
                 |> unwrap_or("<file not found>")
+            // one indexed
             val start_line: Int = line_of(content, at.start)
             val start_column: Int = column_of(content, at.start)
             val end_line: Int = line_of(content, at.end)
             val end_column: Int = column_of(content, at.end)
-            val header: String = (if use_color { FG_BRIGHT_BLACK } else { "" })
+            val header: String = location_c
                 |> concat("in _:_") |> fmt(at.path, Int::as_string(start_line))
             val disp_line_c: Int = Int::min(
-                end_line - start_line, MAX_DISP_LINES
+                end_line - start_line + 1, MAX_DISP_LINES
             )
+            val line_num_w: Int = Int::as_string(end_line) |> length()
             val lines: List[String] = content 
                 |> split("\n") 
                 |> skip(start_line - 1)
                 |> take(disp_line_c)
                 |> List::collect()
             val disp_line: Fun(Int) -> String = |rel_line_i| {
-                // input column is zero terminated
+                // input column is zero indexed
                 val is_marked: Fun(Int) -> Bool = |column_i| {
                     val unmarked_l: Bool = rel_line_i == 0 
                         && (column_i + 1) < start_column
@@ -126,18 +133,32 @@ pub fun Message::Section::display(
                 val colored_line: String = line
                     |> indices()
                     |> map[Int, String](|column_i| {
-                        val color: String = if !use_color { "" }
-                            else if is_marked(column_i) { FG_WHITE }
-                            else { FG_BRIGHT_BLACK }
+                        val color: String = if is_marked(column_i) { marked_c } 
+                            else { unmarked_c }
                         return color |> concat(line |> at(column_i))
                     })
                     |> join("")
-                return colored_line
+                val arrows: String = line
+                    |> indices()
+                    |> map[Int, String](
+                        |column_i| if is_marked(column_i) { "^" } else { " " }
+                    )
+                    |> join("")
+                val line_num: String = Int::as_string(start_line + rel_line_i)
+                    |> pad_begin(line_num_w, " ")
+                val line_plh: String = " " |> repeat(line_num_w)
+                return "\n __ _\n _ __" |> fmt(
+                    location_c, line_num, colored_line,
+                    line_plh, marked_c, arrows
+                ) 
             }
             val code: String = lines 
                 |> indices() 
                 |> map(disp_line)
                 |> join("")
+            return header 
+                |> concat(code)
+                |> concat(RESET_STYLE)
         }
     }
 }
