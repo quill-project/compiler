@@ -72,4 +72,4 @@ console.log(`QIQ took ${qiqEnd - qiqStart}ms to compile QIQ`);
 fs.writeFileSync("bootstrap/build.c", qiqExtFiles + result);
 
 // compile the output of QIQ compiling itself using any C compiler
-exec("cc bootstrap/build.c c-runtime/src/io.c c-runtime/src/string.c -I c-runtime/include -lm -o bootstrap/build -g")
+exec("cc bootstrap/build.c c-runtime/src/io.c c-runtime/src/string.c c-runtime/src/alloc.c -I c-runtime/include -lm -o bootstrap/build -O3 -flto")

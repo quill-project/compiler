@@ -91,9 +91,12 @@ void quill_println(quill_string_t line);
 void quill_panic(quill_string_t reason);
 
 
+void *quill_buffer_alloc(size_t n);
+void quill_buffer_free(void *buffer);
+
 static quill_alloc_t *quill_malloc(size_t n, quill_destructor_t destructor) {
     if(n == 0) { return NULL; }
-    quill_alloc_t *alloc = malloc(sizeof(quill_alloc_t) + n);
+    quill_alloc_t *alloc = quill_buffer_alloc(sizeof(quill_alloc_t) + n);
     if(alloc == NULL) {
         quill_panic((quill_string_t) {
             .alloc = NULL,
@@ -125,7 +128,7 @@ static void quill_rc_dec(quill_alloc_t *alloc) {
     if(alloc->rc > 0) { return; }
     quill_destructor_t destructor = alloc->destructor;
     if(destructor != NULL) { destructor(alloc); }
-    free(alloc);
+    quill_buffer_free(alloc);
 }
 
 static void quill_unit_rc_dec(quill_unit_t v) { (void) v; }
