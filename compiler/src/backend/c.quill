@@ -277,7 +277,8 @@ pub fun expand_external_body(
     args: List[Pair[String, TypedNode]],
     t_args: mut Map[String, Type],
     context: ModuleContext,
-    g: mut Generator
+    g: mut Generator,
+    includes: mut Set[String]
 ) -> String {
     return og_body
         |> pragma::expand_all("var", |n| {
@@ -357,10 +358,14 @@ pub fun expand_external_body(
                 }
             }
         })
+        |> pragma::expand_all("include", |i| {
+            includes |> add(i)
+            return ""
+        })
 }
 
 // Emits the full implementations of the functions in the given table.
-pub fun emit_func_implementations(g: mut Generator) -> String 
+pub fun emit_func_implementations(g: mut Generator, includes: mut Set[String]) -> String 
     = g.table.symbols |> values() |> map[Symbol, String](
         |s| s.instances |> values() |> map[Triplet[TypedNode, Int, List[Type]], String](
             |i| { match i.first.value {
@@ -401,7 +406,7 @@ pub fun emit_func_implementations(g: mut Generator) -> String
                         |> zip(i.third |> values(), |n, t| Pair(n, t))
                         |> Map::collect()
                     val body_s: String = expand_external_body(
-                        body, args, t_args, s.context, g
+                        body, args, t_args, s.context, g, includes
                     )
                     return signature |> concat(" {")
                         |> concat(body_s)
@@ -1312,7 +1317,7 @@ pub val HEADER: String = "
 // C code generated from Quill source code by the Quill compiler
 // https://github.com/schwalbe-t/quill
 
-#include <quill.h>
+_
 
 "
 
@@ -1336,9 +1341,14 @@ pub fun emit(
         |> map[String, String](|r| r |> concat("();"))
         |> unwrap_or("")
     val g = Generator::new(table, messages)
-    val func_decls: String = emit_func_implementations(g)
+    val includes: mut Set[String] = Set::of("<quill.h>")
+    val func_decls: String = emit_func_implementations(g, includes)
     val global_inits: String = emit_global_inits(g, GLOBALS_INIT)
-    return HEADER
+    return HEADER 
+        |> fmt(includes |> values() 
+            |> map[String, String](|i| "#include _" |> fmt(i))
+            |> join("\n")    
+        )
         |> concat(emit_declarations(table))
         |> concat(emit_type_destructors(table))
         |> concat(g.closure_destr |> values() |> join(""))

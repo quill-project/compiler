@@ -329,7 +329,6 @@ pub fun Checker::check_declaration(
             // types and symbols are instantiated during type checking
             // (and that type errors don't occur during codegen)
             body
-                // |> pragma::expand_all("var", |n| {}) // nothing to do
                 |> pragma::expand_all("type", pragma_parse_type)
                 |> pragma::expand_all("rc_add", pragma_parse_type)
                 |> pragma::expand_all("rc_dec", pragma_parse_type)

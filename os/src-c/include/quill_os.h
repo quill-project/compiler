@@ -1,4 +1,9 @@
 
+#ifndef QUILL_OS_H
+#define QUILL_OS_H
+
+#include <locale.h>
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -91,3 +96,5 @@
     char r[(s).length_bytes + 1]; \
     memcpy(r, (s).data, (s).length_bytes); \
     r[(s).length_bytes] = '\0';
+
+#endif

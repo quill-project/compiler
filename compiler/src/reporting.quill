@@ -104,11 +104,15 @@ pub fun Message::Section::display(
             val content: String = files
                 |> get(at.path) 
                 |> unwrap_or("<file not found>")
+            val content_l: Int = content |> length()
+            // zero indexed
+            val start: Int = at.start |> clamp(0, content_l - 1)
+            val end: Int = at.end |> clamp(0, content_l - 1)
             // one indexed
-            val start_line: Int = line_of(content, at.start)
-            val start_column: Int = column_of(content, at.start)
-            val end_line: Int = line_of(content, at.end)
-            val end_column: Int = column_of(content, at.end)
+            val start_line: Int = line_of(content, start)
+            val start_column: Int = column_of(content, start)
+            val end_line: Int = line_of(content, end)
+            val end_column: Int = column_of(content, end)
             val header: String = location_c
                 |> concat("in _:_") |> fmt(at.path, Int::as_string(start_line))
             val disp_line_c: Int = Int::min(

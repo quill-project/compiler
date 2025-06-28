@@ -58,6 +58,7 @@
         quill_panic(quill_string_from_static_cstr(
             "Failed to acquire ownership of mutex"
         ));
+        return QUILL_FALSE;
     }
 
     void quill_mutex_unlock(quill_mutex_t *m) {

@@ -62,6 +62,7 @@ pub fun join(low: String, high: String) -> String
 // Requires the given path to be an accessible, existing directory.
 // Returns a value indicating success or an error.
 pub ext fun set_cwd(path: String) -> Result[Unit, os::Error] = "
+    #include(<quill_os.h>)
     #ifdef _WIN32
         QUILL_FS_STRING_AS_WIDE(#var(path), path_w, #fun(os::fs::make_err[String]))
         if(!SetCurrentDirectoryW(path_w)) {
@@ -91,6 +92,7 @@ pub fun get_cwd() -> String
 // Returns either the absolute equivalent of the given path or an error.
 // Note that on Windows, this function will not resolve symbolic links.
 pub ext fun canonicalize(path: String) -> Result[String, os::Error] = "
+    #include(<quill_os.h>)
     #ifdef _WIN32
         QUILL_FS_STRING_AS_WIDE(#var(path), path_w, #fun(os::fs::make_err[String]))
         DWORD res_w_length_chars_nt = GetFullPathNameW(path_w, 0, NULL, NULL);

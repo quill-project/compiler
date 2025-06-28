@@ -136,6 +136,7 @@ pub fun Checker::exit_scope(self: mut Checker) {
         |> expect("caller should ensure checker is in scope")
     scope.locals 
         |> entries()
+        |> filter(|local| local.first != "_")
         |> filter(|local| !local.second.used)
         |> for_each(|local| {
             self.messages |> push(

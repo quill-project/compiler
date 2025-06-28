@@ -1,0 +1,211 @@
+
+mod conc
+
+struct Monitor[T]()
+
+// Creates and returns a new monitor containing the value.
+// The main purpose of a monitor is to allow threads to wait until the value
+// that the monitor contains meets a specific condition.
+// Similar to a mutex it also only allows one thread to access the shared
+// value at a time.
+pub ext fun Monitor::new[T](value: T) -> mut Monitor[T] = "
+    #include(<quill_conc.h>)
+    quill_struct_t monitor_obj = quill_malloc(
+        sizeof(quill_conc_monitor_layout_t), &#fun(Monitor::destruct[T])
+    );
+    quill_conc_monitor_layout_t *monitor_data
+        = (quill_conc_monitor_layout_t *) monitor_obj->data;
+    quill_mutex_init(&monitor_data->lock);
+    quill_conc_cond_init(&monitor_data->cond);
+    monitor_data->value = #fun(box_value[T])(#var(value));
+    return monitor_obj;
+"
+
+// Makes the calling thread wait until it acquires ownership of the monitor.
+// Getting ownership multiple times is required to be supported.
+ext fun Monitor::lock[T](self: Monitor[T]) = "
+    #include(<quill_conc.h>)
+    quill_conc_monitor_layout_t *monitor_data
+        = (quill_conc_monitor_layout_t *) #var(self)->data;
+    quill_mutex_lock(&monitor_data->lock);
+    return QUILL_UNIT;
+"
+
+// Makes the calling thread wait until another thread calls 'Monitor::notify_all'
+// on this same monitor. Requires that the calling thread has ownership over the
+// monitor before calling. While waiting, ownership is released over the monitor,
+// and before the function returns it is acquired again.
+ext fun Monitor::wait[T](self: Monitor[T]) = "
+    #include(<quill_conc.h>)
+    quill_conc_monitor_layout_t *monitor_data
+        = (quill_conc_monitor_layout_t *) #var(self)->data;
+    quill_conc_cond_wait(&monitor_data->cond, &monitor_data->lock);
+    return QUILL_UNIT;
+"
+
+// Returns the value protected by the monitor contained in a mutable box.
+ext fun Monitor::contained[T](self: Monitor[T]) -> mut Box[T] = "
+    #include(<quill_conc.h>)
+    quill_conc_monitor_layout_t *monitor_data
+        = (quill_conc_monitor_layout_t *) #var(self)->data;
+    #rc_add(Box[T])(monitor_data->value);
+    return monitor_data->value;
+"
+
+// Makes the calling thread release ownership over the monitor.
+// For the monitor to be released, this function must be called the same number
+// of times that 'Monitor::lock' has been called.
+ext fun Monitor::unlock[T](self: Monitor[T]) = "
+    #include(<quill_conc.h>)
+    quill_conc_monitor_layout_t *monitor_data
+        = (quill_conc_monitor_layout_t *) #var(self)->data;
+    quill_mutex_unlock(&monitor_data->lock);
+    return QUILL_UNIT;
+"
+
+// Makes all threads that have previously called 'Monitor::wait' on this
+// monitor resume execution in no particular order.
+ext fun Monitor::notify_all[T](self: Monitor[T]) = "
+    #include(<quill_conc.h>)
+    quill_conc_monitor_layout_t *monitor_data
+        = (quill_conc_monitor_layout_t *) #var(self)->data;
+    quill_conc_cond_notify_all(&monitor_data->cond);
+    return QUILL_UNIT;
+"
+
+ext fun Monitor::destruct[T](self: mut Monitor[T]) = "
+    #include(<quill_conc.h>)
+    quill_conc_monitor_layout_t *monitor_data
+        = (quill_conc_monitor_layout_t *) #var(self)->data;
+    quill_mutex_destroy(&monitor_data->lock);
+    quill_conc_cond_destroy(&monitor_data->cond);
+    #rc_dec(Box[T])(monitor_data->value);
+    return QUILL_UNIT;
+"
+
+// Waits until the calling thread has acquired the monitor and executes the given
+// function, passing a reference to the contained value.
+//
+// The reference to the contained value or a contained reference value 
+// must NEVER be stored OUTSIDE THE FUNCTION.
+// Doing so defeats the whole purpose of the monitor, since suddenly one does not
+// need ownership over the monitor to modify the value.
+// 
+// The provided function may freely acquire ownership over the monitor.
+// Ownership over the monitor is released after the provided function returns.
+pub fun Monitor::take[T](self: mut Monitor[T], f: Fun(mut Box[T])) {
+    self |> lock()
+    f(self |> contained())
+    self |> notify_all()
+    self |> unlock()
+}
+
+// Makes the calling thread wait while a given condition based on the value
+// contained in the monitor is met. 
+//
+// Note that a reference value contained in the monitor must NEVER be stored
+// OUTSIDE THE FUNCTION. 
+// Doing so defeats the whole purpose of the monitor, since suddenly one does not
+// need ownership over the monitor to modify the value.
+//
+// It is guaranteed that the calling thread has ownership over the monitor
+// during the execution of the given condition function.
+// The condition function may be executed any number of times. 
+// Once the function returns, the calling thread DOES NOT have ownership over
+// the monitor. This means that after the function returns the value contained
+// inside the monitor may change at any time, including directly after.
+//
+// To keep ownership over the monitor after the wait, please use 'wait_while_then',
+// which allows passing a function (similar to 'take') to be executed after.
+pub fun Monitor::wait_while[T](self: Monitor[T], cond: Fun(T) -> Bool) {
+    self |> lock()
+    val content: Box[T] = self |> contained()
+    while cond(content.value) {
+        self |> wait()
+    }
+    self |> unlock()
+}
+
+// Makes the calling thread wait until a given condition based on the value
+// contained in the monitor is met. 
+//
+// Note that a reference value contained in the monitor must NEVER be stored
+// OUTSIDE THE FUNCTION. 
+// Doing so defeats the whole purpose of the monitor, since suddenly one does not
+// need ownership over the monitor to modify the value.
+//
+// It is guaranteed that the calling thread has ownership over the monitor
+// during the execution of the given condition function.
+// The condition function may be executed any number of times. 
+// Once the function returns, the calling thread DOES NOT have ownership over
+// the monitor. This means that after the function returns the value contained
+// inside the monitor may change at any time, including directly after.
+//
+// To keep ownership over the monitor after the wait, please use 'wait_until_then',
+// which allows passing a function (similar to 'take') to be executed after.
+pub fun Monitor::wait_until[T](self: Monitor[T], cond: Fun(T) -> Bool) {
+    self |> lock()
+    val content: Box[T] = self |> contained()
+    while !cond(content.value) {
+        self |> wait()
+    }
+    self |> unlock()
+}
+
+// Makes the calling thread wait while a given condition based on the value
+// contained in the monitor is met, and then executes a given function
+// (passing a mutable reference to the contained value), only releasing
+// ownership over the monitor AFTER.
+//
+// Note that a reference value contained in the monitor must NEVER be stored
+// OUTSIDE THE FUNCTION. 
+// Doing so defeats the whole purpose of the monitor, since suddenly one does not
+// need ownership over the monitor to modify the value.
+//
+// It is guaranteed that the calling thread has ownership over the monitor
+// during the execution of the given condition function, and that 
+// (at the end of the wait) the ownership is extended until 'f' returns.
+// The condition function may be executed any number of times. 
+// Once the function returns, the calling thread DOES NOT have ownership over
+// the monitor. This means that after the function returns the value contained
+// inside the monitor may change at any time, including directly after.
+pub fun Monitor::wait_while_then[T](
+    self: mut Monitor[T], cond: Fun(T) -> Bool, f: Fun(mut Box[T])
+) {
+    self |> lock()
+    val content: mut Box[T] = self |> contained()
+    while cond(content.value) {
+        self |> wait()
+    }
+    f(content)
+    self |> unlock()
+}
+
+// Makes the calling thread wait until a given condition based on the value
+// contained in the monitor is met, and then executes a given function
+// (passing a mutable reference to the contained value), only releasing
+// ownership over the monitor AFTER.
+//
+// Note that a reference value contained in the monitor must NEVER be stored
+// OUTSIDE THE FUNCTION. 
+// Doing so defeats the whole purpose of the monitor, since suddenly one does not
+// need ownership over the monitor to modify the value.
+//
+// It is guaranteed that the calling thread has ownership over the monitor
+// during the execution of the given condition function, and that 
+// (at the end of the wait) the ownership is extended until 'f' returns.
+// The condition function may be executed any number of times. 
+// Once the function returns, the calling thread DOES NOT have ownership over
+// the monitor. This means that after the function returns the value contained
+// inside the monitor may change at any time, including directly after.
+pub fun Monitor::wait_until_then[T](
+    self: mut Monitor[T], cond: Fun(T) -> Bool, f: Fun(mut Box[T])
+) {
+    self |> lock()
+    val content: mut Box[T] = self |> contained()
+    while !cond(content.value) {
+        self |> wait()
+    }
+    f(content)
+    self |> unlock()
+}

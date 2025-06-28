@@ -13,6 +13,7 @@ fun make_ok[T](value: T) -> Result[T, os::Error] {
 // To specifically check for a file (and not a directory), use 'is_file'.
 // To specifically check for a directory, use 'is_dir'.
 pub ext fun file_exists(path: String) -> Bool = "
+    #include(<quill_os.h>)
     #ifdef _WIN32
         QUILL_FS_STRING_AS_WIDE(#var(path), path_w, QUILL_FS_ERR_RET_FALSE)
         return GetFileAttributesW(path_w) != INVALID_FILE_ATTRIBUTES;
@@ -28,6 +29,7 @@ pub ext fun file_exists(path: String) -> Bool = "
 // Returns false in all other cases.
 // To determine if a file of any type exists at a given path, use 'file_exists'.
 pub ext fun is_file(path: String) -> Bool = "
+    #include(<quill_os.h>)
     #ifdef _WIN32
         QUILL_FS_STRING_AS_WIDE(#var(path), path_w, QUILL_FS_ERR_RET_FALSE)
         DWORD attr = GetFileAttributesW(path_w);
@@ -46,6 +48,7 @@ pub ext fun is_file(path: String) -> Bool = "
 // If the file does not yet exist, a new one is created.
 // Returns either a value indicating success or an error.
 pub ext fun write_file(content: String, path: String) -> Result[Unit, os::Error] = "
+    #include(<quill_os.h>)
     FILE *f = NULL;
     #ifdef _WIN32
         QUILL_FS_STRING_AS_WIDE(#var(path), path_w, #fun(make_err[Unit]))
@@ -74,6 +77,7 @@ pub ext fun write_file(content: String, path: String) -> Result[Unit, os::Error]
 // Attempts to read the contents of the file encoded in UTF-8 at the given path.
 // Returns either the contents of the file or an error.
 pub ext fun read_file(path: String) -> Result[String, os::Error] = "
+    #include(<quill_os.h>)
     FILE *f = NULL;
     #ifdef _WIN32
         QUILL_FS_STRING_AS_WIDE(#var(path), path_w, #fun(make_err[String]))
@@ -124,6 +128,7 @@ pub ext fun read_file(path: String) -> Result[String, os::Error] = "
 // Deletes the directory at the given path only if it exists and is empty.
 // Returns either a value indicating success or an error.
 pub ext fun delete_file(path: String) -> Result[Unit, os::Error] = "
+    #include(<quill_os.h>)
     #ifdef _WIN32
         QUILL_FS_STRING_AS_WIDE(#var(path), path_w, #fun(make_err[Unit]))
         if(_wremove(path_w) != 0) {
@@ -142,6 +147,7 @@ pub ext fun delete_file(path: String) -> Result[Unit, os::Error] = "
 // Only returns true if the path exists and refers to a directory.
 // Returns false in all other cases.
 pub ext fun is_dir(path: String) -> Bool = "
+    #include(<quill_os.h>)
     #ifdef _WIN32
         QUILL_FS_STRING_AS_WIDE(#var(path), path_w, QUILL_FS_ERR_RET_FALSE)
         DWORD attr = GetFileAttributesW(path_w);
@@ -159,6 +165,7 @@ pub ext fun is_dir(path: String) -> Bool = "
 // Returns either a value indicating success or an error.
 // If the directory already exists, the function results in an error.
 pub ext fun create_dir(path: String) -> Result[Unit, os::Error] = "
+    #include(<quill_os.h>)
     #ifdef _WIN32
         QUILL_FS_STRING_AS_WIDE(#var(path), path_w, #fun(make_err[Unit]))
         if(!CreateDirectoryW(path_w, NULL)) {
@@ -181,6 +188,7 @@ pub ext fun create_dir(path: String) -> Result[Unit, os::Error] = "
 // (as a list of the names of the files in the directory)
 // or an error.
 pub ext fun read_dir(path: String) -> Result[List[String], os::Error] = "
+    #include(<quill_os.h>)
     #ifdef _WIN32
         // convert the path to UTF-16 and add the search pattern at the end
         char last_char = #var(path).data[#var(path).length_bytes - 1];
@@ -245,6 +253,7 @@ pub ext fun read_dir(path: String) -> Result[List[String], os::Error] = "
 // Deletes the directory at the given path only if it exists and is empty.
 // Returns either a value indicating success or an error.
 pub ext fun delete_dir(path: String) -> Result[Unit, os::Error] = "
+    #include(<quill_os.h>)
     #ifdef _WIN32
         QUILL_FS_STRING_AS_WIDE(#var(path), path_w, #fun(make_err[Unit]))
         if(_wrmdir(path_w) != 0) {
