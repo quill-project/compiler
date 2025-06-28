@@ -496,6 +496,96 @@ pub fun SymbolTable::from(
     return SymbolTable(SymbolTable::collect_symbols(nodes, names, messages))
 }
 
+struct PreparedInstance(
+    instance: SymbolInstance, key: String, id: Int, symbol: mut Symbol
+)
+
+// Prepares the given symbol instance for type checking of the instance.
+// If an instance with the same type arguments already exists, this function
+// returns no value.
+// If no such instance exists, it is prepared. After this call, no further
+// calls to this table with the same type arguments shall result in a returned
+// value.
+// Receiving a value from this function makes it required for the caller
+// to then pass it to 'SymbolTable::check_prepared_symbol'.
+// 'SymbolTable::check_symbol' can be used to check a symbol instance in a
+// single call.
+pub fun SymbolTable::prepare_check_symbol(
+    self: mut SymbolTable,
+    instance: SymbolInstance
+) -> Option[PreparedInstance] {
+    val instance_key: String = instance |> key()
+    val symbol: mut Symbol = self.symbols 
+        |> get(instance.path) 
+        |> unwrap_or_else(|| "Requested instance '_' does not refer to a known symbol"
+            |> fmt(instance.path |> values() |> join("::"))
+            |> panic()
+        )
+    if symbol.instances |> has(instance_key) { return Option::None }
+    val dummy: TypedNode = TypedNode(
+        ast::Variant::Invalid, 
+        Source("", 0, 0), 
+        Type(Variant::Invalid, false, Source("", 0, 0))
+    )
+    val id: Int = symbol.next_id
+    symbol.next_id = id + 1
+    val i: Triplet[TypedNode, Int, List[Type]] 
+        = Triplet(dummy, id, instance.type_args)
+    symbol.instances |> set(instance_key, i)
+    return Option::Some(PreparedInstance(
+        instance, instance_key, id, symbol
+    ))
+}
+
+struct CheckedInstance(
+    key: String, checked: TypedNode, id: Int, type_args: List[Type],
+    symbol: mut Symbol
+)
+
+// Fully type checks a given prepared type instance.
+// During this call the function is guaranteed to only ever access
+// the constant, untyped nodes of any symbols stored in the table.
+// Dependencies of the symbol instance are pushed onto
+// the given dependency list and resulting messages are pushed onto the given
+// message list.
+// 'SymbolTable::check_symbol' can be used to check a symbol instance in a
+// single call.
+pub fun SymbolTable::check_prepared_symbol(
+    self: SymbolTable,
+    i: PreparedInstance,
+    dependencies: mut List[SymbolInstance],
+    messages: mut List[Message]
+) -> CheckedInstance {
+    val named_t_args: mut Map[String, Type] = i.instance.type_args 
+        |> indices()
+        |> map[Int, Pair[String, Type]](|idx| Pair(
+            i.symbol.type_args |> at(idx),
+            i.instance.type_args |> at(idx)
+        ))
+        |> Map::collect()
+    val checker = Checker(
+        List::empty(), // no function scope
+        named_t_args, self, i.symbol.context, dependencies, messages
+    )
+    val checked: TypedNode = checker |> check_declaration(i.symbol.node)
+    return CheckedInstance(
+        i.key, checked, i.id, i.instance.type_args, i.symbol
+    )
+}
+
+// Inserts the given checked symbol into the symbol table.
+// 'SymbolTable::check_symbol' can be used to check a symbol instance in a
+// single call.
+pub fun SymbolTable::register_checked_symbol(
+    self: mut SymbolTable,
+    i: CheckedInstance
+) {
+    self // technically unused :)
+    val instance: Triplet[TypedNode, Int, List[Type]] 
+        = Triplet(i.checked, i.id, i.type_args)
+    i.symbol.instances |> set(i.key, instance)
+}
+
 // Type checks the given symbol instance and inserts the result into the
 // symbol table. Only the symbol specified by the 'path' property of the given
 // instance will be written to. In addition, instantiations caused by this
@@ -507,31 +597,14 @@ pub fun SymbolTable::check_symbol(
     dependencies: mut List[SymbolInstance],
     messages: mut List[Message]
 ) {
-    val instance_key: String = instance |> key()
-    val symbol: mut Symbol = self.symbols 
-        |> get(instance.path) 
-        |> unwrap_or_else(|| "Requested instance '_' does not refer to a known symbol"
-            |> fmt(instance.path |> values() |> join("::"))
-            |> panic()
-        )
-    if symbol.instances |> has(instance_key) { return unit }
-    val named_t_args: mut Map[String, Type] = instance.type_args 
-        |> indices()
-        |> map[Int, Pair[String, Type]](|i| Pair(
-            symbol.type_args |> at(i),
-            instance.type_args |> at(i)
-        ))
-        |> Map::collect()
-    val checker = Checker(
-        List::empty(), // no function scope
-        named_t_args, self, symbol.context, dependencies, messages
-    )
-    val checked: TypedNode = checker |> check_declaration(symbol.node)
-    val id: Int = symbol.next_id
-    val variant: Triplet[TypedNode, Int, List[Type]] 
-        = Triplet(checked, id, instance.type_args)
-    symbol.instances |> set(instance_key, variant)
-    symbol.next_id = id + 1
+    match self |> prepare_check_symbol(instance) {
+        Some(prep) {
+            val checked: CheckedInstance = self 
+                |> check_prepared_symbol(prep, dependencies, messages)
+            self |> register_checked_symbol(checked)
+        }
+        None {}
+    }
 }
 
 // Returns a new list of instances representing all symbols present in the

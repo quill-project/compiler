@@ -119,6 +119,7 @@ void *quill_buffer_alloc(size_t n) {
     if(free_slab != NULL) {
         alloc->next_free = free_slab->next_free;
         quill_mutex_unlock(&alloc->lock);
+        free_slab->owner = alloc;
         return free_slab->data;
     }
     size_t slab_size = sizeof(quill_slab_t) + alloc->slab_content_size;
