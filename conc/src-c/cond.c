@@ -6,7 +6,7 @@
         InitializeConditionVariable(cond);
     }
 
-    void quill_conc_cond_wait(quill_conc_cond_t *cond, quill_mutex_t *mutex) {
+    void quill_conc_cond_wait(quill_conc_cond_t *cond, quill_conc_mutex_t *mutex) {
         SleepConditionVariableCS(cond, mutex, INFINITE);
     }
 
@@ -29,7 +29,7 @@
         ));
     }
 
-    void quill_conc_cond_wait(quill_conc_cond_t *cond, quill_mutex_t *mutex) {
+    void quill_conc_cond_wait(quill_conc_cond_t *cond, quill_conc_mutex_t *mutex) {
         if(pthread_cond_wait(cond, mutex) == 0) { return; }
         quill_panic(quill_string_from_static_cstr(
             "Failed to wait for condition variable"

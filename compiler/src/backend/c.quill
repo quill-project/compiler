@@ -1321,12 +1321,10 @@ _
 
 "
 
-pub val ALLOC_INIT: String = "quill_allocator_init"
 pub val GLOBALS_INIT: String = "quill_init_globals"
 
 pub val MAIN: String = "
 int main(void) {
-    _();
     _();
     _
 }
@@ -1355,5 +1353,5 @@ pub fun emit(
         |> concat(g.closure_bodies.value)
         |> concat(func_decls)
         |> concat(global_inits)
-        |> concat(MAIN |> fmt(ALLOC_INIT, GLOBALS_INIT, main_call))
+        |> concat(MAIN |> fmt(GLOBALS_INIT, main_call))
 }

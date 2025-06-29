@@ -43,21 +43,6 @@ typedef uint8_t quill_bool_t;
 #endif
 
 
-#ifdef _WIN32
-    #include <windows.h>
-    typedef CRITICAL_SECTION quill_mutex_t;
-#else
-    #include <pthread.h>
-    typedef pthread_mutex_t quill_mutex_t;
-#endif
-
-void quill_mutex_init(quill_mutex_t *m);
-void quill_mutex_lock(quill_mutex_t *m);
-quill_bool_t quill_mutex_try_lock(quill_mutex_t *m);
-void quill_mutex_unlock(quill_mutex_t *m);
-void quill_mutex_destroy(quill_mutex_t *m);
-
-
 typedef struct quill_alloc quill_alloc_t;
 
 typedef quill_unit_t (*quill_destructor_t)(quill_alloc_t *alloc);
@@ -113,13 +98,9 @@ void quill_println(quill_string_t line);
 void quill_panic(quill_string_t reason);
 
 
-void quill_allocator_init(void);
-void *quill_buffer_alloc(size_t n);
-void quill_buffer_free(void *buffer);
-
 static quill_alloc_t *quill_malloc(size_t n, quill_destructor_t destructor) {
     if(n == 0) { return NULL; }
-    quill_alloc_t *alloc = quill_buffer_alloc(sizeof(quill_alloc_t) + n);
+    quill_alloc_t *alloc = malloc(sizeof(quill_alloc_t) + n);
     if(alloc == NULL) {
         quill_panic((quill_string_t) {
             .alloc = NULL,
@@ -154,7 +135,7 @@ static void quill_rc_dec(quill_alloc_t *alloc) {
     atomic_thread_fence(memory_order_acquire);
     quill_destructor_t destructor = alloc->destructor;
     if(destructor != NULL) { destructor(alloc); }
-    quill_buffer_free(alloc);
+    free(alloc);
 }
 
 static void quill_unit_rc_dec(quill_unit_t v) { (void) v; }

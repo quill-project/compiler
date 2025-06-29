@@ -40,7 +40,7 @@ use quill::(
 )
 use conc::(Mutex, Thread)
 
-val CHECKER_THREAD_COUNT: Int = 1
+val CHECKER_THREAD_COUNT: Int = 10
 
 fun main() {
     val source_paths: List[String] = PACKAGE_DIRS
@@ -65,6 +65,7 @@ fun main() {
         |> reduce(List::concat)
         |> unwrap_or_else(List::empty)
     // build a symbol table and check all symbols
+    println("starting type checking")
     val unl_table = SymbolTable::from(nodes, unl_messages)
     val worker_table: mut Mutex[mut SymbolTable] 
         = Mutex::new(unl_table)
@@ -78,14 +79,16 @@ fun main() {
             val msgs: mut List[Message] = List::empty()
             val ch_i: CheckedInstance = unl_table 
                 |> check_prepared_symbol(p_i, deps, msgs)
-            worker_queue |> take(|q| {
-                deps |> values() |> for_each(|d| { q.value |> push(d) })
+            worker_table |> take(|t| {
+                t.value |> register_checked_symbol(ch_i)
+                worker_queue |> take(|q| {
+                    deps |> values()
+                        |> filter(|d| !(t.value |> has_instance(d)))
+                        |> for_each(|d| { q.value |> push(d) })
+                })
             })
             worker_msgs |> take(|m| {
                 msgs |> values() |> for_each(|msg| { m.value |> push(msg) })
-            })
-            worker_table |> take(|t| {
-                t.value |> register_checked_symbol(ch_i)
             })
         }
         val prepare_symbol: Fun(SymbolInstance) = |i| {
@@ -109,6 +112,7 @@ fun main() {
         |> map(|_| Thread::spawn(worker))
         |> List::collect()
     workers |> values() |> for_each(Thread::join)
+    println("completed type checking")
     // report messages and exit if has any
     if unl_messages |> values() |> any(Message::is_error) {
         unl_messages |> values() 

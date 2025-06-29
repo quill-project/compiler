@@ -9,10 +9,10 @@ QUILL_CONC_THREAD_RET_TYPE quill_conc_thread_start(void *context) {
         thread_data->task, 
         QUILL_CLOSURE_FPTR_NA(thread_data->task, quill_unit_t)
     );
-    quill_mutex_lock(&thread_data->lock);
+    quill_conc_mutex_lock(&thread_data->lock);
     thread_data->done = QUILL_TRUE;
     quill_conc_cond_notify_all(&thread_data->joined);
-    quill_mutex_unlock(&thread_data->lock);
+    quill_conc_mutex_unlock(&thread_data->lock);
     quill_rc_dec(thread_obj);
     return QUILL_CONC_THREAD_RET_VAL;
 }

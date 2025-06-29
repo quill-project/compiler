@@ -16,7 +16,7 @@ pub ext fun Mutex::new[T](value: T) -> mut Mutex[T] = "
     );
     quill_conc_mutex_layout_t *mutex_data 
         = (quill_conc_mutex_layout_t *) mutex_obj->data;
-    quill_mutex_init(&mutex_data->lock);
+    quill_conc_mutex_init(&mutex_data->lock);
     mutex_data->value = #fun(box_value[T])(#var(value));
     return mutex_obj;
 "
@@ -27,7 +27,7 @@ ext fun Mutex::lock[T](self: mut Mutex[T]) = "
     #include(<quill_conc.h>)
     quill_conc_mutex_layout_t *mutex_data 
         = (quill_conc_mutex_layout_t *) #var(self)->data;
-    quill_mutex_lock(&mutex_data->lock);
+    quill_conc_mutex_lock(&mutex_data->lock);
     return QUILL_UNIT;
 "
 
@@ -38,7 +38,7 @@ ext fun Mutex::try_lock[T](self: mut Mutex[T]) -> Bool = "
     #include(<quill_conc.h>)
     quill_conc_mutex_layout_t *mutex_data 
         = (quill_conc_mutex_layout_t *) #var(self)->data;
-    return quill_mutex_try_lock(&mutex_data->lock);
+    return quill_conc_mutex_try_lock(&mutex_data->lock);
 "
 
 // Makes the calling thread release ownership over the mutex.
@@ -48,7 +48,7 @@ ext fun Mutex::unlock[T](self: mut Mutex[T]) = "
     #include(<quill_conc.h>)
     quill_conc_mutex_layout_t *mutex_data 
         = (quill_conc_mutex_layout_t *) #var(self)->data;
-    quill_mutex_unlock(&mutex_data->lock);
+    quill_conc_mutex_unlock(&mutex_data->lock);
     return QUILL_UNIT;
 "
 
@@ -66,7 +66,7 @@ ext fun Mutex::destruct[T](self: mut Mutex[T]) = "
     quill_conc_mutex_layout_t *mutex_data 
         = (quill_conc_mutex_layout_t *) #var(self)->data;
     #rc_dec(Box[T])(mutex_data->value);
-    quill_mutex_destroy(&mutex_data->lock);
+    quill_conc_mutex_destroy(&mutex_data->lock);
     return QUILL_UNIT;
 "
 

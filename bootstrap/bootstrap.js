@@ -78,5 +78,6 @@ fs.writeFileSync("bootstrap/build.c", result);
 const ccCmd = `cc bootstrap/build.c ${qiqExtSourcePaths.join(" ")}`
     + qiqExtIncludeDirs.map(p => " -I " + p).join("")
     + " -lm -O3 -flto -o bootstrap/build";
+    // + " -lm -O0 -g -o bootstrap/build";
 console.log(ccCmd);
 exec(ccCmd);

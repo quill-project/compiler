@@ -5,8 +5,28 @@
 #include <quill.h>
 
 
+#ifdef _WIN32
+    #include <windows.h>
+#else
+    #include <pthread.h>
+#endif
+
+
+#ifdef _WIN32
+    typedef CRITICAL_SECTION quill_conc_mutex_t;
+#else
+    typedef pthread_mutex_t quill_conc_mutex_t;
+#endif
+
+void quill_conc_mutex_init(quill_conc_mutex_t *mutex);
+void quill_conc_mutex_lock(quill_conc_mutex_t *mutex);
+quill_bool_t quill_conc_mutex_try_lock(quill_conc_mutex_t *mutex);
+void quill_conc_mutex_unlock(quill_conc_mutex_t *mutex);
+void quill_conc_mutex_destroy(quill_conc_mutex_t *mutex);
+
+
 typedef struct quill_conc_mutex_layout {
-    quill_mutex_t lock;
+    quill_conc_mutex_t lock;
     quill_struct_t value;
 } quill_conc_mutex_layout_t;
 
@@ -18,14 +38,14 @@ typedef struct quill_conc_mutex_layout {
 #endif
 
 void quill_conc_cond_init(quill_conc_cond_t *cond);
-void quill_conc_cond_wait(quill_conc_cond_t *cond, quill_mutex_t *mutex);
+void quill_conc_cond_wait(quill_conc_cond_t *cond, quill_conc_mutex_t *mutex);
 void quill_conc_cond_notify(quill_conc_cond_t *cond);
 void quill_conc_cond_notify_all(quill_conc_cond_t *cond);
 void quill_conc_cond_destroy(quill_conc_cond_t *cond);
 
 
 typedef struct quill_conc_monitor_layout {
-    quill_mutex_t lock;
+    quill_conc_mutex_t lock;
     quill_conc_cond_t cond;
     quill_struct_t value;
 } quill_conc_monitor_layout_t;
@@ -42,7 +62,7 @@ typedef struct quill_conc_monitor_layout {
 #endif
 
 typedef struct quill_conc_thread_layout {
-    quill_mutex_t lock;
+    quill_conc_mutex_t lock;
     quill_closure_t task;
     quill_conc_cond_t joined;
     quill_bool_t done;

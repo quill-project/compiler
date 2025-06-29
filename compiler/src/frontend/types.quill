@@ -496,6 +496,22 @@ pub fun SymbolTable::from(
     return SymbolTable(SymbolTable::collect_symbols(nodes, names, messages))
 }
 
+// Checks if a given instance already exists as a check instance of a given
+// symbol in the table.
+pub fun SymbolTable::has_instance(
+    self: SymbolTable,
+    instance: SymbolInstance
+) -> Bool {
+    val instance_key: String = instance |> key()
+    val symbol: mut Symbol = self.symbols 
+        |> get(instance.path) 
+        |> unwrap_or_else(|| "Requested instance '_' does not refer to a known symbol"
+            |> fmt(instance.path |> values() |> join("::"))
+            |> panic()
+        )
+    return symbol.instances |> has(instance_key)
+}
+
 struct PreparedInstance(
     instance: SymbolInstance, key: String, id: Int, symbol: mut Symbol
 )
