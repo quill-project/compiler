@@ -65,7 +65,6 @@ fun main() {
         |> reduce(List::concat)
         |> unwrap_or_else(List::empty)
     // build a symbol table and check all symbols
-    println("starting type checking")
     val unl_table = SymbolTable::from(nodes, unl_messages)
     val worker_table: mut Mutex[mut SymbolTable] 
         = Mutex::new(unl_table)
@@ -112,7 +111,6 @@ fun main() {
         |> map(|_| Thread::spawn(worker))
         |> List::collect()
     workers |> values() |> for_each(Thread::join)
-    println("completed type checking")
     // report messages and exit if has any
     if unl_messages |> values() |> any(Message::is_error) {
         unl_messages |> values() 

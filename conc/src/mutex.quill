@@ -12,11 +12,11 @@ fun box_value[T](value: T) -> mut Box[T] = Box(value)
 pub ext fun Mutex::new[T](value: T) -> mut Mutex[T] = "
     #include(<quill_conc.h>)
     quill_struct_t mutex_obj = quill_malloc(
-        sizeof(quill_conc_mutex_layout_t), &#fun(Mutex::destruct[T])
+        sizeof(quill_mutex_layout_t), &#fun(Mutex::destruct[T])
     );
-    quill_conc_mutex_layout_t *mutex_data 
-        = (quill_conc_mutex_layout_t *) mutex_obj->data;
-    quill_conc_mutex_init(&mutex_data->lock);
+    quill_mutex_layout_t *mutex_data 
+        = (quill_mutex_layout_t *) mutex_obj->data;
+    quill_mutex_init(&mutex_data->lock);
     mutex_data->value = #fun(box_value[T])(#var(value));
     return mutex_obj;
 "
@@ -25,9 +25,9 @@ pub ext fun Mutex::new[T](value: T) -> mut Mutex[T] = "
 // Getting ownership multiple times is required to be supported.
 ext fun Mutex::lock[T](self: mut Mutex[T]) = "
     #include(<quill_conc.h>)
-    quill_conc_mutex_layout_t *mutex_data 
-        = (quill_conc_mutex_layout_t *) #var(self)->data;
-    quill_conc_mutex_lock(&mutex_data->lock);
+    quill_mutex_layout_t *mutex_data 
+        = (quill_mutex_layout_t *) #var(self)->data;
+    quill_mutex_lock(&mutex_data->lock);
     return QUILL_UNIT;
 "
 
@@ -36,9 +36,9 @@ ext fun Mutex::lock[T](self: mut Mutex[T]) = "
 // The function returns true only if the mutex has been acquired.
 ext fun Mutex::try_lock[T](self: mut Mutex[T]) -> Bool = "
     #include(<quill_conc.h>)
-    quill_conc_mutex_layout_t *mutex_data 
-        = (quill_conc_mutex_layout_t *) #var(self)->data;
-    return quill_conc_mutex_try_lock(&mutex_data->lock);
+    quill_mutex_layout_t *mutex_data 
+        = (quill_mutex_layout_t *) #var(self)->data;
+    return quill_mutex_try_lock(&mutex_data->lock);
 "
 
 // Makes the calling thread release ownership over the mutex.
@@ -46,27 +46,27 @@ ext fun Mutex::try_lock[T](self: mut Mutex[T]) -> Bool = "
 // of times that 'Mutex::lock' has been called.
 ext fun Mutex::unlock[T](self: mut Mutex[T]) = "
     #include(<quill_conc.h>)
-    quill_conc_mutex_layout_t *mutex_data 
-        = (quill_conc_mutex_layout_t *) #var(self)->data;
-    quill_conc_mutex_unlock(&mutex_data->lock);
+    quill_mutex_layout_t *mutex_data 
+        = (quill_mutex_layout_t *) #var(self)->data;
+    quill_mutex_unlock(&mutex_data->lock);
     return QUILL_UNIT;
 "
 
 // Returns the value protected by the mutex contained in a mutable box.
 ext fun Mutex::contained[T](self: mut Mutex[T]) -> mut Box[T] = "
     #include(<quill_conc.h>)
-    quill_conc_mutex_layout_t *mutex_data 
-        = (quill_conc_mutex_layout_t *) #var(self)->data;
+    quill_mutex_layout_t *mutex_data 
+        = (quill_mutex_layout_t *) #var(self)->data;
     #rc_add(Box[T])(mutex_data->value);
     return mutex_data->value;
 "
 
 ext fun Mutex::destruct[T](self: mut Mutex[T]) = "
     #include(<quill_conc.h>)
-    quill_conc_mutex_layout_t *mutex_data 
-        = (quill_conc_mutex_layout_t *) #var(self)->data;
+    quill_mutex_layout_t *mutex_data 
+        = (quill_mutex_layout_t *) #var(self)->data;
     #rc_dec(Box[T])(mutex_data->value);
-    quill_conc_mutex_destroy(&mutex_data->lock);
+    quill_mutex_destroy(&mutex_data->lock);
     return QUILL_UNIT;
 "
 

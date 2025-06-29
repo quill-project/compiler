@@ -42,6 +42,20 @@ typedef uint8_t quill_bool_t;
     #include <stdatomic.h>
 #endif
 
+#ifdef _WIN32
+    #include <windows.h>
+    typedef CRITICAL_SECTION quill_mutex_t;
+#else
+    #include <pthread.h>
+    typedef pthread_mutex_t quill_mutex_t;
+#endif
+
+void quill_mutex_init(quill_mutex_t *mutex);
+void quill_mutex_lock(quill_mutex_t *mutex);
+quill_bool_t quill_mutex_try_lock(quill_mutex_t *mutex);
+void quill_mutex_unlock(quill_mutex_t *mutex);
+void quill_mutex_destroy(quill_mutex_t *mutex);
+
 
 typedef struct quill_alloc quill_alloc_t;
 
@@ -98,9 +112,16 @@ void quill_println(quill_string_t line);
 void quill_panic(quill_string_t reason);
 
 
+void quill_alloc_init_global(void);
+void quill_alloc_init_thread(void);
+void quill_alloc_destruct_thread(void);
+void *quill_alloc_alloc(size_t n);
+void quill_alloc_free(void *alloc);
+
+
 static quill_alloc_t *quill_malloc(size_t n, quill_destructor_t destructor) {
     if(n == 0) { return NULL; }
-    quill_alloc_t *alloc = malloc(sizeof(quill_alloc_t) + n);
+    quill_alloc_t *alloc = quill_alloc_alloc(sizeof(quill_alloc_t) + n);
     if(alloc == NULL) {
         quill_panic((quill_string_t) {
             .alloc = NULL,
@@ -135,7 +156,7 @@ static void quill_rc_dec(quill_alloc_t *alloc) {
     atomic_thread_fence(memory_order_acquire);
     quill_destructor_t destructor = alloc->destructor;
     if(destructor != NULL) { destructor(alloc); }
-    free(alloc);
+    quill_alloc_free(alloc);
 }
 
 static void quill_unit_rc_dec(quill_unit_t v) { (void) v; }
@@ -203,5 +224,22 @@ static quill_unit_t quill_captured_closure_free(quill_alloc_t *alloc) {
 
 #define QUILL_CALL_CLOSURE_NA(closure, closure_fptr) \
     (closure_fptr)((closure).alloc)
+
+
+static void quill_runtime_init_global(void) {
+    quill_alloc_init_global();
+}
+
+static void quill_runtime_destruct_global(void) {
+    // nothing to do
+}
+
+static void quill_runtime_init_thread(void) {
+    quill_alloc_init_thread();
+}
+
+static void quill_runtime_destruct_thread(void) {
+    quill_alloc_destruct_thread();
+}
 
 #endif
