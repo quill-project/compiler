@@ -34,10 +34,14 @@ pub fun Set::clone[T](self: Set[T]) -> Set[T]
 // modification
 
 pub fun Set::set_load_factor[T](self: mut Set[T], load_factor: Float) {
+    if load_factor <= 0.0 {
+        return panic("Attempt to specify load factor of zero or lower")
+    }
     self.load_factor = load_factor
 }
 
 pub fun Set::set_capacity[T](self: mut Set[T], capacity: Int) {
+    if capacity <= (self.buckets |> length()) { return unit }
     val vals = self.buckets
         |> values()
         |> map(List::values[T])

@@ -44,7 +44,7 @@ typedef struct quill_slab {
     uint8_t data[];
 } quill_slab_t;
 
-#define REGION_SLAB_COUNT 16384
+#define REGION_SLAB_COUNT 8192
 
 typedef struct quill_region {
     size_t next_i;

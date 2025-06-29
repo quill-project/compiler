@@ -35,10 +35,14 @@ pub fun Map::clone[K, V](self: Map[K, V]) -> mut Map[K, V]
 // modification
 
 pub fun Map::set_load_factor[K, V](self: mut Map[K, V], load_factor: Float) {
+    if load_factor <= 0.0 {
+        return panic("Attempt to specify load factor of zero or lower")
+    }
     self.load_factor = load_factor
 }
 
 pub fun Map::set_capacity[K, V](self: mut Map[K, V], capacity: Int) {
+    if capacity <= (self.buckets |> length()) { return unit }
     val entries = self.buckets 
         |> values()
         |> map[List[Pair[K, V]], mut Sequence[Pair[K, V]]](List::values)

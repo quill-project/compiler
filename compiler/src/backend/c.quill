@@ -446,9 +446,9 @@ fun emit_global(
             val dest: String = mangle_path(path, instance.second)
             gen |> emit_expression(value, dest)
             out.value = out.value
-                |> concat(gen.start.value)
-                |> concat(gen.body.value)
-                |> concat(gen.end.value)
+                |> concat(gen.start |> as_string())
+                |> concat(gen.body |> as_string())
+                |> concat(gen.end |> as_string())
             emitted |> add(path)
         }
         _ {
@@ -481,9 +481,9 @@ pub fun emit_global_inits(g: mut Generator, f_name: String) -> String {
 
 // Stores the state and context required for the emission of a single function.
 pub struct Generator(
-    start: mut Box[String],
-    body: mut Box[String],
-    end: mut Box[String],
+    start: mut StringBuilder,
+    body: mut StringBuilder,
+    end: mut StringBuilder,
     locals: mut Map[String, String],
     locals_capt: mut Map[String, String],
     table: SymbolTable,
@@ -498,19 +498,19 @@ pub struct Generator(
 // Creates a new generator state from scratch.
 pub fun Generator::new(table: SymbolTable, messages: mut List[Message]) -> mut Generator
     = Generator(
-        Box(""), Box(""), Box(""),
+        StringBuilder::empty(), StringBuilder::empty(), StringBuilder::empty(),
         Map::empty(), Map::empty(), 
         table,
         Box(0), Box(""), Box(0), Map::empty(), Box(0),
         messages
     )
 
-// Creates a new generator in a new function inside the function of the 
-// given exisiting generator. Symbols and 
-// local variable indices are shared with the parent scope.
+// Creates a new generator in a new function in the same module context 
+// as the given generator. Symbols and local variable indices are shared 
+// with the parent scope.
 pub fun Generator::in_context_of(existing: Generator) -> mut Generator
     = Generator(
-        Box(""), Box(""), Box(""), 
+        StringBuilder::empty(), StringBuilder::empty(), StringBuilder::empty(), 
         Map::empty(), Map::empty(),
         existing.table,
         existing.next_local_id, existing.closure_bodies, 
@@ -536,20 +536,20 @@ pub fun Generator::in_scope_under(existing: Generator) -> mut Generator
 // Inserts the given text in the beginning section of the generator scope.
 // The beginning section is used to create and set up local variables.
 pub fun Generator::at_start(self: mut Generator, s: String) {
-    self.start.value = self.start.value |> concat(s)
+    self.start |> push(s)
 }
 
 // Inserts the given text in the body section of the generator scope.
 // The body section is used to execute code.
 pub fun Generator::in_body(self: mut Generator, s: String) {
-    self.body.value = self.body.value |> concat(s)
+    self.body |> push(s)
 }
 
 // Inserts the given text at the end of the generator scope.
 // The end section is ALWAYS invoked before returning from the function,
 // making it cruical for the proper handling of reference counts of references.
 pub fun Generator::at_end(self: mut Generator, s: String) {
-    self.end.value = self.end.value |> concat(s)
+    self.end |> push(s)
 }
 
 // Set up a local variable in the scope that allows for returning of 
@@ -623,10 +623,10 @@ pub fun Generator::assign_to(
 // when it wants to return (to invoke all code in the 'end' section) and to
 // actually return.
 pub fun Generator::output(self: Generator) -> String
-    = self.start.value
-    |> concat(self.body.value)
+    = self.start |> as_string()
+    |> concat(self.body |> as_string())
     |> concat("ret:;\n")
-    |> concat(self.end.value)
+    |> concat(self.end |> as_string())
     |> concat("return ret_val;\n")
 
 // Emits the given expression after the given pattern path.
@@ -1120,8 +1120,9 @@ pub fun emit_expression(gen: mut Generator, node: TypedNode, into: String) {
                 ))
                 val info: String = "((_ *) _->data)"
                     |> fmt("quill_list_layout_t", va_args_arr)
-                gen |> in_body("_->buffer = malloc(sizeof(_) * _);\n" |> fmt(
-                    info, emit_type(va_elem_t), va_c |> as_string()
+                gen |> in_body("_->buffer = _(sizeof(_) * _);\n" |> fmt(
+                    info, "QUILL_LIST_BUFFER_ALLOC",
+                    emit_type(va_elem_t), va_c |> as_string()
                 ))
                 gen |> in_body("_->capacity = _;\n" |> fmt(
                     info, va_c |> as_string()

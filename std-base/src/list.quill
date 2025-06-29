@@ -89,6 +89,12 @@ pub fun List::push[T](self: mut List[T], value: T) -> Int {
     return pos
 }
 
+pub fun List::append[T](self: mut List[T], other: List[T]) {
+    other |> values() |> for_each(|v| {
+        self |> push(v)
+    })
+}
+
 // ext fun List::set_unchecked[T](self: mut List[T], position: Int, value: T)
 
 pub fun List::set[T](self: mut List[T], position: Int, value: T) -> T {
@@ -157,7 +163,7 @@ pub fun List::indices_rep[T](self: List[T]) -> mut Stream[Int] {
     if 0 == (self |> length()) {
         return panic("Attempt to get index stream from empty list!")
     }
-    return count_from(0)
+    return count_up_from(0)
         |> map(|i| i % (self |> length()))
 }
 
@@ -169,23 +175,16 @@ pub fun List::values_rep[T](self: List[T]) -> mut Stream[T] {
     if 0 == (self |> length()) {
         return panic("Attempt to get element stream from empty list!")
     }
-    return count_from(0)
+    return count_up_from(0)
         |> map[Int, T](|i| self |> get_unchecked(i % (self |> length())))
 }
 
 pub fun List::reversed[T](self: List[T]) -> mut Sequence[T]
-    = range_incl(1, self |> length())
-    |> map[Int, T](|i| self |> get_unchecked((self |> length()) - i))
+    = range_down_incl((self |> length()) - 1, 0)
+    |> map[Int, T](|i| self |> get_unchecked(i))
 
-pub fun List::indices_rev[T](self: List[T]) -> mut Sequence[Int] {
-    mut i = (self |> length()) - 1
-    return Sequence::new[Int](|| {
-        if i < 0 { return Option::None }
-        val n: Int = i
-        i = i - 1
-        return Option::Some(n)
-    })
-}
+pub fun List::indices_rev[T](self: List[T]) -> mut Sequence[Int]
+    = range_down_incl((self |> length()) - 1, 0)
 
 // removal
 

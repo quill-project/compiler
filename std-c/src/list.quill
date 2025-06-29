@@ -2,12 +2,17 @@
 mod std
 
 ext fun List::grow[T](self: mut List[T], n: Int) = "
+    #include(<string.h>)
     quill_list_layout_t *data = (quill_list_layout_t *) #var(self)->data;
-    size_t size_bytes = sizeof(#type(T)) * #var(n);
-    data->buffer 
-        = #var(n) <= data->capacity? data->buffer
-        : data->buffer == NULL? malloc(size_bytes)
-        : realloc(data->buffer, size_bytes);
+    if(#var(n) <= data->capacity) { return QUILL_UNIT; }
+    size_t new_size_bytes = sizeof(#type(T)) * #var(n);
+    #type(T) *new_buffer = QUILL_LIST_BUFFER_ALLOC(new_size_bytes);
+    if(data->buffer != NULL) {
+        size_t copied_size_bytes = sizeof(#type(T)) * data->length;
+        memcpy(new_buffer, data->buffer, copied_size_bytes);
+        QUILL_LIST_BUFFER_FREE(data->buffer);
+    }
+    data->buffer = new_buffer;
     data->capacity = #var(n);
     return QUILL_UNIT;
 "
@@ -141,6 +146,6 @@ ext fun List::destruct[T](self: mut List[T]) = "
     for(quill_int_t i = 0; i < data->length; i += 1) {
         #rc_dec(T)(values[i]);
     }
-    free(data->buffer);
+    QUILL_LIST_BUFFER_FREE(data->buffer);
     return QUILL_UNIT;
 "

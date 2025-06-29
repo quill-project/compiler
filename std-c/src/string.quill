@@ -48,6 +48,7 @@ ext fun String::slice_from_unchecked(self: String, start: Int) -> String = "
     };
 "
 
+// MUST ALWAYS ALLOCATE A NEW STRING!
 pub ext fun String::concat(low: String, high: String) -> String = "
     quill_string_t res;
     res.length_points = #var(low).length_points + #var(high).length_points;

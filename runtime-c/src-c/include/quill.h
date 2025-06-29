@@ -94,6 +94,9 @@ typedef struct quill_list_layout {
     quill_int_t length;
 } quill_list_layout_t;
 
+#define QUILL_LIST_BUFFER_ALLOC quill_alloc_alloc
+#define QUILL_LIST_BUFFER_FREE quill_alloc_free
+
 typedef quill_alloc_t *quill_list_t;
 
 

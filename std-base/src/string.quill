@@ -3,12 +3,14 @@ mod std
 
 // ext fun String::slice_unchecked(self: String, start: Int, end: Int) -> String
 // ext fun String::slice_from_unchecked(self: String, start: Int) -> String
-// pub ext fun String::concat(low: String, high: String) -> String
+// pub ext fun String::concat(low: String, high: String) -> String    // MUST ALWAYS ALLOCATE A NEW STRING!
 // pub ext fun String::length(self: String) -> Int
 // ext fun String::as_code_unchecked(self: String) -> Int
 // ext fun String::from_code_unchecked(code: Int) -> String
 // pub fun String::chars(self: String) -> mut Sequence[String]
 // pub fun String::chars_rep(self: String) -> mut Stream[String]
+
+pub fun String::is_empty(self: String) -> Bool = (self |> length()) == 0
 
 pub fun String::as_string(self: String) -> String = self
 
@@ -19,12 +21,16 @@ pub fun String::as_hash(self: String) -> Int = self
 
 pub fun String::clone(self: String) -> String = self
 
-pub fun String::join(from: mut Sequence[String], delim: String) -> String = from 
-    |> reduce(|acc, curr| acc 
-        |> concat(delim) 
-        |> concat(curr)
-    ) 
-    |> unwrap_or("")
+pub fun String::join(from: mut Sequence[String], delim: String) -> String {
+    val r: mut StringBuilder = from
+        |> next() |> unwrap_or("")
+        |> StringBuilder::of()
+    from |> for_each(|v| {
+        r |> push(delim)
+        r |> push(v)
+    })
+    return r |> as_string()
+}
 
 pub fun String::indices(self: String) -> mut Sequence[Int] 
     = range(0, self |> length())
@@ -33,19 +39,12 @@ pub fun String::indices_rep(self: String) -> mut Stream[Int] {
     if 0 == (self |> length()) {
         return panic("Attempt to get index stream from empty string!")
     }
-    return count_from(0)
+    return count_up_from(0)
         |> map(|i| i % (self |> length()))
 }
 
-pub fun String::indices_rev(self: String) -> mut Sequence[Int] {
-    mut i = (self |> length()) - 1
-    return Sequence::new[Int](|| {
-        if i < 0 { return Option::None }
-        val n: Int = i
-        i = i - 1
-        return Option::Some(n)
-    })
-}
+pub fun String::indices_rev(self: String) -> mut Sequence[Int]
+    = range_down_incl((self |> length()) - 1, 0)
 
 pub fun String::codes(self: String) -> mut Sequence[Int] = self
     |> chars()

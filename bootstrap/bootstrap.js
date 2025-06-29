@@ -54,11 +54,13 @@ const qiqSrcPaths = [
 ];
 const qiqExtSourcePaths = [
     ...collectFiles("./runtime-c/src-c", [".c"]),
+    ...collectFiles("./std-c/src-c", [".c"]),
     ...collectFiles("./os/src-c", [".c"]),
     ...collectFiles("./conc/src-c", [".c"])
 ];
 const qiqExtIncludeDirs = [
     "./runtime-c/src-c/include",
+    "./std-c/src-c/include",
     "./os/src-c/include",
     "./conc/src-c/include"
 ]

@@ -1,0 +1,151 @@
+
+mod std
+
+struct StringBuilder()
+
+// creation
+
+// pub ext fun StringBuilder::empty() -> mut StringBuilder
+
+pub fun StringBuilder::of(content: String) -> mut StringBuilder {
+    val self = StringBuilder::empty()
+    self |> push(content)
+    return self
+}
+
+pub fun StringBuilder::clone(self: StringBuilder) -> mut StringBuilder 
+    = StringBuilder::of(StringBuilder::as_string(self))
+
+// modification
+
+// pub ext fun StringBuilder::set_capacity(self: mut StringBuilder, capacity: Int)
+
+// ext fun StringBuilder::insert_unchecked(self: mut StringBuilder, position: Int, value: String)
+
+pub fun StringBuilder::insert(self: mut StringBuilder, position: Int, value: String) {
+    val len: Int = self |> length()
+    val i: Int = if position >= 0 { position } else { len + position }
+    if i >= 0 && i <= len {
+        return self |> insert_unchecked(i, value)
+    }
+    return "Attempt to insert into string at position _, which is out of bounds for length _"
+        |> fmt(Int::as_string(position), Int::as_string(len))
+        |> panic()
+}
+
+// pub ext fun StringBuilder::push(self: mut StringBuilder, value: String)
+
+pub fun StringBuilder::append(self: mut StringBuilder, value: StringBuilder) {
+    self |> push(value |> as_string_ref())
+}
+
+// access
+
+pub fun StringBuilder::eq(lhs: StringBuilder, rhs: StringBuilder) -> Bool
+    = StringBuilder::as_string_ref(lhs) == StringBuilder::as_string_ref(rhs)
+
+pub fun StringBuilder::not_eq(lhs: StringBuilder, rhs: StringBuilder) -> Bool
+    = StringBuilder::as_string_ref(lhs) != StringBuilder::as_string_ref(rhs)
+
+// ext fun StringBuilder::as_string_ref(self: StringBuilder) -> String
+
+pub fun StringBuilder::as_string(self: StringBuilder) -> String
+    = self |> as_string_ref() |> concat("")
+
+pub fun StringBuilder::as_hash(self: StringBuilder) -> Int
+    = self |> as_string_ref() |> as_hash() 
+
+pub fun StringBuilder::length(self: StringBuilder) -> Int
+    = self |> as_string_ref() |> length()
+
+pub fun StringBuilder::is_empty(self: StringBuilder) -> Bool 
+    = (self |> length()) == 0
+
+pub fun StringBuilder::slice(self: StringBuilder, start: Int, end: Int) -> String
+    = self |> as_string_ref() |> slice(start, end) |> concat("")
+
+pub fun StringBuilder::slice_from(self: StringBuilder, start: Int) -> String
+    = self |> as_string_ref() |> slice_from(start) |> concat("")
+
+pub fun StringBuilder::slice_to(self: StringBuilder, end: Int) -> String
+    = self |> as_string_ref() |> slice_to(end) |> concat("")
+
+pub fun StringBuilder::indices(self: StringBuilder) -> mut Sequence[Int] 
+    = range(0, self |> length())
+
+pub fun StringBuilder::indices_rep(self: StringBuilder) -> mut Stream[Int] {
+    if 0 == (self |> length()) {
+        return panic("Attempt to get index stream from empty list!")
+    }
+    return count_up_from(0)
+        |> map(|i| i % (self |> length()))
+}
+
+pub fun StringBuilder::chars(self: StringBuilder) -> mut Sequence[String]
+    = self |> as_string() |> chars()
+
+pub fun StringBuilder::chars_rep(self: StringBuilder) -> mut Stream[String]
+    = self |> as_string() |> chars_rep()
+
+pub fun StringBuilder::codes(self: StringBuilder) -> mut Sequence[Int] 
+    = self |> as_string() |> codes()
+
+pub fun StringBuilder::codes_rep(self: StringBuilder) -> mut Stream[Int] 
+    = self |> as_string() |> codes_rep()
+
+pub fun StringBuilder::indices_rev(self: StringBuilder) -> mut Sequence[Int]
+    = range_down_incl((self |> length()) - 1, 0)
+
+// removal
+
+// ext fun StringBuilder::splice_unchecked(self: mut StringBuilder, start: Int, end: Int) -> String
+
+// ext fun StringBuilder::splice_from_unchecked(self: mut StringBuilder, start: Int) -> String
+
+pub fun StringBuilder::splice(self: mut StringBuilder, start: Int, end: Int) -> String {
+    val len: Int = self |> length()
+    val s: Int = if start >= 0 { start } else { len + start }
+    val e: Int = if end >= 0 { end } else { len + end }
+    if s < 0 || s > len {
+        return "Attempt to splice string starting from position _, which is out of bounds for length _"
+            |> fmt(Int::as_string(start), Int::as_string(len))
+            |> panic()
+    }
+    if e < 0 || e > len {
+        return "Attempt to splice string up to position _, which is out of bounds for length _"
+            |> fmt(Int::as_string(end), Int::as_string(len))
+            |> panic()
+    }
+    if s > e {
+        return "Attempt to splice string from position _ up to position _, which is in descending order for length _"
+            |> fmt(Int::as_string(start), Int::as_string(end), Int::as_string(len))
+            |> panic()
+    }
+    return self |> splice_unchecked(s, e)
+}
+
+pub fun StringBuilder::splice_from(self: mut StringBuilder, start: Int) -> String {
+    val len: Int = self |> length()
+    val s: Int = if start >= 0 { start } else { len + start }
+    if s < 0 || s > len {
+        return "Attempt to splice string starting from position _, which is out of bounds for length _"
+            |> fmt(Int::as_string(start), Int::as_string(len))
+            |> panic()
+    }
+    return self |> splice_from_unchecked(s)
+}
+
+pub fun StringBuilder::splice_to(self: mut StringBuilder, end: Int) -> String {
+    val len: Int = self |> length()
+    val e: Int = if end >= 0 { end } else { len + end }
+    if e < 0 || e > len {
+        return "Attempt to splice string up to position _, which is out of bounds for length _"
+            |> fmt(Int::as_string(end), Int::as_string(len))
+            |> panic()
+    }
+    return self |> splice_unchecked(0, e)
+}
+
+pub fun StringBuilder::clear(self: mut StringBuilder) {
+    self |> splice_from_unchecked(0)
+}

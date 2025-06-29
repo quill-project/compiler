@@ -17,7 +17,7 @@ pub fun of() {
 }
 
 pub fun zip() {
-    val a = std::count_from(1)
+    val a = std::count_up_from(1)
     val b = Stream::of(3)
     val s: mut Stream[Int] = Stream::zip(a, b, |x, y| x * y)
     assert_eq(Stream::next(s), 3)
@@ -27,7 +27,7 @@ pub fun zip() {
 }
 
 pub fun map() {
-    val s: mut Stream[Int] = std::count_from(10)
+    val s: mut Stream[Int] = std::count_up_from(10)
         |> Stream::map(|n| n * 3)
     assert_eq(Stream::next(s), 30)
     assert_eq(Stream::next(s), 33)
@@ -36,7 +36,7 @@ pub fun map() {
 }
 
 pub fun skip() {
-    val s = std::count_from(10)
+    val s = std::count_up_from(10)
     assert_eq(Stream::next(s), 10)
     Stream::skip(s, 5)
     assert_eq(Stream::next(s), 16)
@@ -46,7 +46,7 @@ pub fun skip() {
 }
 
 pub fun take() {
-    val s = std::count_from(10)
+    val s = std::count_up_from(10)
         |> Stream::take(3)
     assert_eq(Sequence::next(s), Option::Some(10))
     assert_eq(Sequence::next(s), Option::Some(11))
@@ -55,13 +55,13 @@ pub fun take() {
 }
 
 pub fun take_while() {
-    val s = std::count_from(10)
+    val s = std::count_up_from(10)
         |> Stream::take_while(|n| n < 100)
     assert_eq(Sequence::last(s), Option::Some(99))
 }
 
 pub fun take_until() {
-    val s = std::count_from(10)
+    val s = std::count_up_from(10)
         |> Stream::take_until(|n| n > 42)
     assert_eq(Sequence::last(s), Option::Some(42))
 }
@@ -84,7 +84,7 @@ pub fun flatten() {
 }
 
 pub fun filter() {
-    val s = std::count_from(1)
+    val s = std::count_up_from(1)
         |> Stream::filter(|n| n % 2 == 0)
     assert_eq(Stream::next(s), 2)
     assert_eq(Stream::next(s), 4)

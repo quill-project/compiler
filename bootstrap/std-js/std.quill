@@ -169,3 +169,39 @@ pub fun String::chars_rep(self: String) -> mut Stream[String] {
         return char
     })
 }
+
+
+pub ext fun StringBuilder::empty() -> mut StringBuilder = "
+    return { content: \"\" };
+"
+
+pub ext fun StringBuilder::set_capacity(self: mut StringBuilder, capacity: Int) = "
+    // JS impl does not have a capacity
+"
+
+ext fun StringBuilder::insert_unchecked(self: mut StringBuilder, position: Int, value: String) = "
+    self.content = self.content.substring(0, position)
+        + value
+        + self.content.substring(position);
+"
+
+pub ext fun StringBuilder::push(self: mut StringBuilder, value: String) = "
+    self.content += value;
+"
+
+ext fun StringBuilder::as_string_ref(self: StringBuilder) -> String = "
+    return self.content;
+"
+
+ext fun StringBuilder::splice_unchecked(self: mut StringBuilder, start: Int, end: Int) -> String = "
+    const removed = self.content.substring(start, end);
+    self.content = self.content.substring(0, start)
+        + self.content.substring(end);
+    return removed;
+"
+
+ext fun StringBuilder::splice_from_unchecked(self: mut StringBuilder, start: Int) -> String = "
+    const removed = self.content.substring(start);
+    self.content = self.content.substring(0, start);
+    return removed;
+"

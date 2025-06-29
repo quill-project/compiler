@@ -1,0 +1,150 @@
+
+mod std
+
+pub ext fun StringBuilder::empty() -> mut StringBuilder = "
+    #include(<quill_std.h>)
+    quill_struct_t alloc = quill_malloc(
+        sizeof(quill_std_strbuilder_layout_t), &#fun(StringBuilder::destruct)
+    );
+    quill_std_strbuilder_layout_t *data
+        = (quill_std_strbuilder_layout_t *) alloc->data;
+    data->capacity_bytes = 0;
+    data->length_points = 0;
+    data->length_bytes = 0;
+    data->buffer = NULL;
+    return alloc;
+"
+
+pub ext fun StringBuilder::set_capacity(self: mut StringBuilder, capacity: Int) = "
+    #include(<quill_std.h>)
+    quill_std_strbuilder_layout_t *data
+        = (quill_std_strbuilder_layout_t *) #var(self)->data;
+    if(#var(capacity) < data->capacity_bytes) { return QUILL_UNIT; }
+    uint8_t *new_buffer = QUILL_STD_STRBUILDER_BUFFER_ALLOC(#var(capacity));
+    if(data->buffer != NULL) {
+        memcpy(new_buffer, data->buffer, data->length_bytes);
+        QUILL_STD_STRBUILDER_BUFFER_FREE(data->buffer);
+    }
+    data->buffer = new_buffer;
+    data->capacity_bytes = #var(capacity);
+    return QUILL_UNIT;
+"
+
+ext fun StringBuilder::insert_unchecked(self: mut StringBuilder, position: Int, value: String) = "
+    #include(<quill_std.h>)
+    quill_std_strbuilder_layout_t *data
+        = (quill_std_strbuilder_layout_t *) #var(self)->data;
+    if(data->capacity_bytes == 0) {
+        #fun(StringBuilder::set_capacity)(#var(self), 16);
+    }
+    for(;;) {
+        quill_int_t rem_bytes = data->capacity_bytes - data->length_bytes;
+        if(rem_bytes >= #var(value).length_bytes) { break; }
+        #fun(StringBuilder::set_capacity)(#var(self), data->capacity_bytes * 2);
+    }
+    quill_int_t pos_offset = 0;
+    for(quill_int_t i = 0; i < #var(position); i += 1) {
+        pos_offset += quill_point_decode_length(data->buffer[pos_offset]);
+    }
+    memmove(
+        data->buffer + pos_offset + #var(value).length_bytes,
+        data->buffer + pos_offset,
+        data->length_bytes - pos_offset
+    );
+    memcpy(
+        data->buffer + pos_offset, #var(value).data, #var(value).length_bytes
+    );
+    data->length_points += #var(value).length_points;
+    data->length_bytes += #var(value).length_bytes;
+    return QUILL_UNIT;
+"
+
+pub ext fun StringBuilder::push(self: mut StringBuilder, value: String) = "
+    #include(<quill_std.h>)
+    quill_std_strbuilder_layout_t *data
+        = (quill_std_strbuilder_layout_t *) #var(self)->data;
+    if(data->capacity_bytes == 0) {
+        #fun(StringBuilder::set_capacity)(#var(self), 16);
+    }
+    for(;;) {
+        quill_int_t rem_bytes = data->capacity_bytes - data->length_bytes;
+        if(rem_bytes >= #var(value).length_bytes) { break; }
+        #fun(StringBuilder::set_capacity)(#var(self), data->capacity_bytes * 2);
+    }
+    memcpy(
+        data->buffer + data->length_bytes, #var(value).data, 
+        #var(value).length_bytes
+    );
+    data->length_points += #var(value).length_points;
+    data->length_bytes += #var(value).length_bytes;
+    return QUILL_UNIT;
+"
+
+ext fun StringBuilder::as_string_ref(self: StringBuilder) -> String = "
+    #include(<quill_std.h>)
+    quill_std_strbuilder_layout_t *data
+        = (quill_std_strbuilder_layout_t *) #var(self)->data;
+    quill_rc_add(#var(self));
+    return (quill_string_t) {
+        .alloc = #var(self),
+        .data = data->buffer,
+        .length_points = data->length_points,
+        .length_bytes = data->length_bytes
+    };
+"
+
+ext fun StringBuilder::splice_unchecked(self: mut StringBuilder, start: Int, end: Int) -> String = "
+    #include(<quill_std.h>)
+    quill_std_strbuilder_layout_t *data
+        = (quill_std_strbuilder_layout_t *) #var(self)->data;
+    quill_int_t start_offset = 0;
+    for(quill_int_t i = 0; i < #var(start); i += 1) {
+        start_offset += quill_point_decode_length(data->buffer[start_offset]);
+    }
+    quill_int_t end_offset = start_offset;
+    for(quill_int_t i = #var(start); i < #var(end); i += 1) {
+        end_offset += quill_point_decode_length(data->buffer[end_offset]);
+    }
+    quill_string_t res;
+    res.length_points = #var(end) - #var(start);
+    res.length_bytes = end_offset - start_offset;
+    res.alloc = quill_malloc(res.length_bytes, NULL);
+    res.data = res.alloc->data;
+    memcpy(res.alloc->data, data->buffer + start_offset, res.length_bytes);
+    memmove(
+        data->buffer + start_offset, data->buffer + end_offset, 
+        data->length_bytes - end_offset
+    );
+    data->length_points -= res.length_points;
+    data->length_bytes -= res.length_bytes;
+    return res;
+"
+
+ext fun StringBuilder::splice_from_unchecked(self: mut StringBuilder, start: Int) -> String = "
+    #include(<quill_std.h>)
+    quill_std_strbuilder_layout_t *data
+        = (quill_std_strbuilder_layout_t *) #var(self)->data;
+    quill_int_t start_offset = 0;
+    for(quill_int_t i = 0; i < #var(start); i += 1) {
+        start_offset += quill_point_decode_length(data->buffer[start_offset]);
+    }
+    quill_string_t res;
+    res.length_points = data->length_points - #var(start);
+    res.length_bytes = data->length_bytes - start_offset;
+    res.alloc = quill_malloc(res.length_bytes, NULL);
+    res.data = res.alloc->data;
+    memcpy(res.alloc->data, data->buffer + start_offset, res.length_bytes);
+    data->length_points = #var(start);
+    data->length_bytes = start_offset;
+    return res;
+"
+
+ext fun StringBuilder::destruct(self: mut StringBuilder) = "
+    #include(<quill_std.h>)
+    quill_std_strbuilder_layout_t *data
+        = (quill_std_strbuilder_layout_t *) #var(self)->data;
+    if(data->buffer != NULL) {
+        QUILL_STD_STRBUILDER_BUFFER_FREE(data->buffer);
+    }
+    return QUILL_UNIT;
+"

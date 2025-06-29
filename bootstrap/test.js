@@ -2,7 +2,7 @@
 const tests = [
     "std::tests::range",
     "std::tests::range_incl",
-    "std::tests::count_from",
+    "std::tests::count_up_from",
 
     "std::tests::option::as_string",
     "std::tests::option::as_hash",
