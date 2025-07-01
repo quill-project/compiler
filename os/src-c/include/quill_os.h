@@ -2,6 +2,8 @@
 #ifndef QUILL_OS_H
 #define QUILL_OS_H
 
+#include <quill.h>
+
 #include <locale.h>
 #include <errno.h>
 #include <stdio.h>
@@ -10,9 +12,10 @@
 #ifdef _WIN32
     #include <windows.h>
 
-    #define QUILL_FS_ERR_RET_FALSE(x) QUILL_FALSE
+    #define QUILL_OS_ERR_RET_FALSE(x) QUILL_FALSE
+    #define QUILL_OS_ERR_RET_VOID(x)
 
-    #define QUILL_FS_STRING_AS_WIDE(s, r, e) \
+    #define QUILL_OS_STRING_AS_WIDE(s, r, e) \
         int r##_length = MultiByteToWideChar( \
             CP_UTF8, 0, (s).data, (int) (s).length_bytes, NULL, 0 \
         ); \
@@ -28,7 +31,7 @@
         } \
         r[r##_length] = L'\0';
 
-    #define QUILL_FS_STRING_FROM_WIDE(s, sl, r, e) \
+    #define QUILL_OS_STRING_FROM_WIDE(s, sl, r, e) \
         quill_string_t r; \
         r.length_bytes = WideCharToMultiByte( \
             CP_UTF8, 0, (s), (sl), NULL, 0, NULL, NULL \
@@ -48,7 +51,7 @@
             o += quill_point_decode_length(r.data[o]); \
         }
 
-    static quill_int_t quill_fs_win_to_errno(DWORD err) {
+    static quill_int_t quill_os_win_to_errno(DWORD err) {
         switch(err) {
             case ERROR_FILE_NOT_FOUND:
             case ERROR_PATH_NOT_FOUND:
@@ -90,11 +93,58 @@
     #include <sys/stat.h>
     #include <unistd.h>
     #include <dirent.h>
+
+    extern char **environ;
 #endif
 
-#define QUILL_FS_STRING_AS_NT(s, r) \
+#define QUILL_OS_STRING_AS_NT(s, r) \
     char r[(s).length_bytes + 1]; \
     memcpy(r, (s).data, (s).length_bytes); \
     r[(s).length_bytes] = '\0';
+
+
+extern quill_mutex_t quill_os_env_lock;
+
+
+#ifdef _WIN32
+    #define QUILL_ENV_IS_WINDOWS QUILL_TRUE
+#else
+    #define QUILL_ENV_IS_WINDOWS QUILL_FALSE
+#endif
+
+#if defined(__unix__) || defined(__unix) || defined(__APPLE__)
+    #define QUILL_ENV_IS_UNIX QUILL_TRUE
+#else
+    #define QUILL_ENV_IS_UNIX QUILL_FALSE
+#endif
+
+#ifdef __APPLE__
+    #include <TargetConditionals.h>
+    #if TARGET_OS_MAC && !TARGET_OS_IPHONE
+        #define QUILL_ENV_IS_OSX QUILL_TRUE
+        #define QUILL_ENV_IS_IOS QUILL_FALSE
+    #elif TARGET_OS_IPHONE
+        #define QUILL_ENV_IS_OSX QUILL_FALSE
+        #define QUILL_ENV_IS_IOS QUILL_TRUE
+    #else
+        #define QUILL_ENV_IS_OSX QUILL_FALSE
+        #define QUILL_ENV_IS_IOS QUILL_FALSE
+    #endif
+#else
+    #define QUILL_ENV_IS_OSX QUILL_FALSE
+    #define QUILL_ENV_IS_IOS QUILL_FALSE
+#endif
+
+#ifdef __linux__
+    #define QUILL_ENV_IS_LINUX QUILL_TRUE
+#else
+    #define QUILL_ENV_IS_LINUX QUILL_FALSE
+#endif
+
+#ifdef __ANDROID__
+    #define QUILL_ENV_IS_ANDROID QUILL_TRUE
+#else
+    #define QUILL_ENV_IS_ANDROID QUILL_FALSE
+#endif
 
 #endif
