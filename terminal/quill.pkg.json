@@ -1,0 +1,11 @@
+{
+    "name": "terminal",
+    "authors": ["schwalbe_t"],
+    "desciption": "Provides utilites for building terminal applications.",
+    "type": "library",
+    "backend": "c",
+    "dependencies": [
+        "./../os",
+        "./../std-c"
+    ]
+}

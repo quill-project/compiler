@@ -1,0 +1,10 @@
+{
+    "name": "std-c",
+    "authors": ["schwalbe_t"],
+    "desciption": "Implements the Quill standard library for the C backend.",
+    "type": "library",
+    "backend": "c",
+    "dependencies": [
+        "./../std-base"
+    ]
+}
