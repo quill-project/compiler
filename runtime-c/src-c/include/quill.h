@@ -229,20 +229,12 @@ static quill_unit_t quill_captured_closure_free(quill_alloc_t *alloc) {
     (closure_fptr)((closure).alloc)
 
 
-static void quill_runtime_init_global(void) {
-    quill_alloc_init_global();
-}
+// DO NOT MUTATE!
+extern quill_list_t quill_program_args;
 
-static void quill_runtime_destruct_global(void) {
-    // nothing to do
-}
-
-static void quill_runtime_init_thread(void) {
-    quill_alloc_init_thread();
-}
-
-static void quill_runtime_destruct_thread(void) {
-    quill_alloc_destruct_thread();
-}
+void quill_runtime_init_global(int argc, char **argv);
+void quill_runtime_destruct_global(void);
+void quill_runtime_init_thread(void);
+void quill_runtime_destruct_thread(void);
 
 #endif

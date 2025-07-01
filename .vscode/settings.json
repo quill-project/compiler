@@ -1,5 +1,8 @@
 {
     "files.associations": {
-        "cstdint": "cpp"
+        "cstdint": "cpp",
+        "array": "c",
+        "string": "c",
+        "string_view": "c"
     }
 }

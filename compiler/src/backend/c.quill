@@ -1327,8 +1327,8 @@ pub val GLOBALS_INIT: String = "quill_init_globals"
 pub val RUNTIME_DSTR: String = "quill_runtime_destruct_global"
 
 pub val MAIN: String = "
-int main(void) {
-    _();
+int main(int argc, char **argv) {
+    _(argc, argv);
     _();
     _
     _();
