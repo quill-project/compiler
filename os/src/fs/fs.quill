@@ -1,14 +1,6 @@
 
 mod os::fs
 
-fun make_err[T](code: Int) -> Result[T, os::Error] {
-    return Result::Err(os::Error::unsafe_from_code(code))
-}
-
-fun make_ok[T](value: T) -> Result[T, os::Error] {
-    return Result::Ok(value)
-}
-
 // Determines if a file of any type exists at the given path.
 // To specifically check for a file (and not a directory), use 'is_file'.
 // To specifically check for a directory, use 'is_dir'.
@@ -51,14 +43,14 @@ pub ext fun write_file(content: String, path: String) -> Result[Unit, os::Error]
     #include(<quill_os.h>)
     FILE *f = NULL;
     #ifdef _WIN32
-        QUILL_OS_STRING_AS_WIDE(#var(path), path_w, #fun(make_err[Unit]))
+        QUILL_OS_STRING_AS_WIDE(#var(path), path_w, #fun(os::make_err[Unit]))
         f = _wfopen(path_w, L\"wb\");
     #else 
         QUILL_OS_STRING_AS_NT(#var(path), path_nt)
         f = fopen(path_nt, \"wb\");
     #endif
     if(f == NULL) {
-        return #fun(make_err[Unit])((quill_int_t) errno);
+        return #fun(os::make_err[Unit])((quill_int_t) errno);
     }
     size_t written_bytes = fwrite(
         #var(content).data, sizeof(uint8_t), #var(content).length_bytes, f
@@ -66,12 +58,12 @@ pub ext fun write_file(content: String, path: String) -> Result[Unit, os::Error]
     if(written_bytes != (size_t) #var(content).length_bytes) {
         quill_int_t e = (quill_int_t) errno;
         fclose(f);
-        return #fun(make_err[Unit])(e);
+        return #fun(os::make_err[Unit])(e);
     }
     if(fclose(f) != 0) {
-        return #fun(make_err[Unit])((quill_int_t) errno);
+        return #fun(os::make_err[Unit])((quill_int_t) errno);
     }
-    return #fun(make_ok[Unit])(QUILL_UNIT);
+    return #fun(os::make_ok[Unit])(QUILL_UNIT);
 "
 
 // Attempts to read the contents of the file encoded in UTF-8 at the given path.
@@ -80,24 +72,24 @@ pub ext fun read_file(path: String) -> Result[String, os::Error] = "
     #include(<quill_os.h>)
     FILE *f = NULL;
     #ifdef _WIN32
-        QUILL_OS_STRING_AS_WIDE(#var(path), path_w, #fun(make_err[String]))
+        QUILL_OS_STRING_AS_WIDE(#var(path), path_w, #fun(os::make_err[String]))
         f = _wfopen(path_w, L\"r\");
     #else 
         QUILL_OS_STRING_AS_NT(#var(path), path_nt)
         f = fopen(path_nt, \"r\");
     #endif
     if(f == NULL) {
-        return #fun(make_err[String])((quill_int_t) errno);
+        return #fun(os::make_err[String])((quill_int_t) errno);
     }
     if(fseek(f, 0, SEEK_END) != 0) {
         quill_int_t e = (quill_int_t) errno;
         fclose(f);
-        return #fun(make_err[String])(e);
+        return #fun(os::make_err[String])(e);
     }
     quill_string_t res;
     res.length_bytes = (quill_int_t) ftell(f);
     if(res.length_bytes < 0) {
-        return #fun(make_err[String])((quill_int_t) errno);
+        return #fun(os::make_err[String])((quill_int_t) errno);
     }
     res.length_points = 0;
     res.alloc = quill_malloc(res.length_bytes, NULL);
@@ -112,17 +104,17 @@ pub ext fun read_file(path: String) -> Result[String, os::Error] = "
         quill_int_t e = (quill_int_t) errno;
         quill_rc_dec(res.alloc);
         fclose(f);
-        return #fun(make_err[String])(e);
+        return #fun(os::make_err[String])(e);
     }
     if(fclose(f) != 0) {
         quill_int_t e = (quill_int_t) errno;
         quill_rc_dec(res.alloc);
-        return #fun(make_err[String])(e);
+        return #fun(os::make_err[String])(e);
     }
     for(quill_int_t o = 0; o < res.length_bytes; res.length_points += 1) {
         o += quill_point_decode_length(res.data[o]);
     }
-    return #fun(make_ok[String])(res);
+    return #fun(os::make_ok[String])(res);
 "
 
 // Deletes the directory at the given path only if it exists and is empty.
@@ -130,17 +122,17 @@ pub ext fun read_file(path: String) -> Result[String, os::Error] = "
 pub ext fun delete_file(path: String) -> Result[Unit, os::Error] = "
     #include(<quill_os.h>)
     #ifdef _WIN32
-        QUILL_OS_STRING_AS_WIDE(#var(path), path_w, #fun(make_err[Unit]))
+        QUILL_OS_STRING_AS_WIDE(#var(path), path_w, #fun(os::make_err[Unit]))
         if(_wremove(path_w) != 0) {
-            return #fun(make_err[Unit])((quill_int_t) errno);
+            return #fun(os::make_err[Unit])((quill_int_t) errno);
         }
     #else
         QUILL_OS_STRING_AS_NT(#var(path), path_nt)
         if(remove(path_nt) != 0) {
-            return #fun(make_err[Unit])((quill_int_t) errno);
+            return #fun(os::make_err[Unit])((quill_int_t) errno);
         }
     #endif
-    return #fun(make_ok[Unit])(QUILL_UNIT);
+    return #fun(os::make_ok[Unit])(QUILL_UNIT);
 "
 
 // Attempts to determine if the file at the given path is a directory.
@@ -167,9 +159,9 @@ pub ext fun is_dir(path: String) -> Bool = "
 pub ext fun create_dir(path: String) -> Result[Unit, os::Error] = "
     #include(<quill_os.h>)
     #ifdef _WIN32
-        QUILL_OS_STRING_AS_WIDE(#var(path), path_w, #fun(make_err[Unit]))
+        QUILL_OS_STRING_AS_WIDE(#var(path), path_w, #fun(os::make_err[Unit]))
         if(!CreateDirectoryW(path_w, NULL)) {
-            return #fun(make_err[Unit])(quill_os_win_to_errno(GetLastError()));
+            return #fun(os::make_err[Unit])(quill_os_win_to_errno(GetLastError()));
         }
     #else
         QUILL_OS_STRING_AS_NT(#var(path), path_nt)
@@ -177,10 +169,10 @@ pub ext fun create_dir(path: String) -> Result[Unit, os::Error] = "
         const mode_t dir_mode = S_IRUSR | S_IWUSR | S_IXUSR
             | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH;
         if(mkdir(path_nt, dir_mode) != 0) {
-            return #fun(make_err[Unit])((quill_int_t) errno);
+            return #fun(os::make_err[Unit])((quill_int_t) errno);
         }
     #endif
-    return #fun(make_ok[Unit])(QUILL_UNIT);
+    return #fun(os::make_ok[Unit])(QUILL_UNIT);
 "
 
 // Attempts to read the contents of a directory a the given apth.
@@ -195,7 +187,7 @@ pub ext fun read_dir(path: String) -> Result[List[String], os::Error] = "
         quill_bool_t requires_sep = #var(path).length_points > 0
             && last_char != '\\\\' 
             && last_char != '/';
-        QUILL_OS_STRING_AS_WIDE(#var(path), path_w, #fun(make_err[List[String]]))
+        QUILL_OS_STRING_AS_WIDE(#var(path), path_w, #fun(os::make_err[List[String]]))
         int pat_w_length = path_w_length + (requires_sep? 2 : 1);
         wchar_t pat_w[pat_w_length + 1];
         memcpy(pat_w, path_w, sizeof(wchar_t) * path_w_length);
@@ -210,7 +202,7 @@ pub ext fun read_dir(path: String) -> Result[List[String], os::Error] = "
         WIN32_FIND_DATAW entry;
         HANDLE d = FindFirstFileW(pat_w, &entry);
         if(d == INVALID_HANDLE_VALUE) {
-            return #fun(make_err[List[String]])(
+            return #fun(os::make_err[List[String]])(
                 quill_os_win_to_errno(GetLastError())
             );
         }
@@ -220,17 +212,17 @@ pub ext fun read_dir(path: String) -> Result[List[String], os::Error] = "
             if(wcscmp(entry.cFileName, L\"..\") == 0) { continue; }
             QUILL_OS_STRING_FROM_WIDE(
                 entry.cFileName, wcslen(entry.cFileName),
-                name, #fun(make_err[List[String]])
+                name, #fun(os::make_err[List[String]])
             )
             #fun(List::push[String])(res, name);
         } while(FindNextFileW(d, &entry));
         FindClose(d);
-        return #fun(make_ok[List[String]])(res);
+        return #fun(os::make_ok[List[String]])(res);
     #else
         QUILL_OS_STRING_AS_NT(#var(path), path_nt)
         DIR *d = opendir(path_nt);
         if(d == NULL) {
-            return #fun(make_err[List[String]])((quill_int_t) errno);
+            return #fun(os::make_err[List[String]])((quill_int_t) errno);
         }
         #type(List[String]) res = #fun(List::empty[String])();
         for(;;) {
@@ -244,9 +236,9 @@ pub ext fun read_dir(path: String) -> Result[List[String], os::Error] = "
         if(closedir(d) != 0) {
             quill_int_t e = (quill_int_t) errno;
             quill_rc_dec(res);
-            return #fun(make_err[List[String]])(e);
+            return #fun(os::make_err[List[String]])(e);
         }
-        return #fun(make_ok[List[String]])(res);
+        return #fun(os::make_ok[List[String]])(res);
     #endif
 "
 
@@ -255,15 +247,15 @@ pub ext fun read_dir(path: String) -> Result[List[String], os::Error] = "
 pub ext fun delete_dir(path: String) -> Result[Unit, os::Error] = "
     #include(<quill_os.h>)
     #ifdef _WIN32
-        QUILL_OS_STRING_AS_WIDE(#var(path), path_w, #fun(make_err[Unit]))
+        QUILL_OS_STRING_AS_WIDE(#var(path), path_w, #fun(os::make_err[Unit]))
         if(_wrmdir(path_w) != 0) {
-            return #fun(make_err[Unit])((quill_int_t) errno);
+            return #fun(os::make_err[Unit])((quill_int_t) errno);
         }
     #else
         QUILL_OS_STRING_AS_NT(#var(path), path_nt)
         if(rmdir(path_nt) != 0) {
-            return #fun(make_err[Unit])((quill_int_t) errno);
+            return #fun(os::make_err[Unit])((quill_int_t) errno);
         }
     #endif
-    return #fun(make_ok[Unit])(QUILL_UNIT);
+    return #fun(os::make_ok[Unit])(QUILL_UNIT);
 "

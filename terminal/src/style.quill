@@ -1,12 +1,14 @@
 
-mod term::style
+mod terminal::style
 
 ext fun enable_virt_esc() = "
-    HANDLE out = GetStdHandle(STD_OUTPUT_HANDLE);
-    DWORD mode;
-    GetConsoleMode(out, &mode);
-    mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-    SetConsoleMode(out, mode);
+    #ifdef _WIN32
+        HANDLE out = GetStdHandle(STD_OUTPUT_HANDLE);
+        DWORD mode;
+        GetConsoleMode(out, &mode);
+        mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+        SetConsoleMode(out, mode);
+    #endif
 "
 
 val ENABLED_VIRT_ESC: Unit = enable_virt_esc()
@@ -59,9 +61,9 @@ pub val ON_BRIGHT_CYAN: Int = 106
 pub val ON_BRIGHT_WHITE: Int = 107
 
 
-pub fun apply(text: String, ...style: List[Int]) -> String {
+pub fun style(text: String, ...s: List[Int]) -> String {
     if COLOR_DISABLED { return text }
-    val seq_nums: String = style |> values() 
+    val seq_nums: String = s |> values() 
         |> map(Int::as_string) 
         |> join(";")
     return SEQ_START |> concat(seq_nums) |> concat(SEQ_END)

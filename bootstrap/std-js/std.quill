@@ -6,6 +6,10 @@ ext fun raw_println(line: String) = "
     console.log(line);
 "
 
+ext fun raw_eprintln(line: String) = "
+    console.error(line);
+"
+
 pub ext fun panic[T](reason: String) -> T = "
     Error.stackTraceLimit = 100;
     throw new Error(reason);

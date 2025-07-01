@@ -17,6 +17,10 @@ static void quill_runtime_init_args(int argc, char **argv) {
 }
 
 void quill_runtime_init_global(int argc, char **argv) {
+    #ifdef _WIN32
+        SetConsoleCP(65001);
+        SetConsoleOutputCP(65001);
+    #endif
     quill_alloc_init_global();
     quill_runtime_init_args(argc, argv);
 }

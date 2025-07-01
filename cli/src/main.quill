@@ -1,159 +1,190 @@
 
 mod quill::cli
 
-use os::fs
-
-pub fun read_dir_rec(path: String) -> List[String]
-    = fs::read_dir(path) 
-    |> unwrap_or(List::empty())
-    |> values()
-    |> map[String, List[String]](|name| {
-        val full: String = fs::path::join(path, name)
-        return if fs::is_dir(full) { read_dir_rec(full) }
-            else { List::of(full) }
-    })
-    |> reduce(List::concat)
-    |> unwrap_or(List::empty())
-
-val PACKAGE_DIRS: List[String] = List::of(
-    "runtime-c",
-    "std-c",
-    "std-base",
-    "compiler",
-    "os",
-    "conc",
-    "cli"
-)
-val PKG_SRC_DIR: String = "src"
-val PKG_EXT_DIR: String = "src-c"
-val PKG_INC_DIR: String = "src-c/include"
-val ENTRY_POINT: String = "quill::cli::main"
-val C_OUTPUT_PATH: String = "bootstrap/build.c"
-val BIN_OUTPUT_PATH: String = "bootstrap/build"
-
-use quill::(
-    Message,
-    lexer, token::Token,
-    parser::(Parser, parse_file), ast::UntypedNode,
-    types::(SymbolTable, SymbolInstance, PreparedInstance, CheckedInstance),
-    codegen
-)
-use conc::(Mutex, Thread)
-
-val CHECKER_THREAD_COUNT: Int = 10
+use os::*
 
 fun main() {
-    val source_paths: List[String] = PACKAGE_DIRS
-        |> values()
-        |> map[String, String](|d| fs::path::join(d, PKG_SRC_DIR))
-        |> map(read_dir_rec)
-        |> reduce(List::concat)
-        |> unwrap_or_else(List::empty)
-    val sources: Map[String, String] = source_paths
-        |> values()
-        |> map(|path| Pair(path, fs::read_file(path) |> unwrap()))
-        |> Map::collect()
-    val unl_messages: mut List[Message] = List::empty()
-    // parse all source files
-    val nodes: List[UntypedNode] = sources
-        |> entries()
-        |> map[Pair[String, String], List[UntypedNode]](|s| {
-            val tokens: mut Stream[Token]
-                = lexer::tokenize(s.first, s.second, unl_messages)
-            return Parser::from(tokens, unl_messages) |> parse_file()
-        })
-        |> reduce(List::concat)
-        |> unwrap_or_else(List::empty)
-    // build a symbol table and check all symbols
-    val unl_table = SymbolTable::from(nodes, unl_messages)
-    val worker_table: mut Mutex[mut SymbolTable] 
-        = Mutex::new(unl_table)
-    val worker_queue: mut Mutex[mut List[SymbolInstance]]
-        = Mutex::new(unl_table |> base_instances())
-    val worker_msgs: mut Mutex[mut List[Message]]
-        = Mutex::new(unl_messages)
-    val worker: Fun() = || {
-        val check_symbol: Fun(PreparedInstance) = |p_i| {
-            val deps: mut List[SymbolInstance] = List::empty()
-            val msgs: mut List[Message] = List::empty()
-            val ch_i: CheckedInstance = unl_table 
-                |> check_prepared_symbol(p_i, deps, msgs)
-            worker_table |> take(|t| {
-                t.value |> register_checked_symbol(ch_i)
-                worker_queue |> take(|q| {
-                    deps |> values()
-                        |> filter(|d| !(t.value |> has_instance(d)))
-                        |> for_each(|d| { q.value |> push(d) })
-                })
-            })
-            worker_msgs |> take(|m| {
-                msgs |> values() |> for_each(|msg| { m.value |> push(msg) })
-            })
-        }
-        val prepare_symbol: Fun(SymbolInstance) = |i| {
-            val prep_i: Option[PreparedInstance]
-                = worker_table |> compute(|t| t |> prepare_check_symbol(i))
-            match prep_i {
-                Some(p_i) { check_symbol(p_i) }
-                None {}
-            }
-        }
-        while true {
-            val next: Option[SymbolInstance] 
-                = worker_queue |> compute(|q| q |> pop())
-            match next {
-                None { break }
-                Some(i) { prepare_symbol(i) } 
-            }
-        }
+    val test: String = "
+#include <stdio.h>
+
+int main(int argc, char **argv) {
+    for(int argi = 0; argi < argc; argi += 1) {
+        printf(\"[%d] %s\\n\", argi, argv[argi]);
     }
-    val workers: List[Thread] = range(0, CHECKER_THREAD_COUNT)
-        |> map(|_| Thread::spawn(worker))
-        |> List::collect()
-    workers |> values() |> for_each(Thread::join)
-    // report messages and exit if has any
-    if unl_messages |> values() |> any(Message::is_error) {
-        unl_messages |> values() 
-            |> map[Message, String](
-                |m| m |> display(sources, true) |> concat("\n")
-            ) 
-            |> for_each(println)
-        return unit
-    }
-    // emit code
-    val output: String = codegen::c::emit(
-        unl_table, 
-        ENTRY_POINT |> split("::") |> List::collect(), 
-        unl_messages
-    )
-    // report messages and exit if has any
-    unl_messages |> values() 
-        |> map[Message, String](
-            |m| m |> display(sources, true) |> concat("\n")
-        ) 
-        |> for_each(println)
-    if unl_messages |> values() |> any(Message::is_error) {
-        return unit
-    }
-    // write output
-    output |> fs::write_file(C_OUTPUT_PATH) |> unwrap()
-    // generate C build command
-    val ext_c_files: String = PACKAGE_DIRS
-        |> values()
-        |> map[String, String](|d| fs::path::join(d, PKG_EXT_DIR))
-        |> map(read_dir_rec)
-        |> reduce(List::concat)
-        |> unwrap_or_else(List::empty)
-        |> values()
-        |> filter(|p| p |> ends_with(".c"))
-        |> join(" ")
-    val ext_inc_dirs: String = PACKAGE_DIRS
-        |> values()
-        |> map[String, String](|d| fs::path::join(d, PKG_INC_DIR))
-        |> filter(fs::is_dir)
-        |> map[String, String](|d| "-I " |> concat(d))
-        |> join(" ")
-    val cc_cmd: String = "cc _ _ _ -lm -O3 -flto -o _"
-        |> fmt(C_OUTPUT_PATH, ext_c_files, ext_inc_dirs, BIN_OUTPUT_PATH)
-    println(cc_cmd)
+    return 0;
 }
+    "
+    fs::write_file(test, "test.c") 
+        |> unwrap()
+    val comp = Process::spawn("gcc", List::of("test.c", "-o", "test"))
+        |> unwrap()
+    val comp_exit: Int = comp |> wait()
+    if comp_exit != 0 {
+        comp |> read_stdout() |> println()
+        comp |> read_stderr() |> eprintln()
+        return panic("compilation failed")
+    }
+    val exec = Process::spawn("./test", List::of("Hello, world!", "Very cool stuff"))
+        |> unwrap()
+    exec |> wait()
+    exec |> read_stdout() |> println()
+}
+
+// mod quill::cli
+
+// use os::fs
+
+// pub fun read_dir_rec(path: String) -> List[String]
+//     = fs::read_dir(path) 
+//     |> unwrap_or(List::empty())
+//     |> values()
+//     |> map[String, List[String]](|name| {
+//         val full: String = fs::path::join(path, name)
+//         return if fs::is_dir(full) { read_dir_rec(full) }
+//             else { List::of(full) }
+//     })
+//     |> reduce(List::concat)
+//     |> unwrap_or(List::empty())
+
+// val PACKAGE_DIRS: List[String] = List::of(
+//     "runtime-c",
+//     "std-c",
+//     "std-base",
+//     "compiler",
+//     "os",
+//     "conc",
+//     "cli"
+// )
+// val PKG_SRC_DIR: String = "src"
+// val PKG_EXT_DIR: String = "src-c"
+// val PKG_INC_DIR: String = "src-c/include"
+// val ENTRY_POINT: String = "quill::cli::main"
+// val C_OUTPUT_PATH: String = "bootstrap/build.c"
+// val BIN_OUTPUT_PATH: String = "bootstrap/build"
+
+// use quill::(
+//     Message,
+//     lexer, token::Token,
+//     parser::(Parser, parse_file), ast::UntypedNode,
+//     types::(SymbolTable, SymbolInstance, PreparedInstance, CheckedInstance),
+//     codegen
+// )
+// use conc::(Mutex, Thread)
+
+// val CHECKER_THREAD_COUNT: Int = 10
+
+// fun main() {
+//     val source_paths: List[String] = PACKAGE_DIRS
+//         |> values()
+//         |> map[String, String](|d| fs::path::join(d, PKG_SRC_DIR))
+//         |> map(read_dir_rec)
+//         |> reduce(List::concat)
+//         |> unwrap_or_else(List::empty)
+//     val sources: Map[String, String] = source_paths
+//         |> values()
+//         |> map(|path| Pair(path, fs::read_file(path) |> unwrap()))
+//         |> Map::collect()
+//     val unl_messages: mut List[Message] = List::empty()
+//     // parse all source files
+//     val nodes: List[UntypedNode] = sources
+//         |> entries()
+//         |> map[Pair[String, String], List[UntypedNode]](|s| {
+//             val tokens: mut Stream[Token]
+//                 = lexer::tokenize(s.first, s.second, unl_messages)
+//             return Parser::from(tokens, unl_messages) |> parse_file()
+//         })
+//         |> reduce(List::concat)
+//         |> unwrap_or_else(List::empty)
+//     // build a symbol table and check all symbols
+//     val unl_table = SymbolTable::from(nodes, unl_messages)
+//     val worker_table: mut Mutex[mut SymbolTable] 
+//         = Mutex::new(unl_table)
+//     val worker_queue: mut Mutex[mut List[SymbolInstance]]
+//         = Mutex::new(unl_table |> base_instances())
+//     val worker_msgs: mut Mutex[mut List[Message]]
+//         = Mutex::new(unl_messages)
+//     val worker: Fun() = || {
+//         val check_symbol: Fun(PreparedInstance) = |p_i| {
+//             val deps: mut List[SymbolInstance] = List::empty()
+//             val msgs: mut List[Message] = List::empty()
+//             val ch_i: CheckedInstance = unl_table 
+//                 |> check_prepared_symbol(p_i, deps, msgs)
+//             worker_table |> take(|t| {
+//                 t.value |> register_checked_symbol(ch_i)
+//                 worker_queue |> take(|q| {
+//                     deps |> values()
+//                         |> filter(|d| !(t.value |> has_instance(d)))
+//                         |> for_each(|d| { q.value |> push(d) })
+//                 })
+//             })
+//             worker_msgs |> take(|m| {
+//                 msgs |> values() |> for_each(|msg| { m.value |> push(msg) })
+//             })
+//         }
+//         val prepare_symbol: Fun(SymbolInstance) = |i| {
+//             val prep_i: Option[PreparedInstance]
+//                 = worker_table |> compute(|t| t |> prepare_check_symbol(i))
+//             match prep_i {
+//                 Some(p_i) { check_symbol(p_i) }
+//                 None {}
+//             }
+//         }
+//         while true {
+//             val next: Option[SymbolInstance] 
+//                 = worker_queue |> compute(|q| q |> pop())
+//             match next {
+//                 None { break }
+//                 Some(i) { prepare_symbol(i) } 
+//             }
+//         }
+//     }
+//     val workers: List[Thread] = range(0, CHECKER_THREAD_COUNT)
+//         |> map(|_| Thread::spawn(worker))
+//         |> List::collect()
+//     workers |> values() |> for_each(Thread::join)
+//     // report messages and exit if has any
+//     if unl_messages |> values() |> any(Message::is_error) {
+//         unl_messages |> values() 
+//             |> map[Message, String](
+//                 |m| m |> display(sources, true) |> concat("\n")
+//             ) 
+//             |> for_each(println)
+//         return unit
+//     }
+//     // emit code
+//     val output: String = codegen::c::emit(
+//         unl_table, 
+//         ENTRY_POINT |> split("::") |> List::collect(), 
+//         unl_messages
+//     )
+//     // report messages and exit if has any
+//     unl_messages |> values() 
+//         |> map[Message, String](
+//             |m| m |> display(sources, true) |> concat("\n")
+//         ) 
+//         |> for_each(println)
+//     if unl_messages |> values() |> any(Message::is_error) {
+//         return unit
+//     }
+//     // write output
+//     output |> fs::write_file(C_OUTPUT_PATH) |> unwrap()
+//     // generate C build command
+//     val ext_c_files: String = PACKAGE_DIRS
+//         |> values()
+//         |> map[String, String](|d| fs::path::join(d, PKG_EXT_DIR))
+//         |> map(read_dir_rec)
+//         |> reduce(List::concat)
+//         |> unwrap_or_else(List::empty)
+//         |> values()
+//         |> filter(|p| p |> ends_with(".c"))
+//         |> join(" ")
+//     val ext_inc_dirs: String = PACKAGE_DIRS
+//         |> values()
+//         |> map[String, String](|d| fs::path::join(d, PKG_INC_DIR))
+//         |> filter(fs::is_dir)
+//         |> map[String, String](|d| "-I " |> concat(d))
+//         |> join(" ")
+//     val cc_cmd: String = "cc _ _ _ -lm -O3 -flto -o _"
+//         |> fmt(C_OUTPUT_PATH, ext_c_files, ext_inc_dirs, BIN_OUTPUT_PATH)
+//     println(cc_cmd)
+// }

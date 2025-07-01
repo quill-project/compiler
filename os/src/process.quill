@@ -1,0 +1,356 @@
+
+mod os
+
+struct Process()
+
+val REQUIRES_QUOTING: String = " \t\n\"\x0B"
+
+fun arg_requires_quoting(arg: String) -> Bool = arg
+    |> chars()
+    |> any(|c| REQUIRES_QUOTING |> find(c) |> next() |> is_some())
+
+fun quote_arg(arg: String) -> String {
+    if !arg_requires_quoting(arg) { return arg }
+    val quoted = StringBuilder::of("\"")
+    mut escape_c: Int = 0
+    for c: arg |> chars() {
+        match c {
+            "\\" { escape_c = escape_c + 1 }
+            "\"" {
+                // backslashes before a quotation mark need to be doubled
+                quoted |> push("\\\\" |> repeat(escape_c))
+                escape_c = 0
+                // escape the quotation mark
+                quoted |> push("\\\"")
+            }
+            other {
+                if escape_c > 0 {
+                    // backslashes before something other than a quotation mark
+                    // ARE NOT doubled
+                    quoted |> push("\\" |> repeat(escape_c))
+                    escape_c = 0
+                }
+                quoted |> push(other)
+            }
+        }
+    }
+    // backslashes immediately before the closing quote need to be doubled too
+    quoted |> push("\\\\" |> repeat(escape_c))
+    // DO NOT escape the final quotation mark
+    quoted |> push("\"")
+    return quoted |> as_string()
+}
+
+fun quote_arg_list(args: List[String]) -> String = args 
+    |> values()
+    |> map(quote_arg)
+    |> join(" ")
+
+fun build_command_line(path: String, args: List[String]) -> String
+    = quote_arg(path)
+    |> concat(if args |> is_empty() { "" } else { " " })
+    |> concat(quote_arg_list(args))
+
+// Creates a new process executing the program referred to by 'path'.
+pub ext fun Process::spawn(path: String, args: List[String]) -> Result[mut Process, os::Error] = "
+    #ifdef _WIN32
+        quill_string_t cmd_line 
+            = #fun(build_command_line)(#var(path), #var(args));
+        QUILL_OS_STRING_AS_WIDE(cmd_line, cmd_line_w, #fun(os::make_err[mut Process]))
+        quill_struct_t prc_obj = quill_malloc(
+            sizeof(quill_os_process_layout_t), &#fun(Process::destruct)
+        );
+        quill_os_process_layout_t *prc_data
+            = (quill_os_process_layout_t *) prc_obj->data;
+        quill_mutex_init(&prc_data->lock);
+        prc_data->is_done = QUILL_FALSE;
+        prc_data->exit_code = 0;
+        SECURITY_ATTRIBUTES sec_attribs;
+        sec_attribs.nLength = sizeof(SECURITY_ATTRIBUTES);
+        sec_attribs.bInheritHandle = TRUE;
+        sec_attribs.lpSecurityDescriptor = NULL;
+        HANDLE out_write;
+        HANDLE err_write;
+        HANDLE in_read;
+        BOOL pipes_initialized 
+            = CreatePipe(&prc_data->out_read, &out_write, &sec_attribs, 0)
+            && SetHandleInformation(prc_data->out_read, HANDLE_FLAG_INHERIT, 0)
+            && CreatePipe(&prc_data->err_read, &err_write, &sec_attribs, 0)
+            && SetHandleInformation(prc_data->err_read, HANDLE_FLAG_INHERIT, 0)
+            && CreatePipe(&in_read, &prc_data->in_write, &sec_attribs, 0)
+            && SetHandleInformation(prc_data->in_write, HANDLE_FLAG_INHERIT, 0);
+        if(!pipes_initialized) {
+            quill_rc_dec(prc_obj);
+            return #fun(os::make_err[mut Process])(
+                quill_os_win_to_errno(GetLastError())
+            );
+        }
+        ZeroMemory(&prc_data->pi, sizeof(PROCESS_INFORMATION));
+        STARTUPINFOW startup_info;
+        ZeroMemory(&startup_info, sizeof(STARTUPINFOW));
+        startup_info.cb = sizeof(STARTUPINFOW);
+        startup_info.hStdOutput = out_write;
+        startup_info.hStdError = err_write;
+        startup_info.hStdInput = in_read;
+        startup_info.dwFlags |= STARTF_USESTDHANDLES;
+        BOOL success = CreateProcessW(
+            NULL, // parse program from command line
+            cmd_line_w, // command to execute
+            NULL, // security attributes of process
+            NULL, // security attributes of main thread
+            TRUE, // inherit handles (except the ones we excluded above)
+            0, // creation flags
+            NULL, // inherit environment
+            NULL, // inherit current directory
+            &startup_info,
+            &prc_data->pi
+        );
+        if(!success) {
+            quill_rc_dec(prc_obj);
+            return #fun(os::make_err[mut Process])(
+                quill_os_win_to_errno(GetLastError())
+            );
+        }
+        CloseHandle(out_write);
+        CloseHandle(err_write);
+        CloseHandle(in_read);
+        return #fun(make_ok[mut Process])(prc_obj);
+    #else
+        int stdout_pipe[2];
+        int stderr_pipe[2];
+        int stdin_pipe[2];
+        quill_bool_t pipes_initialized
+            = (pipe(stdout_pipe) == 0)
+            && (pipe(stderr_pipe) == 0)
+            && (pipe(stdin_pipe) == 0);
+        if(!pipes_initialized) {
+            return #fun(os::make_err[mut Process])((quill_int_t) errno);
+        }
+        pid_t pid = fork();
+        if(pid == 0) {
+            // child process
+            // build null-terminated arguments
+            char *path_nt = quill_malloc_cstr_from_string(#var(path));
+            size_t arg_c = (size_t) #fun(List::length[String])(#var(args));
+            char *arg_v[1 + arg_c + 1];
+            arg_v[0] = path_nt;
+            for(size_t arg_i = 0; arg_i < arg_c; arg_i += 1) {
+                quill_string_t arg = #fun(List::at[String])(#var(args), arg_i);
+                arg_v[1 + arg_i] = quill_malloc_cstr_from_string(arg);
+            }
+            arg_v[1 + arg_c] = NULL;
+            // stdout - use write end as actual stdout, close read end
+            dup2(stdout_pipe[1], STDOUT_FILENO);
+            close(stdout_pipe[0]);
+            // stderr - use write end as actual stderr, close read end
+            dup2(stderr_pipe[1], STDERR_FILENO);
+            close(stderr_pipe[0]);
+            // stdin - use read end as actual stdin, close write end
+            dup2(stdin_pipe[0], STDIN_FILENO);
+            close(stdin_pipe[1]);
+            // execute the command
+            execvp(path_nt, arg_v);
+            // clean up (error)
+            free(path_nt);
+            for(size_t arg_i = 0; arg_i < arg_c; arg_i += 1) {
+                free(arg_v[1 + arg_i]);
+            }
+            _exit(127);
+        } else {
+            // parent process
+            close(stdout_pipe[1]); // close write end of stdout pipe
+            close(stderr_pipe[1]); // close write end of stderr pipe
+            close(stdin_pipe[0]); // close read end of stdin pipe
+            quill_struct_t prc_obj = quill_malloc(
+                sizeof(quill_os_process_layout_t), &#fun(Process::destruct)
+            );
+            quill_os_process_layout_t *prc_data
+                = (quill_os_process_layout_t *) prc_obj->data;
+            quill_mutex_init(&prc_data->lock);
+            prc_data->pid = pid;
+            prc_data->is_done = QUILL_FALSE;
+            prc_data->exit_code = 0;
+            prc_data->out_read = stdout_pipe[0];
+            prc_data->err_read = stderr_pipe[0];
+            prc_data->in_write = stdin_pipe[1];
+            return #fun(make_ok[mut Process])(prc_obj);
+        }
+    #endif
+"
+
+// Reads all text written to the standard output by the given process since the start
+// of the process or since the last call to this method (whichever was last).
+pub ext fun Process::read_stdout(self: mut Process) -> String = "
+    quill_os_process_layout_t *prc_data
+        = (quill_os_process_layout_t *) #var(self)->data;
+    quill_mutex_lock(&prc_data->lock);
+    quill_string_t read = quill_os_read_pipe(prc_data->out_read);
+    quill_mutex_unlock(&prc_data->lock);
+    return read;
+"
+
+// Reads all text written to the standard error output by the given process 
+// since the start of the process or since the last call to this method 
+// (whichever was last).
+pub ext fun Process::read_stderr(self: mut Process) -> String = "
+    quill_os_process_layout_t *prc_data
+        = (quill_os_process_layout_t *) #var(self)->data;
+    quill_mutex_lock(&prc_data->lock);
+    quill_string_t read = quill_os_read_pipe(prc_data->err_read);
+    quill_mutex_unlock(&prc_data->lock);
+    return read;
+"
+
+// Writes the given text to the standard input of the child process.
+pub ext fun Process::write_stdin(self: mut Process, text: String) = "
+    quill_os_process_layout_t *prc_data
+        = (quill_os_process_layout_t *) #var(self)->data;
+    quill_mutex_lock(&prc_data->lock);
+    #ifdef _WIN32
+        if(prc_data->in_write == INVALID_HANDLE_VALUE) {
+            quill_mutex_unlock(&prc_data->lock);
+            return QUILL_UNIT;
+        }
+        DWORD written_bytes;
+        BOOL success = WriteFile(
+            prc_data->in_write, #var(text).data, #var(text).length_bytes, 
+            &written_bytes, NULL
+        );
+        success = success && (written_bytes == #var(text).length_bytes);
+        if(!success) {
+            quill_mutex_unlock(&prc_data->lock);
+            quill_panic(quill_string_from_static_cstr(
+                \"Failed to write data to pipe\\n\"
+            ));
+        }
+    #else
+        if(prc_data->in_write == -1) {
+            quill_mutex_unlock(&prc_data->lock);
+            return QUILL_UNIT;
+        }
+        ssize_t written_bytes = write(
+            prc_data->in_write, #var(text).data, #var(text).length_bytes
+        );
+        if(written_bytes == -1 || written_bytes != #var(text).length_bytes) {
+            quill_mutex_unlock(&prc_data->lock);
+            quill_panic(quill_string_from_static_cstr(
+                \"Failed to write data to pipe\\n\"
+            ));
+        }
+    #endif
+    quill_mutex_unlock(&prc_data->lock);
+    return QUILL_UNIT;
+"
+
+// Forcefully ends the given process.
+pub ext fun Process::kill(self: mut Process) = "
+    quill_os_process_layout_t *prc_data
+        = (quill_os_process_layout_t *) #var(self)->data;
+    #ifdef _WIN32
+        if(!TerminateProcess(prc_data->pi.hProcess, 1)) {
+            quill_panic(quill_string_from_static_cstr(
+                \"Failed to terminate child process\"
+            ));
+        }
+        quill_mutex_lock(&prc_data->lock);
+        prc_data->exit_code = 1;
+        prc_data->is_done = QUILL_TRUE;
+        quill_mutex_unlock(&prc_data->lock);
+    #else
+        if(kill(prc_data->pid, SIGTERM) != 0) {
+            quill_panic(quill_string_from_static_cstr(
+                \"Failed to terminate child process\"
+            ));
+        }
+        int exit_code;
+        if(waitpid(prc_data->pid, &exit_code, 0) == -1) {
+            quill_panic(quill_string_from_static_cstr(
+                \"Failed to await termination of child process\"
+            ));
+        }
+        quill_mutex_lock(&prc_data->lock);
+        prc_data->exit_code = (quill_int_t) exit_code;
+        prc_data->is_done = QUILL_TRUE;
+        quill_mutex_unlock(&prc_data->lock);
+    #endif
+    return QUILL_UNIT;
+"
+
+// Makes the calling thread wait until completion of the given process.
+// Returns the exit code of the process.
+// May be called multiple times, in which case the function will return
+// immediately and return the previous exit code.
+pub ext fun Process::wait(self: Process) -> Int = "
+    quill_os_process_layout_t *prc_data
+        = (quill_os_process_layout_t *) #var(self)->data;
+    quill_mutex_lock(&prc_data->lock);
+    if(prc_data->is_done) {
+        quill_int_t exit_code = prc_data->exit_code;
+        quill_mutex_unlock(&prc_data->lock);
+        return exit_code;
+    }
+    #ifdef _WIN32
+        // close the input handle so no deadlocks can occur
+        if(prc_data->in_write != INVALID_HANDLE_VALUE) {
+            CloseHandle(prc_data->in_write);
+            prc_data->in_write = INVALID_HANDLE_VALUE;
+        }
+        quill_mutex_unlock(&prc_data->lock);
+        DWORD wait_res = WaitForSingleObject(prc_data->pi.hProcess, INFINITE);
+        if(wait_res != WAIT_OBJECT_0) {
+            quill_panic(quill_string_from_static_cstr(
+                \"Failed to await completion of child process\"
+            ));
+        }
+        quill_mutex_lock(&prc_data->lock);
+        DWORD exit_code;
+        if(!GetExitCodeProcess(prc_data->pi.hProcess, &exit_code)) {
+            quill_panic(quill_string_from_static_cstr(
+                \"Failed to get the child process exit code\"
+            ));
+        }
+        prc_data->exit_code = (quill_int_t) exit_code;
+        prc_data->is_done = QUILL_TRUE;
+        quill_mutex_unlock(&prc_data->lock);
+        return (quill_int_t) exit_code;
+    #else
+        // close the input handle so no deadlocks can occur
+        if(prc_data->in_write != -1) {
+            close(prc_data->in_write);
+            prc_data->in_write = -1;
+        }
+        quill_mutex_unlock(&prc_data->lock);
+        int exit_code;
+        if(waitpid(prc_data->pid, &exit_code, 0) == -1) {
+            quill_panic(quill_string_from_static_cstr(
+                \"Failed to await termination of child process\"
+            ));
+        }
+        quill_mutex_lock(&prc_data->lock);
+        prc_data->exit_code = (quill_int_t) exit_code;
+        prc_data->is_done = QUILL_TRUE;
+        quill_mutex_unlock(&prc_data->lock);
+    #endif
+"
+
+ext fun Process::destruct(self: mut Process) = "
+    quill_os_process_layout_t *prc_data
+        = (quill_os_process_layout_t *) #var(self)->data;
+    quill_mutex_destroy(&prc_data->lock);
+    #ifdef _WIN32
+        CloseHandle(prc_data->pi.hProcess);
+        CloseHandle(prc_data->pi.hThread);
+        CloseHandle(prc_data->out_read);
+        CloseHandle(prc_data->err_read);
+        if(prc_data->in_write != INVALID_HANDLE_VALUE) {
+            CloseHandle(prc_data->in_write);
+        }
+    #else
+        close(prc_data->out_read);
+        close(prc_data->err_read);
+        if(prc_data->in_write != -1) {
+            close(prc_data->in_write);
+        }
+    #endif
+    return QUILL_UNIT;
+"

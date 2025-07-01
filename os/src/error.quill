@@ -1,6 +1,15 @@
 
 mod os
 
+fun make_err[T](code: Int) -> Result[T, os::Error] {
+    return Result::Err(os::Error::unsafe_from_code(code))
+}
+
+fun make_ok[T](value: T) -> Result[T, os::Error] {
+    return Result::Ok(value)
+}
+
+
 struct Error(code: Int)
 
 pub fun Error::unsafe_from_code(code: Int) -> Error = Error(code)

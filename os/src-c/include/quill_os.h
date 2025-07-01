@@ -88,13 +88,39 @@
             default:                         return EINVAL;
         }
     }
+
+    typedef struct quill_os_process_layout {
+        quill_mutex_t lock;
+        PROCESS_INFORMATION pi;
+        quill_bool_t is_done;
+        quill_int_t exit_code;
+        HANDLE out_read;
+        HANDLE err_read;
+        HANDLE in_write;
+    } quill_os_process_layout_t;
+
+    quill_string_t quill_os_read_pipe(HANDLE pipe_read);
 #else
     #include <sys/types.h>
     #include <sys/stat.h>
+    #include <sys/wait.h>
     #include <unistd.h>
+    #include <signal.h>
     #include <dirent.h>
 
     extern char **environ;
+
+    typedef struct quill_os_process_layout {
+        quill_mutex_t lock;
+        pid_t pid;
+        quill_bool_t is_done;
+        quill_int_t exit_code;
+        int out_read;
+        int err_read;
+        int in_write;
+    } quill_os_process_layout_t;
+
+    quill_string_t quill_os_read_pipe(int pipe_read);
 #endif
 
 #define QUILL_OS_STRING_AS_NT(s, r) \

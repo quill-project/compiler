@@ -111,7 +111,8 @@ typedef quill_alloc_t *quill_list_t;
 #define QUILL_NULL_LIST QUILL_NULL_ALLOC
 
 
-void quill_println(quill_string_t line);
+void quill_print(quill_string_t text);
+void quill_eprint(quill_string_t text);
 void quill_panic(quill_string_t reason);
 
 
@@ -122,16 +123,27 @@ void *quill_alloc_alloc(size_t n);
 void quill_alloc_free(void *alloc);
 
 
+quill_int_t quill_point_encode_length(uint32_t point);
+quill_int_t quill_point_encode(uint32_t point, uint8_t *dest);
+quill_int_t quill_point_decode_length(uint8_t start);
+uint32_t quill_point_decode(const uint8_t *data);
+quill_string_t quill_string_from_points(
+    uint32_t *points, quill_int_t length_points
+);
+quill_string_t quill_string_from_static_cstr(const char* cstr);
+quill_string_t quill_string_from_temp_cstr(const char *cstr);
+char *quill_malloc_cstr_from_string(quill_string_t string);
+quill_string_t quill_string_from_int(quill_int_t i);
+quill_string_t quill_string_from_float(quill_float_t f);
+
+
 static quill_alloc_t *quill_malloc(size_t n, quill_destructor_t destructor) {
     if(n == 0) { return NULL; }
     quill_alloc_t *alloc = quill_alloc_alloc(sizeof(quill_alloc_t) + n);
     if(alloc == NULL) {
-        quill_panic((quill_string_t) {
-            .alloc = NULL,
-            .data = "Unable to allocate memory",
-            .length_bytes = 25,
-            .length_points = 25
-        });
+        quill_panic(quill_string_from_static_cstr(
+            "Unable to allocate memory\n"
+        ));
     }
     alloc->rc = 1;
     alloc->destructor = destructor;
@@ -168,19 +180,6 @@ static void quill_float_rc_dec(quill_float_t v) { (void) v; }
 static void quill_bool_rc_dec(quill_bool_t v) { (void) v; }
 static void quill_string_rc_dec(quill_string_t v) { quill_rc_dec(v.alloc); }
 static void quill_closure_rc_dec(quill_closure_t v) { quill_rc_dec(v.alloc); }
-
-
-quill_int_t quill_point_encode_length(uint32_t point);
-quill_int_t quill_point_encode(uint32_t point, uint8_t *dest);
-quill_int_t quill_point_decode_length(uint8_t start);
-uint32_t quill_point_decode(const uint8_t *data);
-quill_string_t quill_string_from_points(
-    uint32_t *points, quill_int_t length_points
-);
-quill_string_t quill_string_from_static_cstr(const char* cstr);
-quill_string_t quill_string_from_temp_cstr(const char *cstr);
-quill_string_t quill_string_from_int(quill_int_t i);
-quill_string_t quill_string_from_float(quill_float_t f);
 
 
 static quill_unit_t quill_captured_noop_free(quill_alloc_t *alloc) {

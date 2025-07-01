@@ -184,11 +184,11 @@ pub fun String::fmt(self: String, ...inserted: List[String]) -> String {
         |> panic()
 }
 
-pub fun String::repeat(self: String, n: Int) -> String 
-    = Stream::of(self)
-    |> take(n)
-    |> reduce(String::concat)
-    |> unwrap_or("")
+pub fun String::repeat(self: String, n: Int) -> String {
+    val r = StringBuilder::empty()
+    range(0, n) |> for_each(|_| r |> push(self))
+    return r |> as_string()
+}
 
 pub fun String::repeat_to(self: String, n: Int) -> String {
     val l = self |> length()

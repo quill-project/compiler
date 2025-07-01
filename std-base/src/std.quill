@@ -5,6 +5,10 @@ pub fun println[T](value: T) = value
     |> T::as_string()
     |> raw_println()
 
+pub fun eprintln[T](value: T) = value 
+    |> T::as_string()
+    |> raw_eprintln()
+
 pub fun range(start: Int, end: Int) -> mut Sequence[Int] {
     mut n = start
     return Sequence::new(|| {

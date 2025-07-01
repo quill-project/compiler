@@ -64,17 +64,17 @@ pub fun join(low: String, high: String) -> String
 pub ext fun set_cwd(path: String) -> Result[Unit, os::Error] = "
     #include(<quill_os.h>)
     #ifdef _WIN32
-        QUILL_OS_STRING_AS_WIDE(#var(path), path_w, #fun(os::fs::make_err[String]))
+        QUILL_OS_STRING_AS_WIDE(#var(path), path_w, #fun(os::make_err[String]))
         if(!SetCurrentDirectoryW(path_w)) {
-            return #fun(os::fs::make_err[Unit])(quill_os_win_to_errno(GetLastError()));
+            return #fun(os::make_err[Unit])(quill_os_win_to_errno(GetLastError()));
         }
     #else
         QUILL_OS_STRING_AS_NT(#var(path), path_nt)
         if(chdir(path_nt) != 0) {
-            return #fun(os::fs::make_err[Unit])((quill_int_t) errno);
+            return #fun(os::make_err[Unit])((quill_int_t) errno);
         }
     #endif
-    return #fun(os::fs::make_ok[Unit])(QUILL_UNIT);
+    return #fun(os::make_ok[Unit])(QUILL_UNIT);
 "
 
 // Returns the current working directory as an absolute path.
@@ -94,30 +94,30 @@ pub fun get_cwd() -> String
 pub ext fun canonicalize(path: String) -> Result[String, os::Error] = "
     #include(<quill_os.h>)
     #ifdef _WIN32
-        QUILL_OS_STRING_AS_WIDE(#var(path), path_w, #fun(os::fs::make_err[String]))
+        QUILL_OS_STRING_AS_WIDE(#var(path), path_w, #fun(os::make_err[String]))
         DWORD res_w_length_chars_nt = GetFullPathNameW(path_w, 0, NULL, NULL);
         if(res_w_length_chars_nt == 0) {
-            return #fun(os::fs::make_err[String])(quill_os_win_to_errno(GetLastError()));
+            return #fun(os::make_err[String])(quill_os_win_to_errno(GetLastError()));
         }
         wchar_t res_w[res_w_length_chars_nt];
         if(GetFullPathNameW(path_w, res_w_length_chars_nt, res_w, NULL) == 0) {
-            return #fun(os::fs::make_err[String])(quill_os_win_to_errno(GetLastError()));
+            return #fun(os::make_err[String])(quill_os_win_to_errno(GetLastError()));
         }
         if(GetFileAttributesW(res_w) == INVALID_FILE_ATTRIBUTES) {
-            return #fun(os::fs::make_err[String])(quill_os_win_to_errno(GetLastError()));
+            return #fun(os::make_err[String])(quill_os_win_to_errno(GetLastError()));
         }
         QUILL_OS_STRING_FROM_WIDE(
-            res_w, res_w_length_chars_nt - 1, res, #fun(os::fs::make_err[String])
+            res_w, res_w_length_chars_nt - 1, res, #fun(os::make_err[String])
         )
-        return #fun(os::fs::make_ok[String])(res);
+        return #fun(os::make_ok[String])(res);
     #else
         QUILL_OS_STRING_AS_NT(#var(path), path_nt)
         char *res_nt = realpath(path_nt, NULL);
         if(res_nt == NULL) {
-            return #fun(os::fs::make_err[String])((quill_int_t) errno);
+            return #fun(os::make_err[String])((quill_int_t) errno);
         }
         quill_string_t res = quill_string_from_temp_cstr(res_nt);
         free(res_nt);
-        return #fun(os::fs::make_ok[String])(res);
+        return #fun(os::make_ok[String])(res);
     #endif
 "

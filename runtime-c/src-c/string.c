@@ -13,13 +13,13 @@ quill_int_t quill_point_encode_length(uint32_t point) {
     if(point <= 0x0007FF) { return 2; }
     if(point >= 0x00D800 && point <= 0x00DFFF) {
         quill_panic(quill_string_from_static_cstr(
-            "Attempt to encode surrogate surrogate codepoints"
+            "Attempt to encode surrogate surrogate codepoints\n"
         ));
     }
     if(point <= 0x00FFFF) { return 3; }
     if(point <= 0x10FFFF) { return 4; }
     quill_panic(quill_string_from_static_cstr(
-        "Codepoint too large to encode"
+        "Codepoint too large to encode\n"
     ));
     return 0;
 }
@@ -48,7 +48,7 @@ quill_int_t quill_point_encode(uint32_t point, uint8_t *dest) {
         return 4;
     }
     quill_panic(quill_string_from_static_cstr(
-        "Codepoint too large to encode"
+        "Codepoint too large to encode\n"
     ));
     return 0;
 }
@@ -59,7 +59,7 @@ quill_int_t quill_point_decode_length(uint8_t start) {
     if((start & 0xF0 /* 11110000 */) == 0xE0 /* 11100000 */) { return 3; }
     if((start & 0xF8 /* 11111000 */) == 0xF0 /* 11110000 */) { return 4; }
     quill_panic(quill_string_from_static_cstr(
-        "String improperly encoded"
+        "String improperly encoded\n"
     ));
     return 0;
 }
@@ -89,7 +89,7 @@ uint32_t quill_point_decode(const uint8_t *data) {
         return point;
     }
     quill_panic(quill_string_from_static_cstr(
-        "String improperly encoded"
+        "String improperly encoded\n"
     ));
     return 0;
 }
@@ -148,6 +148,13 @@ quill_string_t quill_string_from_temp_cstr(const char *cstr) {
     res.data = res.alloc->data;
     memcpy(res.alloc->data, data, sizeof(uint8_t) * res.length_bytes);
     return res;
+}
+
+char *quill_malloc_cstr_from_string(quill_string_t string) {
+    char *buffer = malloc(string.length_bytes + 1);
+    memcpy(buffer, string.data, string.length_bytes);
+    buffer[string.length_bytes] = '\0';
+    return buffer;
 }
 
 quill_string_t quill_string_from_int(quill_int_t i) {

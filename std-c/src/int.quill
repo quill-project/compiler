@@ -14,12 +14,16 @@ pub ext fun Int::times(lhs: Int, rhs: Int) -> Int = "
 "
 
 pub ext fun Int::div(lhs: Int, rhs: Int) -> Int = "
-    if(#var(rhs) == 0) { quill_panic((quill_string_t) { .alloc = NULL, .data = \"Integer division by zero\", .length_bytes = 24, .length_points = 24 }); }
+    if(#var(rhs) == 0) { 
+        quill_panic(quill_string_from_static_cstr(\"Integer division by zero\\n\"));
+    }
     return (quill_int_t) (((quill_uint_t) #var(lhs)) / ((quill_uint_t) #var(rhs)));
 "
 
 pub ext fun Int::rem(lhs: Int, rhs: Int) -> Int = "
-    if(#var(rhs) == 0) { quill_panic((quill_string_t) { .alloc = NULL, .data = \"Integer division by zero\", .length_bytes = 24, .length_points = 24 }); }
+    if(#var(rhs) == 0) {
+        quill_panic(quill_string_from_static_cstr(\"Integer division by zero\\n\"));
+    }
     return (quill_int_t) (((quill_uint_t) #var(lhs)) % ((quill_uint_t) #var(rhs)));
 "
 

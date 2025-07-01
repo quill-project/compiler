@@ -29,7 +29,7 @@ pub ext fun Thread::spawn(f: Fun()) -> Thread = "
             quill_rc_dec(thread_obj);
             quill_rc_dec(thread_obj);
             quill_panic(quill_string_from_static_cstr(
-                \"Failed to spawn thread\"
+                \"Failed to spawn thread\\n\"
             ));
         }
         CloseHandle((HANDLE) thread);
@@ -43,7 +43,7 @@ pub ext fun Thread::spawn(f: Fun()) -> Thread = "
             quill_rc_dec(thread_obj);
             quill_rc_dec(thread_obj);
             quill_panic(quill_string_from_static_cstr(
-                \"Failed to spawn thread\"
+                \"Failed to spawn thread\\n\"
             ));
         }
     #endif

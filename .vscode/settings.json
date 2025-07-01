@@ -3,6 +3,9 @@
         "cstdint": "cpp",
         "array": "c",
         "string": "c",
-        "string_view": "c"
+        "string_view": "c",
+        "cstdlib": "c",
+        "wait.h": "c",
+        "dirent.h": "c"
     }
 }

@@ -25,35 +25,35 @@
     void quill_conc_cond_init(quill_conc_cond_t *cond) {
         if(pthread_cond_init(cond, NULL) == 0) { return; }
         quill_panic(quill_string_from_static_cstr(
-            "Failed to initialize condition variable"
+            "Failed to initialize condition variable\n"
         ));
     }
 
     void quill_conc_cond_wait(quill_conc_cond_t *cond, quill_mutex_t *mutex) {
         if(pthread_cond_wait(cond, mutex) == 0) { return; }
         quill_panic(quill_string_from_static_cstr(
-            "Failed to wait for condition variable"
+            "Failed to wait for condition variable\n"
         ));
     }
 
     void quill_conc_cond_notify(quill_conc_cond_t *cond) {
         if(pthread_cond_signal(cond) == 0) { return; }
         quill_panic(quill_string_from_static_cstr(
-            "Failed to notify through condition variable"
+            "Failed to notify through condition variable\n"
         ));
     }
 
     void quill_conc_cond_notify_all(quill_conc_cond_t *cond) {
         if(pthread_cond_broadcast(cond) == 0) { return; }
         quill_panic(quill_string_from_static_cstr(
-            "Failed to notify all through condition variable"
+            "Failed to notify all through condition variable\n"
         ));
     }
 
     void quill_conc_cond_destroy(quill_conc_cond_t *cond) {
         if(pthread_cond_destroy(cond) == 0) { return; }
         quill_panic(quill_string_from_static_cstr(
-            "Failed to uninitialize condition variable"
+            "Failed to uninitialize condition variable\n"
         ));
     }
 #endif
