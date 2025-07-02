@@ -1,8 +1,0 @@
-
-mod std
-
-pub fun Sequence::for_each[T](self: mut Sequence[T], f: Fun(T)) {
-    for v: self {
-        f(v)
-    }
-}
