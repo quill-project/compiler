@@ -1,6 +1,6 @@
-<img src="./quill.png" height="200px" align="right">
+<img src="./quill_tp.svg" height="200px" align="right">
 
 ### The Quill Compiler
-The compiler for Quill, a beautifully simple, statically typed, garbage compiled, compiled programming language.
+The compiler for the Quill programming language, written in Quill.
 
-To start using Quill, use [the Quill command line interface](https://github.com/quill-project/cli).
+This compiler acts as a library and can therefore not be used directly - to start using Quill, use [the Quill command line interface](https://github.com/quill-project/cli).
