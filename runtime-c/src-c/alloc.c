@@ -1,19 +1,31 @@
 
 #include <quill.h>
-#include <threads.h>
 #include <stddef.h>
 
 #ifdef _WIN32
-    #define REGION_ALLOC(n) malloc(n)
-    #define REGION_FREE(p, n) free(p)
+    static void *win_alloc(size_t size) {
+        return VirtualAlloc(
+            NULL, size,
+            MEM_COMMIT | MEM_RESERVE,
+            PAGE_READWRITE
+        );
+    }
+
+    static void win_free(void* ptr, size_t size) {
+        (void) size;
+        VirtualFree(ptr, 0, MEM_RELEASE);
+    }
+
+    #define REGION_ALLOC(n) win_alloc(n)
+    #define REGION_FREE(p, n) win_free(p, n)
 #else
     #include <sys/mman.h>
     #include <unistd.h>
 
-    static void* mmap_alloc(size_t size) {
+    static void *mmap_alloc(size_t size) {
         size_t pagesize = getpagesize();
         size_t aligned_size = (size + pagesize - 1) & ~(pagesize - 1);
-        void* ptr = mmap(
+        void *ptr = mmap(
             NULL, aligned_size,
             PROT_READ | PROT_WRITE,
             MAP_PRIVATE | MAP_ANONYMOUS,
@@ -192,6 +204,11 @@ static quill_slab_t *allocate_slab(size_t class_i, quill_class_t *c) {
         region = REGION_ALLOC(
             sizeof(quill_region_t) + (REGION_SLAB_COUNT * slab_size)
         );
+        if(region == NULL) {
+            quill_panic(quill_string_from_static_cstr(
+                "Failed to allocate memory region"
+            ));
+        }
         region->next_i = 0;
         c->next = region;
     }

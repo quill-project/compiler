@@ -1,6 +1,5 @@
 
 #include <quill_os.h>
-#include <sys/ioctl.h>
 
 #ifdef _WIN32
     quill_string_t quill_os_read_pipe(HANDLE pipe) {
@@ -34,6 +33,8 @@
         return res;
     }
 #else
+    #include <sys/ioctl.h>
+
     quill_string_t quill_os_read_pipe(int pipe) {
         int bytes_available;
         if(ioctl(pipe, FIONREAD, &bytes_available) == -1) {

@@ -80,7 +80,8 @@ fs.writeFileSync("bootstrap/build.c", result);
 // compile the output of QIQ compiling itself using any C compiler
 const ccCmd = `cc bootstrap/build.c ${qiqExtSourcePaths.join(" ")}`
     + qiqExtIncludeDirs.map(p => " -I " + p).join("")
-    + " -lm -O3 -flto -o bootstrap/build";
+    // + " -lm -O3 -flto -o bootstrap/build";
     // + " -lm -O0 -g -o bootstrap/build";
+    + " -lm -O3 -o bootstrap/build";
 console.log(ccCmd);
 exec(ccCmd);

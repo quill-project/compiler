@@ -56,7 +56,6 @@ quill_bool_t quill_mutex_try_lock(quill_mutex_t *mutex);
 void quill_mutex_unlock(quill_mutex_t *mutex);
 void quill_mutex_destroy(quill_mutex_t *mutex);
 
-
 typedef struct quill_alloc quill_alloc_t;
 
 typedef quill_unit_t (*quill_destructor_t)(quill_alloc_t *alloc);

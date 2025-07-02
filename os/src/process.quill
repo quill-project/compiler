@@ -56,7 +56,7 @@ pub ext fun Process::spawn(path: String, args: List[String]) -> Result[mut Proce
     #ifdef _WIN32
         quill_string_t cmd_line 
             = #fun(build_command_line)(#var(path), #var(args));
-        QUILL_OS_STRING_AS_WIDE(cmd_line, cmd_line_w, #fun(os::make_err[mut Process]))
+        QUILL_OS_STRING_AS_WIDE(cmd_line, cmd_line_w, #fun(os::make_err[mut Process])(EINVAL))
         quill_struct_t prc_obj = quill_malloc(
             sizeof(quill_os_process_layout_t), &#fun(Process::destruct)
         );

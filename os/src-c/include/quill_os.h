@@ -11,23 +11,21 @@
 
 #ifdef _WIN32
     #include <windows.h>
-
-    #define QUILL_OS_ERR_RET_FALSE(x) QUILL_FALSE
-    #define QUILL_OS_ERR_RET_VOID(x)
+    #include <direct.h>
 
     #define QUILL_OS_STRING_AS_WIDE(s, r, e) \
         int r##_length = MultiByteToWideChar( \
             CP_UTF8, 0, (s).data, (int) (s).length_bytes, NULL, 0 \
         ); \
         if(r##_length == 0) { \
-            return e((quill_int_t) EINVAL); \
+            return e; \
         } \
         wchar_t r[r##_length + 1]; \
         if(MultiByteToWideChar( \
             CP_UTF8, 0, (char *) (s).data, (int) (s).length_bytes, \
             r, r##_length \
         ) == 0) { \
-            return e((quill_int_t) EINVAL); \
+            return e; \
         } \
         r[r##_length] = L'\0';
 
@@ -37,7 +35,7 @@
             CP_UTF8, 0, (s), (sl), NULL, 0, NULL, NULL \
         ); \
         if (r.length_bytes == 0) { \
-            return e((quill_int_t) EINVAL); \
+            return e; \
         } \
         r.length_points = 0; \
         r.alloc = quill_malloc(sizeof(uint8_t) * r.length_bytes, NULL); \
@@ -45,7 +43,7 @@
         if(WideCharToMultiByte( \
             CP_UTF8, 0, (s), (sl), (char *) r.alloc->data, r.length_bytes, NULL, NULL \
         ) == 0) { \
-            return e((quill_int_t) EINVAL); \
+            return e; \
         } \
         for(quill_int_t o = 0; o < r.length_bytes; r.length_points += 1) { \
             o += quill_point_decode_length(r.data[o]); \
@@ -130,6 +128,8 @@
 
 
 extern quill_mutex_t quill_os_env_lock;
+
+void quill_os_init_env_lock();
 
 
 #ifdef _WIN32

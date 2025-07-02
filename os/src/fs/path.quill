@@ -64,7 +64,7 @@ pub fun join(low: String, high: String) -> String
 pub ext fun set_cwd(path: String) -> Result[Unit, os::Error] = "
     #include(<quill_os.h>)
     #ifdef _WIN32
-        QUILL_OS_STRING_AS_WIDE(#var(path), path_w, #fun(os::make_err[String]))
+        QUILL_OS_STRING_AS_WIDE(#var(path), path_w, #fun(os::make_err[String])(EINVAL))
         if(!SetCurrentDirectoryW(path_w)) {
             return #fun(os::make_err[Unit])(quill_os_win_to_errno(GetLastError()));
         }
@@ -94,7 +94,7 @@ pub fun get_cwd() -> String
 pub ext fun canonicalize(path: String) -> Result[String, os::Error] = "
     #include(<quill_os.h>)
     #ifdef _WIN32
-        QUILL_OS_STRING_AS_WIDE(#var(path), path_w, #fun(os::make_err[String]))
+        QUILL_OS_STRING_AS_WIDE(#var(path), path_w, #fun(os::make_err[String])(EINVAL))
         DWORD res_w_length_chars_nt = GetFullPathNameW(path_w, 0, NULL, NULL);
         if(res_w_length_chars_nt == 0) {
             return #fun(os::make_err[String])(quill_os_win_to_errno(GetLastError()));
@@ -107,7 +107,7 @@ pub ext fun canonicalize(path: String) -> Result[String, os::Error] = "
             return #fun(os::make_err[String])(quill_os_win_to_errno(GetLastError()));
         }
         QUILL_OS_STRING_FROM_WIDE(
-            res_w, res_w_length_chars_nt - 1, res, #fun(os::make_err[String])
+            res_w, res_w_length_chars_nt - 1, res, #fun(os::make_err[String])(EINVAL)
         )
         return #fun(os::make_ok[String])(res);
     #else
