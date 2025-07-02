@@ -183,7 +183,7 @@ pub fun Checker::check_match_pattern(
             }
             if (ref_path |> length()) == 1 {
                 val local: Option[Variable] = self |> find_variable(name)
-                if local |> is_none() {
+                if (local |> is_none()) || name == "_" {
                     val n: Option[String] = if name != "_" { Option::Some(name) } 
                         else { Option::None[String] }
                     val capture: PatternCapture = PatternCapture(n, path, exp)
