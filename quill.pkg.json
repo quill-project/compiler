@@ -1,0 +1,10 @@
+{
+    "name": "compiler",
+    "authors": ["schwalbe_t"],
+    "description": "The compiler for the Quill programming language.",
+    "type": "library",
+    "backend": "any",
+    "dependencies": [
+        "https://github.com/quill-project/std"
+    ]
+}

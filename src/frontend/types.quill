@@ -89,7 +89,10 @@ pub fun Variant::as_path(self: Variant) -> List[String] {
         String { return List::of("std", "String") }
         Struct(Pair(path, _)) | 
         Enum(Pair(path, _)) { return path }
-        Function(_) { return List::of("std", "Fun") }
+        Function(Pair(arg_t, _)) { 
+            val arg_cs: String = arg_t |> length() |> as_string()
+            return List::of("std", "Fun" |> concat(arg_cs)) 
+        }
         List(_) { return List::of("std", "List") }
         Invalid { return List::of("<unknown>") }
     }
