@@ -1,4 +1,4 @@
-<img src="./quill_tp.svg" height="200px" align="right">
+<img src="./quill_tp.svg" width="200px" align="right">
 
 ### The Quill Compiler
 The compiler for the Quill programming language, written in Quill.
