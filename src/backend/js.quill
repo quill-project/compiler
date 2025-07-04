@@ -435,7 +435,7 @@ pub fun emit_statement(gen: mut Generator, node: TypedNode) {
         }
         _ {
             gen |> in_body(gen |> emit_expression(node))
-            gen |> in_body("\n")
+            gen |> in_body(";\n")
         }
     }
 }
