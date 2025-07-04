@@ -339,12 +339,12 @@ pub fun emit_statement(gen: mut Generator, node: TypedNode) {
                     |> Map::collect()
                 branch_captures |> push(capture_values)
             })
+            mut had_pattern: Bool = false
             branches |> indices() |> for_each(|branch_i| {
                 val branch: ast::MatchBranch[TypedNode] = branches 
                     |> at(branch_i)
                 val capture_values: Map[String, String] = branch_captures 
                     |> at(branch_i)
-                mut had_pattern: Bool = false
                 branch.patterns |> values() |> for_each(|pattern| {
                     val emit_cond: Fun(Pair[List[ast::PatternLoc], ast::PatternCond[TypedNode]]) -> String = |cond| {
                         val v: String = emit_pattern_path(matched, cond.first)
