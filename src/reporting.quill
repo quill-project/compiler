@@ -515,7 +515,7 @@ pub fun Message::symbol_private(path: List[String], at: Source, def_at: Source) 
                 |> fmt(path |> values() |> join("::"))
         ),
         Message::Section::Code(at),
-        Message::Section::Error(
+        Message::Section::Info(
             "'_' is declared here:"
                 |> fmt(path |> values() |> join("::"))
         ),
@@ -529,7 +529,7 @@ pub fun Message::missing_member(path: List[String], member: String, at: Source, 
                 |> fmt(path |> values() |> join("::"), member)
         ),
         Message::Section::Code(at),
-        Message::Section::Error(
+        Message::Section::Info(
             "'_' is declared here:"
                 |> fmt(path |> values() |> join("::"))
         ),

@@ -1,0 +1,61 @@
+
+mod quill::codegen
+
+use quill::*
+use quill::types::*
+
+// Returns a list of all instances of all symbols in the given symbol table.
+pub fun all_instances_of(table: SymbolTable) -> mut Sequence[Triplet[TypedNode, Int, List[Type]]]
+    = table.symbols 
+    |> values() 
+    |> map[Symbol, mut Sequence[Triplet[TypedNode, Int, List[Type]]]](
+        |s| s.instances |> values()
+    )
+    |> flatten()
+
+// Looks up the id and typed node of the symbol instance with the given type arguments
+// from the symbol with the given path from the given symbol table.
+pub fun find_instance_with(
+    path: List[String], t_args: List[Type], table: SymbolTable
+) -> Triplet[TypedNode, Int, List[Type]] {
+    val s: Symbol = table.symbols |> get(path) 
+        |> expect("unknown path should've been rejected during checking")
+    val i: SymbolInstance = SymbolInstance(path, t_args)
+    return s.instances |> get(i |> key())
+        |> unwrap_or_else(|| "instance _[_] should've been instantiated during checking"
+            |> fmt(
+                path |> values() |> join("::"),
+                t_args |> values() |> map(Type::as_string) |> join(", ")
+            )
+            |> panic()
+        )
+}
+
+// Optionally returns the instance ID of the function at the given path,
+// under the condition that it is a valid main function.
+pub fun get_main_instance(
+    table: SymbolTable, main: List[String], messages: mut List[Message]
+) -> Option[Int] {
+    match table.symbols |> get(main) {
+        Some(Symbol(
+            node,
+            List::empty(), 
+            _, _, _
+        )) { match node.value {
+            ast::Variant::Function(ast::Function(
+                _, _, _, args, false,
+                _, _, _
+            )) {
+                if (args |> length()) == 0 {
+                    val main_instance: Triplet[TypedNode, Int, List[Type]] 
+                        = find_instance_with(main, List::empty(), table)
+                    return Option::Some(main_instance.second)
+                }
+            }
+            _ {}
+        } }
+        _ {}
+    }
+    messages |> push(Message::invalid_main(main))
+    return Option::None
+}

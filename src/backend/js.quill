@@ -1,0 +1,626 @@
+
+mod quill::codegen::js
+
+use quill::*
+use quill::types::*
+use quill::codegen::*
+
+// Turns a Quill path and instance id into a valid JS symbol name.
+// This function makes sure that the same combination of path and id will always
+// result in the same, unique name.
+pub fun mangle_path(path: List[String], id: Int) -> String
+    = path |> values() |> join("$") 
+    |> concat("$$") 
+    |> concat(Int::as_string(id))
+
+// Attempts to expand macros such as '#var(...)' and '#fun(...)'
+// in the given external function body, returning the expanded result.
+pub fun expand_external_body(
+    og_body: String,
+    args: List[Pair[String, TypedNode]],
+    t_args: mut Map[String, Type],
+    context: ModuleContext,
+    g: mut Generator
+) -> String = og_body
+    |> pragma::expand_all("var", |n| args 
+        |> indices() 
+        |> find(|i| (args |> at(i)).first == n)
+        |> map[Int, String](|i| "param" |> concat(i |> as_string()))
+        |> unwrap_or_else(|| {
+            g.messages |> push(Message::unknown_path(
+                List::of(n), Source("ext_pragma.quill", 0, 0)
+            ))
+            return "INVALID"
+        })
+    )
+    |> pragma::expand_all("fun", |f| {
+        val i: Option[SymbolInstance] = pragma::parse_operand_symbol_ref(
+            f, t_args, context, g.table, List::empty(), g.messages
+        )
+        match i {
+            None { return "INVALID" }
+            Some(inst) {
+                val inst_info: Triplet[TypedNode, Int, List[Type]] 
+                    = find_instance_with(inst.path, inst.type_args, g.table)
+                return mangle_path(inst.path, inst_info.second)
+            }
+        }
+    })
+
+// Emits the full implementations of the functions in the given table.
+pub fun emit_func_implementations(g: mut Generator) -> String 
+    = g.table.symbols |> values() |> map[Symbol, String](
+        |s| s.instances |> values() |> map[Triplet[TypedNode, Int, List[Type]], String](
+            |i| { match i.first.value {
+                ast::Variant::Function(ast::Function(
+                    path, _, _, args, va, _, _, body
+                )) {
+                    val mangled: String = mangle_path(path, i.second)
+                    val gen = Generator::in_context_of(g)
+                    val arg_names: String = args
+                        |> indices()
+                        |> map[Int, String](|arg_i| {
+                            val arg: Pair[String, TypedNode] = args |> at(arg_i)
+                            val v: String = gen |> alloc()
+                            gen.locals |> set(arg.first, v)
+                            if va && (arg_i == (args |> length()) - 1) { 
+                                return "..." |> concat(v)
+                            }
+                            return v
+                        })
+                        |> join(", ")
+                    gen |> emit_statement_list(body)
+                    return "function _(_) {\n" |> fmt(mangled, arg_names)
+                        |> concat(gen.body |> as_string())
+                        |> concat("}\n\n")
+                }
+                ExternalFunction(ast::ExternalFunction(
+                    path, _, t_arg_names, args, va, _, body
+                )) {
+                    val mangled: String = mangle_path(path, i.second)
+                    val arg_names: String = args
+                        |> indices()
+                        |> map[Int, String](|i| {
+                            val v = "param" |> concat(Int::as_string(i))
+                            if va && (i == (args |> length()) - 1) { 
+                                return "..." |> concat(v)
+                            }
+                            return v
+                        })
+                        |> join(", ")
+                    val t_args: mut Map[String, Type] = t_arg_names |> values()
+                        |> zip(i.third |> values(), |n, t| Pair(n, t))
+                        |> Map::collect()
+                    val body_s: String = expand_external_body(
+                        body, args, t_args, s.context, g
+                    )
+                    return "function _(_) {\n" |> fmt(mangled, arg_names)
+                        |> concat(body_s)
+                        |> concat("}\n\n")
+                }
+                _ { return "" }
+            } }
+        ) |> join("")
+    ) |> join("")
+
+// Emits a singular global variable and all of its dependencies.
+fun emit_global_init(
+    path: List[String], 
+    queued: mut Set[List[String]],
+    emitted: mut Set[List[String]], 
+    g: mut Generator,
+    out: mut StringBuilder
+) {
+    val instance: Triplet[TypedNode, Int, List[Type]] 
+        = find_instance_with(path, List::empty(), g.table)
+    match instance.first.value {
+        GlobalVariable(ast::GlobalVariable(
+            _, _, _, _, value, var_deps
+        )) {
+            if emitted |> has(path) { return unit }
+            if queued |> has(path) {
+                g.messages |> push(Message::cyclic_global_variables(
+                    path, instance.first.source
+                ))
+                return unit
+            }
+            queued |> add(path)
+            var_deps |> values() |> for_each(|dep| {
+                emit_global_init(dep, queued, emitted, g, out)
+            })
+            val gen = Generator::in_context_of(g)
+            val dest: String = mangle_path(path, instance.second)
+            val v: String = gen |> emit_expression(value)
+            gen |> in_body("const _ = _;\n\n" |> fmt(dest, v))
+            out |> push(gen.body |> as_string())
+            emitted |> add(path)
+        }
+        _ {
+            return panic("called 'emit_global_init' on non-global path")
+        }
+    }
+}
+
+// Emits a function with the given name that initializes all global variables 
+// in the given table.
+pub fun emit_global_inits(g: mut Generator) -> String {
+    val content = StringBuilder::empty()
+    val queued: mut Set[List[String]] = Set::empty()
+    val emitted: mut Set[List[String]] = Set::empty()
+    g.table.symbols |> values() |> for_each(
+        |s| s.instances |> values() |> for_each(
+            |i| { match i.first.value {
+                GlobalVariable(ast::GlobalVariable(path, _, _, _, _, _)) {
+                    emit_global_init(path, queued, emitted, g, content)
+                }
+                _ {}
+            } }
+        )
+    )
+    return content |> as_string()
+}
+
+// Stores the state and context required for the emission of a single function.
+pub struct Generator(
+    body: mut StringBuilder,
+    locals: mut Map[String, String],
+    table: SymbolTable,
+    next_local_id: mut Box[Int],
+    messages: mut List[Message]
+)
+
+// Creates a new generator state from scratch.
+pub fun Generator::new(table: SymbolTable, messages: mut List[Message]) -> mut Generator
+    = Generator(
+        StringBuilder::empty(),
+        Map::empty(), 
+        table,
+        Box(0),
+        messages
+    )
+
+// Creates a new generator in a new function in the same module context 
+// as the given generator. Symbols and local variable indices are shared 
+// with the parent scope.
+pub fun Generator::in_context_of(existing: Generator) -> mut Generator
+    = Generator(
+        StringBuilder::empty(),
+        Map::empty(),
+        existing.table,
+        existing.next_local_id,
+        existing.messages
+    )
+
+// Creates a new generator in a new variable scope inside the scope of the
+// given existing generator.
+// Symbols and indices are shared with the parent scope.
+pub fun Generator::in_function_under(existing: Generator) -> mut Generator
+    = Generator(
+        StringBuilder::empty(),
+        existing.locals |> clone(),
+        existing.table,
+        existing.next_local_id,
+        existing.messages
+    )
+
+// Creates a new generator in a new variable scope inside the scope of the
+// given existing generator.
+// Symbols, indices and the output buffer are shared with the parent scope.
+pub fun Generator::in_scope_under(existing: Generator) -> mut Generator
+    = Generator(
+        existing.body,
+        existing.locals |> clone(),
+        existing.table,
+        existing.next_local_id,
+        existing.messages
+    )
+
+// Inserts the given text in the body section of the generator scope.
+// The body section is used to execute code.
+pub fun Generator::in_body(self: mut Generator, s: String) {
+    self.body |> push(s)
+}
+
+// Allocates a new local variable with the given type in the generator scope
+// and only returns the name.
+pub fun Generator::alloc(self: mut Generator) -> String {
+    val id: Int = self.next_local_id.value
+    val name: String = "local" |> concat(id |> as_string())
+    self.next_local_id.value = id + 1
+    return name
+}
+
+// Emits the given expression after the given pattern path.
+pub fun emit_pattern_path(from: String, path: List[ast::PatternLoc]) -> String {
+    if (path |> length()) == 0 { return from }
+    match path |> at(0) {
+        StructMember(Pair(member, _)) {
+            return "(_).m__"
+                |> fmt(from, "_", member)
+                |> emit_pattern_path(path |> slice_from(1))
+        }
+        EnumMember(_) {
+            return "(_).value"
+                |> fmt(from)
+                |> emit_pattern_path(path |> slice_from(1))
+        }
+    }
+}
+
+// Emits a local statement as the equivalent JS code.
+pub fun emit_statement(gen: mut Generator, node: TypedNode) {
+    match node.value {
+        LocalVariable(ast::LocalVariable(name, _, _, _, value)) {
+            val allocated: String = gen |> alloc()
+            val value_s: String = gen |> emit_expression(value)
+            gen |> in_body("let _ = _;\n" |> fmt(allocated, value_s))
+            gen.locals |> set(name, allocated)
+        }
+        Assignment(Pair(dest, value)) {
+            val dest_s: String = gen |> emit_expression(dest)
+            val value_s: String = gen |> emit_expression(value)
+            gen |> in_body("_ = _;\n" |> fmt(dest_s, value_s))
+        }
+        Return(value) {
+            val value_s: String = gen |> emit_expression(value)
+            gen |> in_body("return _;\n" |> fmt(value_s))
+        }
+        Continue {
+            gen |> in_body("continue;\n")
+        }
+        Break {
+            gen |> in_body("break;\n")
+        }
+        If(ast::If(cond, if_body, else_body)) {
+            gen |> in_body("if(")
+            gen |> in_body(gen |> emit_expression(cond))
+            gen |> in_body(") {\n")
+            gen |> emit_statement_list(if_body)
+            gen |> in_body("} else {\n")
+            gen |> emit_statement_list(else_body)
+            gen |> in_body("}\n")
+        }
+        While(ast::While(cond, body)) {
+            gen |> in_body("while(")
+            gen |> emit_expression(cond)
+            gen |> in_body(") {\n")
+            gen |> emit_statement_list(body)
+            gen |> in_body("}\n")
+        }
+        For(ast::For(name, _, in, body)) {
+            val get_opt_tag_i: Fun(String) -> Int = |tag_name| {
+                val s: Symbol = gen.table.symbols 
+                    |> get(List::of("std", "Option"))
+                    |> expect("'std::Option' must exist!")
+                match s.node.value {
+                    Enumeration(ast::CustomType(_, _, _, tags)) {
+                        return tags 
+                            |> indices()
+                            |> find(|i| (tags |> at(i)).first == tag_name)
+                            |> expect("tag on 'std::Option' must exist")
+                    }
+                    _ { return panic("'std::Option' must be an enum!") }
+                }
+            }
+            val opt_some_i: String = get_opt_tag_i("Some") |> as_string()
+            val iter: String = gen |> alloc()
+            val iter_v: String = gen |> emit_expression(in)
+            gen |> in_body("const _ = _;\n" |> fmt(iter, iter_v))
+            gen |> in_body("for(;;) {\n")
+            val next: String = gen |> alloc()
+            val next_v: String = iter |> concat(".m_next()")
+            gen |> in_body("const _ = _;\n" |> fmt(next, next_v))
+            gen |> in_body("if(")
+            gen |> in_body("_.tag !== _" |> fmt(next, opt_some_i))
+            gen |> in_body(") { break; }\n")
+            val value: String = gen |> alloc()
+            gen |> in_body("const _ = _.value;\n" |> fmt(value, next))
+            gen.locals |> set(name, value)
+            gen |> emit_statement_list(body)
+            gen |> in_body("}\n")
+        }
+        Match(ast::Match(matched_value, branches)) {
+            val matched: String = gen |> alloc()
+            val matched_v: String = gen |> emit_expression(matched_value)
+            gen |> in_body("const _ = _;\n" |> fmt(matched, matched_v))
+            val chosen_branch: String = gen |> alloc()
+            gen |> in_body("let _;\n" |> fmt(chosen_branch))
+            val branch_captures: mut List[Map[String, String]] = List::empty()
+            branches |> indices() |> for_each(|branch_i| {
+                val branch: ast::MatchBranch[TypedNode] = branches 
+                    |> at(branch_i)
+                val capture_values: Map[String, String] = branch.captures
+                    |> entries()
+                    |> map[Pair[String, Pair[Type, Box[Bool]]], Pair[String, String]](|c| {
+                        val into: String = gen |> alloc()
+                        gen |> in_body("let _;\n" |> fmt(into))
+                        return Pair(c.first, into)
+                    })
+                    |> Map::collect()
+                branch_captures |> push(capture_values)
+            })
+            branches |> indices() |> for_each(|branch_i| {
+                val branch: ast::MatchBranch[TypedNode] = branches 
+                    |> at(branch_i)
+                val capture_values: Map[String, String] = branch_captures 
+                    |> at(branch_i)
+                mut had_pattern: Bool = false
+                branch.patterns |> values() |> for_each(|pattern| {
+                    val emit_cond: Fun(Pair[List[ast::PatternLoc], ast::PatternCond[TypedNode]]) -> String = |cond| {
+                        val v: String = emit_pattern_path(matched, cond.first)
+                        match cond.second {
+                            EnumVariant(Pair(name, i)) {
+                                val instance: Triplet[TypedNode, Int, List[Type]] 
+                                    = find_instance_with(i.path, i.type_args, gen.table)
+                                val enum_members: Fun() -> List[Pair[String, TypedNode]] = || {
+                                    match instance.first.value {
+                                        Enumeration(ast::CustomType(
+                                            _, _, _, mems
+                                        )) { return mems }
+                                        _ { return List::empty() }
+                                    }
+                                }
+                                val members = enum_members()
+                                val member_i: String 
+                                    = members |> indices()
+                                    |> find(|i| (members |> at(i)).first == name)
+                                    |> map(Int::as_string)
+                                    |> unwrap_or("INVALID")
+                                return "_.tag === _" |> fmt(v, member_i)
+                            }
+                            Value(Pair(eq_i, value)) {
+                                val eq_instance: Triplet[TypedNode, Int, List[Type]] 
+                                    = find_instance_with(eq_i.path, eq_i.type_args, gen.table)
+                                val eq_name: String = mangle_path(eq_i.path, eq_instance.second)
+                                val v_cmp: String = gen |> emit_expression(value)
+                                return "_(_, _)" |> fmt(eq_name, v, v_cmp)
+                            }
+                        }
+                    }
+                    if had_pattern { gen |> in_body(" else ") }
+                    had_pattern = true
+                    gen |> in_body("if(")
+                    val conds: String = pattern.conditions
+                        |> values()
+                        |> map(emit_cond)
+                        |> join("&&")
+                    gen |> in_body(
+                        if (conds |> length()) >= 1 { conds } else { "true" }
+                    )
+                    gen |> in_body(") {\n")
+                    pattern.captures |> values() |> for_each(|capture| {
+                        if capture.name |> is_none() { return unit }
+                        val name: String = capture.name 
+                            |> expect("filtered out above")
+                        val dest: String = capture_values 
+                            |> get(name)
+                            |> expect("capture exists within branch captures")
+                        val v: String = emit_pattern_path(matched, capture.path)
+                        gen |> in_body("_ = _;\n" |> fmt(dest, v))
+                    })
+                    gen |> in_body("_ = _;\n" |> fmt(
+                        chosen_branch, branch_i |> as_string()
+                    ))
+                    gen |> in_body("}")
+                })
+            })
+            gen |> in_body("\n")
+            mut had_branch = false
+            branches |> indices() |> for_each(|branch_i| {
+                val branch: ast::MatchBranch[TypedNode] = branches 
+                    |> at(branch_i)
+                val capture_values: Map[String, String] = branch_captures 
+                    |> at(branch_i)
+                if had_branch { gen |> in_body(" else ") }
+                had_branch = true
+                gen |> in_body("if(")
+                gen |> in_body(
+                    "_ === _" |> fmt(chosen_branch, branch_i |> as_string())
+                )
+                gen |> in_body(") {\n")
+                val body_gen = Generator::in_scope_under(gen)
+                branch.captures |> entries() |> for_each(|c| {
+                    val value: String = capture_values |> get(c.first)
+                        |> expect("originates from branch capture map")
+                    body_gen.locals |> set(c.first, value)
+                })
+                body_gen |> emit_statement_list(branch.body)
+                gen |> in_body("}")
+            })
+            gen |> in_body("\n")
+        }
+        Invalid { 
+            println("encountered invalid AST node!")
+            gen |> in_body("INVALID;\n")
+        }
+        _ {
+            gen |> in_body(gen |> emit_expression(node))
+            gen |> in_body("\n")
+        }
+    }
+}
+
+// Emits the entire given statement list as the equivalent JS code, NOT including
+// opening and closing braces.
+pub fun emit_statement_list(parent: mut Generator, nodes: List[TypedNode]) {
+    val gen: mut Generator = Generator::in_scope_under(parent)
+    return nodes |> values() |> for_each(|n| gen |> emit_statement(n))
+}
+
+// Escapes the given string content to a JS string literal's content.
+pub fun escape_string_literal(content: String) -> String
+    = content
+    |> chars()
+    |> map[String, String](|c| {
+        match c {
+            "\\" { return "\\\\" }
+            "\"" { return "\\\"" }
+            "\b" { return "\\b" }
+            "\f" { return "\\f" }
+            "\n" { return "\\n" }
+            "\r" { return "\\r" }
+            "\t" { return "\\t" }
+            _ { return c }
+        }
+    })
+    |> join("")
+
+// Emits the equivalent lowered JS code for the given expression.
+pub fun emit_expression(gen: mut Generator, node: TypedNode) -> String {
+    match node.value {
+        PathRef(ast::PathRef(path, o_t_args)) {
+            val t_args: List[Type] = o_t_args
+                |> unwrap_or(List::empty())
+                |> values()
+                |> map[TypedNode, Type](|t| t.type)
+                |> List::collect()
+            val i: Triplet[TypedNode, Int, List[Type]] 
+                = find_instance_with(path, t_args, gen.table)
+            return mangle_path(path, i.second)
+        }
+        VariableRef(name) {
+            return gen.locals |> get(name) 
+                |> expect("checker produced reference to unknown variable")
+        }
+        Member(Pair(accessed, name)) {
+            val accessed_s: String = gen |> emit_expression(accessed)
+            return "(_).m__" |> fmt(accessed_s, "_", name)
+        }
+        Int(i) { return i |> as_string() |> concat("n") }
+        Float(f) { return f |> as_string() }
+        Bool(b) { return if b { "true" } else { "false" } }
+        Unit { return "undefined" }
+        String(content) {
+            return "\"" 
+                |> concat(escape_string_literal(content)) 
+                |> concat("\"")
+        }
+        Closure(ast::Closure(args, _, _, body)) {
+            val body_gen = Generator::in_function_under(gen)
+            val arg_names: String = args |> indices()
+                |> map[Int, String](|i| {
+                    val name: String = args |> at(i)
+                    val allocated: String = gen |> alloc()
+                    body_gen.locals |> set(name, allocated)
+                    return allocated
+                })
+                |> join(", ")
+            body_gen |> emit_statement_list(body) 
+            return "(_) => {\n_}" 
+                |> fmt(arg_names, body_gen.body |> as_string())
+        }
+        Call(ast::Invocation(invoked, args)) {
+            val invoked_s: String = gen |> emit_expression(invoked)
+            val args_s: String = args
+                |> values()
+                |> map[TypedNode, String](|n| gen |> emit_expression(n))
+                |> join(", ")
+            return "(_)(_)" |> fmt(invoked_s, args_s)
+        }
+        NamedCall(ast::PathInvocation(path, args, t_n_args)) {
+            val t_args: List[Type] = t_n_args
+                |> unwrap_or(List::empty())
+                |> values()
+                |> map[TypedNode, Type](|t| t.type)
+                |> List::collect()
+            val instance: Triplet[TypedNode, Int, List[Type]] 
+                = find_instance_with(path, t_args, gen.table)
+            val called: String 
+                = mangle_path(path, instance.second)
+            val args_s: String = args
+                |> values()
+                |> map[TypedNode, String](|n| gen |> emit_expression(n))
+                |> join(", ")
+            return "_(_)" |> fmt(called, args_s)
+        }
+        StructInit(ast::PathInvocation(path, args, t_n_args)) {
+            val t_args: List[Type] = t_n_args
+                |> unwrap_or(List::empty())
+                |> values()
+                |> map[TypedNode, Type](|t| t.type)
+                |> List::collect()
+            val instance: Triplet[TypedNode, Int, List[Type]] 
+                = find_instance_with(path, t_args, gen.table)
+            val get_members: Fun() -> List[String] = || { match instance.first.value {
+                Structure(ast::CustomType(_, _, _, mems)) {
+                    return mems |> values() 
+                        |> map[Pair[String, TypedNode], String](|m| m.first)
+                        |> List::collect()
+                }
+                _ { return panic("initialized non-struct with 'StructInit'") }
+            } }
+            val members: List[String] = get_members()
+            val member_vals: String = args |> indices()
+                |> map[Int, String](|i| {
+                    val name: String = members |> at(i)
+                    val value: String = gen |> emit_expression(args |> at(i))
+                    return "m__: _" |> fmt("_", name, value)
+                })
+                |> join(", ")
+            return "{" |> concat(member_vals) |> concat("}")
+        }
+        EnumInit(ast::PathInvocation(inv_path, args, t_n_args)) {
+            val path = inv_path |> slice_to(-1)
+            val name = inv_path |> at(-1)
+            val t_args: List[Type] = t_n_args
+                |> unwrap_or(List::empty())
+                |> values()
+                |> map[TypedNode, Type](|t| t.type)
+                |> List::collect()
+            val instance: Triplet[TypedNode, Int, List[Type]] 
+                = find_instance_with(path, t_args, gen.table)
+            val get_members: Fun() -> List[String] = || { match instance.first.value {
+                Enumeration(ast::CustomType(_, _, _, mems)) {
+                    return mems |> values() 
+                        |> map[Pair[String, TypedNode], String](|m| m.first)
+                        |> List::collect()
+                }
+                _ { return panic("initialized non-enum with 'EnumInit'") }
+            } }
+            val member_names: List[String] = get_members()
+            val member_i: String = member_names
+                |> indices()
+                |> find(|i| (member_names |> at(i)) == name)
+                |> expect("creation of unknown enum member")
+                |> Int::as_string()
+            val value: String = gen |> emit_expression(args |> at(0))
+            return "{ tag: _, value: _ }" |> fmt(member_i, value)
+        }
+        IfExpr(ast::IfExpr(cond, if_val, else_val)) {
+            return "(_? _ : _)" |> fmt(
+                gen |> emit_expression(cond),
+                gen |> emit_expression(if_val),
+                gen |> emit_expression(else_val)
+            )
+        }
+        _ {
+            "encountered invalid AST node! ("
+                |> concat(node |> as_string())
+                |> concat(")")
+                |> println()
+            return "INVALID"
+        }
+    }
+}
+
+pub val HEADER: String = "
+// JS code generated from Quill source code by the Quill compiler
+// https://github.com/quill-project
+
+"
+
+// Emits all symbols defined by the given symbol table as a complete JS file.
+pub fun emit(
+    table: SymbolTable, main: List[String], messages: mut List[Message]
+) -> String {
+    val main_call: String = get_main_instance(table, main, messages)
+        |> map[Int, String](|id| mangle_path(main, id) |> concat("();\n"))
+        |> unwrap_or("")
+    val g = Generator::new(table, messages)
+    val func_decls: String = emit_func_implementations(g)
+    val global_inits: String = emit_global_inits(g)
+    return HEADER
+        |> concat(func_decls)
+        |> concat(global_inits)
+        |> concat(main_call)
+}
