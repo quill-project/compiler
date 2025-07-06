@@ -3,6 +3,22 @@ mod quill::codegen::pragma
 
 use quill::*
 
+fun find_closing_paren(input: String, start: Int) -> Int {
+    mut i = start
+    mut depth = 0
+    Sequence::new[String](|| input |> get(i))
+        |> take_until(|c| depth == 1 && c == ")")
+        |> for_each(|c| {
+            if c == "(" { depth = depth + 1 }
+            if c == ")" { depth = depth - 1 }
+            i = i + 1
+        })
+    if i >= (input |> length()) {
+        return panic("Unclosed pragma in external function body")
+    }
+    return i
+}
+
 // Given an input string and the name of the pragma to expand,
 // this function expands all usages of the given pragma using the given
 // function.
@@ -12,11 +28,10 @@ pub fun expand_all(input: String, pragma_name: String, f: Fun(String) -> String)
     val repl: String 
         = Sequence::new[Int](|| rem |> find(start) |> next())
         |> fold("", |repl, i| {
-            val at: String = rem |> slice_from(i + (start |> length()))
-            val closing: Int = at |> find(")") |> next() 
-                |> expect("Unclosed pragma in external function body")
+            val at: String = rem |> slice_from(i)
+            val closing: Int = find_closing_paren(at, 0)
             val before: String = rem |> slice_to(i)
-            val inner: String = at |> slice_to(closing)
+            val inner: String = at |> slice(start |> length(), closing)
             rem = at |> slice_from(closing + 1)
             return repl |> concat(before) |> concat(f(inner))
         })
