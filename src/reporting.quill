@@ -162,7 +162,7 @@ pub fun Message::Section::display(
                 |> join("")
             return header 
                 |> concat(code)
-                |> concat(RESET_STYLE)
+                |> concat(if use_color { RESET_STYLE } else { "" })
         }
     }
 }
