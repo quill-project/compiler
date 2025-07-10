@@ -282,7 +282,7 @@ pub fun emit_statement(gen: mut Generator, node: TypedNode) {
         }
         While(ast::While(cond, body)) {
             gen |> in_body("while(")
-            gen |> emit_expression(cond)
+            gen |> in_body(gen |> emit_expression(cond))
             gen |> in_body(") {\n")
             gen |> emit_statement_list(body)
             gen |> in_body("}\n")
