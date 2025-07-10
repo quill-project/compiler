@@ -51,7 +51,7 @@ pub fun parse_hex_number(number: String) -> Option[Int] = number
     ))
 
 // Maps Quill keywords to their respective keyword token types.
-pub val keywords: Map[String, TokenType] = Map::of(
+pub val KEYWORDS: Map[String, TokenType] = Map::of(
     Pair("if", TokenType::KeywordIf),
     Pair("else", TokenType::KeywordElse),
     Pair("ext", TokenType::KeywordExt),
@@ -173,7 +173,7 @@ pub fun tokenize_all(
         }
         if is_alphanumeric(current.first) {
             advance_while(is_alphanumeric)
-            return keywords |> get(collected) 
+            return KEYWORDS |> get(collected) 
                 |> unwrap_or(TokenType::Identifier) 
                 |> build_token()
         }

@@ -49,13 +49,13 @@ pub fun Parser::expect(
 
 
 // Maps unary operators to their respective operator precedence
-pub val unary_operator_prec: Map[TokenType, Int] = Map::of(
+pub val UNARY_OPERATOR_PREC: Map[TokenType, Int] = Map::of(
     Pair(TokenType::Minus,            2),
     Pair(TokenType::ExclamationMark,  2)
 )
 
 // Maps binary operators to their respective operator precedence
-pub val binary_operator_prec: Map[TokenType, Int] = Map::of(
+pub val BINARY_OPERATOR_PREC: Map[TokenType, Int] = Map::of(
     Pair(TokenType::ParenOpen,        1),
     Pair(TokenType::Dot,              1),
     Pair(TokenType::Asterisk,         3),
@@ -262,7 +262,7 @@ pub fun parse_value(s: mut Parser) -> UntypedNode {
     }
     val op: Token = s.current
     mut prec: Int = 0
-    match unary_operator_prec |> get(op.type) {
+    match UNARY_OPERATOR_PREC |> get(op.type) {
         Some(p) { prec = p }
         None {
             s.messages |> push(
@@ -286,7 +286,7 @@ pub fun parse_value(s: mut Parser) -> UntypedNode {
 // Parses an expression, including literals, unary operators and binary operators,
 // e.g. '5 + 5', 'true', '!(3 < 4)'
 pub fun parse_expression(s: mut Parser, parent_prec: Int) -> UntypedNode
-    = Sequence::new[Int](|| binary_operator_prec |> get(s.current.type))
+    = Sequence::new[Int](|| BINARY_OPERATOR_PREC |> get(s.current.type))
     |> take_until(|curr_prec| curr_prec >= parent_prec || s.broken)
     |> fold(parse_value(s), |lhs, curr_prec| {
         if s.broken { return make_inv(s) }
