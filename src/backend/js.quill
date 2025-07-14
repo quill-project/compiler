@@ -379,15 +379,16 @@ pub fun emit_statement(gen: mut Generator, node: TypedNode) {
                     }
                     if had_pattern { gen |> in_body(" else ") }
                     had_pattern = true
-                    gen |> in_body("if(")
-                    val conds: String = pattern.conditions
-                        |> values()
-                        |> map(emit_cond)
-                        |> join("&&")
-                    gen |> in_body(
-                        if (conds |> length()) >= 1 { conds } else { "true" }
-                    )
-                    gen |> in_body(") {\n")
+                    if !(pattern.conditions |> is_empty()) {
+                        gen |> in_body("if((")
+                        val conds: String = pattern.conditions
+                            |> values()
+                            |> map(emit_cond)
+                            |> join(") && (")
+                        gen |> in_body(conds)
+                        gen |> in_body(")) ")
+                    }
+                    gen |> in_body("{\n")
                     pattern.captures |> values() |> for_each(|capture| {
                         if capture.name |> is_none() { return unit }
                         val name: String = capture.name 
@@ -606,6 +607,8 @@ pub fun emit_expression(gen: mut Generator, node: TypedNode) -> String {
 pub val HEADER: String = "
 // JS code generated from Quill source code by the Quill compiler
 // https://github.com/quill-project
+
+'use strict';
 
 "
 
