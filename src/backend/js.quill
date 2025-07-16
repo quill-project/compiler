@@ -221,11 +221,10 @@ pub fun Generator::in_body(self: mut Generator, s: String) {
     self.body |> push(s)
 }
 
-// Allocates a new local variable with the given type in the generator scope
-// and only returns the name.
+// Allocates a new local variable in the generator scope and returns its name.
 pub fun Generator::alloc(self: mut Generator) -> String {
     val id: Int = self.next_local_id.value
-    val name: String = "local" |> concat(id |> as_string())
+    val name: String = "l" |> concat(id |> as_string())
     self.next_local_id.value = id + 1
     return name
 }
@@ -272,8 +271,9 @@ pub fun emit_statement(gen: mut Generator, node: TypedNode) {
             gen |> in_body("break;\n")
         }
         If(ast::If(cond, if_body, else_body)) {
+            val cond_s: String = gen |> emit_expression(cond)
             gen |> in_body("if(")
-            gen |> in_body(gen |> emit_expression(cond))
+            gen |> in_body(cond_s)
             gen |> in_body(") {\n")
             gen |> emit_statement_list(if_body)
             gen |> in_body("} else {\n")
@@ -281,9 +281,11 @@ pub fun emit_statement(gen: mut Generator, node: TypedNode) {
             gen |> in_body("}\n")
         }
         While(ast::While(cond, body)) {
-            gen |> in_body("while(")
-            gen |> in_body(gen |> emit_expression(cond))
-            gen |> in_body(") {\n")
+            gen |> in_body("for(;;) {\n")
+            val cond_s: String = gen |> emit_expression(cond)
+            gen |> in_body("if(!(")
+            gen |> in_body(cond_s)
+            gen |> in_body(")) { break; }\n")
             gen |> emit_statement_list(body)
             gen |> in_body("}\n")
         }
@@ -324,7 +326,7 @@ pub fun emit_statement(gen: mut Generator, node: TypedNode) {
             val matched_v: String = gen |> emit_expression(matched_value)
             gen |> in_body("const _ = _;\n" |> fmt(matched, matched_v))
             val chosen_branch: String = gen |> alloc()
-            gen |> in_body("let _;\n" |> fmt(chosen_branch))
+            gen |> in_body("let _ = undefined;\n" |> fmt(chosen_branch))
             val branch_captures: mut List[Map[String, String]] = List::empty()
             branches |> indices() |> for_each(|branch_i| {
                 val branch: ast::MatchBranch[TypedNode] = branches 
@@ -339,14 +341,13 @@ pub fun emit_statement(gen: mut Generator, node: TypedNode) {
                     |> Map::collect()
                 branch_captures |> push(capture_values)
             })
-            mut had_pattern: Bool = false
             branches |> indices() |> for_each(|branch_i| {
                 val branch: ast::MatchBranch[TypedNode] = branches 
                     |> at(branch_i)
                 val capture_values: Map[String, String] = branch_captures 
                     |> at(branch_i)
                 branch.patterns |> values() |> for_each(|pattern| {
-                    val emit_cond: Fun(Pair[List[ast::PatternLoc], ast::PatternCond[TypedNode]]) -> String = |cond| {
+                    val emit_cond_expr: Fun(Pair[List[ast::PatternLoc], ast::PatternCond[TypedNode]]) -> String = |cond| {
                         val v: String = emit_pattern_path(matched, cond.first)
                         match cond.second {
                             EnumVariant(Pair(name, i)) {
@@ -372,23 +373,32 @@ pub fun emit_statement(gen: mut Generator, node: TypedNode) {
                                 val eq_instance: Triplet[TypedNode, Int, List[Type]] 
                                     = find_instance_with(eq_i.path, eq_i.type_args, gen.table)
                                 val eq_name: String = mangle_path(eq_i.path, eq_instance.second)
-                                val v_cmp: String = gen |> emit_expression(value)
+                                val v_cmp: String = gen |> alloc_emit_expression(value)
                                 return "_(_, _)" |> fmt(eq_name, v, v_cmp)
                             }
                         }
                     }
-                    if had_pattern { gen |> in_body(" else ") }
-                    had_pattern = true
-                    if !(pattern.conditions |> is_empty()) {
-                        gen |> in_body("if((")
-                        val conds: String = pattern.conditions
-                            |> values()
-                            |> map(emit_cond)
-                            |> join(") && (")
-                        gen |> in_body(conds)
-                        gen |> in_body(")) ")
+                    val emit_cond: Fun(Pair[List[ast::PatternLoc], ast::PatternCond[TypedNode]]) -> String = |cond| {
+                        val f: String = gen |> alloc()
+                        gen |> in_body("const ")
+                        gen |> in_body(f)
+                        gen |> in_body(" = () => {\n")
+                        val cond_expr: String = emit_cond_expr(cond)
+                        gen |> in_body("return ")
+                        gen |> in_body(cond_expr)
+                        gen |> in_body(";\n")
+                        gen |> in_body("};\n")
+                        return " && " |> concat(f) |> concat("()")
                     }
-                    gen |> in_body("{\n")
+                    val conds: String = pattern.conditions
+                        |> values()
+                        |> map(emit_cond)
+                        |> join("")
+                    gen |> in_body("if(")
+                    gen |> in_body(chosen_branch)
+                    gen |> in_body(" === undefined")
+                    gen |> in_body(conds)
+                    gen |> in_body(") {\n")
                     pattern.captures |> values() |> for_each(|capture| {
                         if capture.name |> is_none() { return unit }
                         val name: String = capture.name 
@@ -402,10 +412,9 @@ pub fun emit_statement(gen: mut Generator, node: TypedNode) {
                     gen |> in_body("_ = _;\n" |> fmt(
                         chosen_branch, branch_i |> as_string()
                     ))
-                    gen |> in_body("}")
+                    gen |> in_body("}\n")
                 })
             })
-            gen |> in_body("\n")
             mut had_branch = false
             branches |> indices() |> for_each(|branch_i| {
                 val branch: ast::MatchBranch[TypedNode] = branches 
@@ -466,6 +475,20 @@ pub fun escape_string_literal(content: String) -> String
     })
     |> join("")
 
+// Emits the equivalent lowered JS code for the given expression and assigns
+// the result to a new local variable. The name of the new local variable is
+// returned.
+pub fun alloc_emit_expression(gen: mut Generator, node: TypedNode) -> String {
+    val value: String = gen |> emit_expression(node)
+    val dest: String = gen |> alloc()
+    gen |> in_body("const ")
+    gen |> in_body(dest)
+    gen |> in_body(" = ")
+    gen |> in_body(value)
+    gen |> in_body(";\n")
+    return dest
+}
+
 // Emits the equivalent lowered JS code for the given expression.
 pub fun emit_expression(gen: mut Generator, node: TypedNode) -> String {
     match node.value {
@@ -484,8 +507,8 @@ pub fun emit_expression(gen: mut Generator, node: TypedNode) -> String {
                 |> expect("checker produced reference to unknown variable")
         }
         Member(Pair(accessed, name)) {
-            val accessed_s: String = gen |> emit_expression(accessed)
-            return "(_).m__" |> fmt(accessed_s, "_", name)
+            val accessed_s: String = gen |> alloc_emit_expression(accessed)
+            return "_.m__" |> fmt(accessed_s, "_", name)
         }
         Int(i) { return i |> as_string() |> concat("n") }
         Float(f) { return f |> as_string() }
@@ -511,12 +534,12 @@ pub fun emit_expression(gen: mut Generator, node: TypedNode) -> String {
                 |> fmt(arg_names, body_gen.body |> as_string())
         }
         Call(ast::Invocation(invoked, args)) {
-            val invoked_s: String = gen |> emit_expression(invoked)
+            val invoked_s: String = gen |> alloc_emit_expression(invoked)
             val args_s: String = args
                 |> values()
-                |> map[TypedNode, String](|n| gen |> emit_expression(n))
+                |> map[TypedNode, String](|n| gen |> alloc_emit_expression(n))
                 |> join(", ")
-            return "(_)(_)" |> fmt(invoked_s, args_s)
+            return "_(_)" |> fmt(invoked_s, args_s)
         }
         NamedCall(ast::PathInvocation(path, args, t_n_args)) {
             val t_args: List[Type] = t_n_args
@@ -530,7 +553,7 @@ pub fun emit_expression(gen: mut Generator, node: TypedNode) -> String {
                 = mangle_path(path, instance.second)
             val args_s: String = args
                 |> values()
-                |> map[TypedNode, String](|n| gen |> emit_expression(n))
+                |> map[TypedNode, String](|n| gen |> alloc_emit_expression(n))
                 |> join(", ")
             return "_(_)" |> fmt(called, args_s)
         }
@@ -554,7 +577,8 @@ pub fun emit_expression(gen: mut Generator, node: TypedNode) -> String {
             val member_vals: String = args |> indices()
                 |> map[Int, String](|i| {
                     val name: String = members |> at(i)
-                    val value: String = gen |> emit_expression(args |> at(i))
+                    val value: String = gen 
+                        |> alloc_emit_expression(args |> at(i))
                     return "m__: _" |> fmt("_", name, value)
                 })
                 |> join(", ")
@@ -584,15 +608,31 @@ pub fun emit_expression(gen: mut Generator, node: TypedNode) -> String {
                 |> find(|i| (member_names |> at(i)) == name)
                 |> expect("creation of unknown enum member")
                 |> Int::as_string()
-            val value: String = gen |> emit_expression(args |> at(0))
+            val value: String = gen |> alloc_emit_expression(args |> at(0))
             return "{ tag: _, value: _ }" |> fmt(member_i, value)
         }
         IfExpr(ast::IfExpr(cond, if_val, else_val)) {
-            return "(_? _ : _)" |> fmt(
-                gen |> emit_expression(cond),
-                gen |> emit_expression(if_val),
-                gen |> emit_expression(else_val)
-            )
+            val dest: String = gen |> alloc()
+            gen |> in_body("let ")
+            gen |> in_body(dest)
+            gen |> in_body(";\n")
+            val cond_s: String = gen |> alloc_emit_expression(cond)
+            gen |> in_body("if(")
+            gen |> in_body(cond_s)
+            gen |> in_body(") {\n")
+            val if_val_s: String = gen |> alloc_emit_expression(if_val)
+            gen |> in_body(dest)
+            gen |> in_body(" = ")
+            gen |> in_body(if_val_s)
+            gen |> in_body(";\n")
+            gen |> in_body("} else { \n")
+            val else_val_s: String = gen |> alloc_emit_expression(else_val)
+            gen |> in_body(dest)
+            gen |> in_body(" = ")
+            gen |> in_body(else_val_s)
+            gen |> in_body(";\n")
+            gen |> in_body("}\n")
+            return dest
         }
         _ {
             "encountered invalid AST node! ("
