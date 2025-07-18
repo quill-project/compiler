@@ -5,9 +5,8 @@ use quill::*
 use quill::types::*
 
 // Returns a list of all instances of all symbols in the given symbol table.
-pub fun all_instances_of(table: SymbolTable) -> mut Sequence[Triplet[TypedNode, Int, List[Type]]]
-    = table.symbols 
-    |> values() 
+pub fun all_instances_of(symbols: mut Sequence[Symbol]) -> mut Sequence[Triplet[TypedNode, Int, List[Type]]]
+    = symbols
     |> map[Symbol, mut Sequence[Triplet[TypedNode, Int, List[Type]]]](
         |s| s.instances |> values()
     )
