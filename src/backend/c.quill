@@ -895,14 +895,16 @@ pub fun emit_expression(gen: mut Generator, node: TypedNode, into: String) {
             ))
         }
         Closure(ast::Closure(args, args_capt, capture_types, body)) {
+            val closure_id: Int = gen.next_closure_id.value
+            gen.next_closure_id.value = closure_id + 1
             val captures: List[String] = capture_types
                 |> keys()
                 |> List::collect()
             val capture_c: Int = captures |> length()
             // define a destructor for the needed capture count if it doesn't exist
-            if !(gen.closure_destr |> has(capture_c)) {
+            if !(gen.closure_destr |> has(closure_id)) {
                 val destr_impl_s: String = "static quill_unit_t quill_closure_"
-                    |> concat(capture_c |> as_string())
+                    |> concat(closure_id |> as_string())
                     |> concat("_destruct(quill_alloc_t *alloc) {\n")
                     |> concat("    quill_capture_t *captures")
                     |> concat(" = (quill_capture_t *) alloc->data;\n")
@@ -916,7 +918,7 @@ pub fun emit_expression(gen: mut Generator, node: TypedNode, into: String) {
                 val destr_impl = destr_impl_s 
                     |> concat(destr_impl_b) 
                     |> concat(destr_impl_e)
-                gen.closure_destr |> set(capture_c, destr_impl)
+                gen.closure_destr |> set(closure_id, destr_impl)
             }
             // generate the body for the closure
             val signature: Pair[List[Type], Type] = get_fun_signature(node.type)
@@ -928,8 +930,6 @@ pub fun emit_expression(gen: mut Generator, node: TypedNode, into: String) {
                     i |> as_string()
                 ))
                 |> join("")
-            val closure_id: Int = gen.next_closure_id.value
-            gen.next_closure_id.value = closure_id + 1
             val body_signature_s: String = "static _ __(__)" |> fmt(
                 signature.second |> emit_type(), 
                 "quill_closure_", 
@@ -1263,6 +1263,8 @@ struct TaskResult(
     func_decls: String
 )
 
+val TASK_ID_DELTA: Int = 2.0 |> powi(32) |> as_int()
+
 // Creates a sequence containing the given number of task functions to be
 // executed by separate threads. The function returns a result variable, which
 // are then combined to produce a final file.
@@ -1281,6 +1283,7 @@ pub fun create_tasks(
             val msgs: mut List[Message] = List::empty()
             val includes: mut Set[String] = Set::empty()
             val g = Generator::new(table, msgs)
+            g.next_closure_id.value = task_i * TASK_ID_DELTA
             val decls: String
                 = emit_declarations(task_symbols)
             val type_destr: String
@@ -1301,8 +1304,6 @@ pub fun create_tasks(
 pub val HEADER: String = "
 // C code generated from Quill source code by the Quill compiler
 // https://github.com/quill-project
-
-_
 
 "
 
@@ -1342,6 +1343,7 @@ pub fun combine_results(
         result |> push(i)
         result |> push("\n")
     })
+    result |> push("\n")
     val add_results: Fun(Fun(TaskResult) -> String) = |f| results
         |> values()
         |> map(f)

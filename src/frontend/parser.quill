@@ -1001,8 +1001,15 @@ pub fun parse_declaration(s: mut Parser) -> UntypedNode {
 }
 
 // Repeatedly parses declarations until the end of the file is reached.
-pub fun parse_file(s: mut Parser) -> List[UntypedNode]
-    = Stream::new[Token](|| s.current)
-    |> take_until(|t| t.type == TokenType::EndOfFile)
-    |> map[Token, UntypedNode](|_| parse_declaration(s))
-    |> List::collect()
+pub fun parse_file(s: mut Parser) -> List[UntypedNode] {
+    val contents: mut List[UntypedNode] = List::empty()
+    contents |> push(UntypedNode(
+        ast::Variant::Module(List::empty()),
+        Source(s.current.source.path, 0, 0)
+    ))
+    Stream::new[Token](|| s.current)
+        |> take_until(|t| t.type == TokenType::EndOfFile)
+        |> map[Token, UntypedNode](|_| parse_declaration(s))
+        |> for_each(|n| { contents |> push(n) })
+    return contents
+}
