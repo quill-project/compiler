@@ -738,11 +738,12 @@ pub val declaration_starters: Set[TokenType] = Set::of(
 // or a parenthesized list of even more paths
 // ('quill::token::(Token, TokenType, TokenType::is_relevant)')
 pub fun parse_usages(s: mut Parser, before: List[String]) -> Pair[List[Pair[String, List[String]]], Source] {
-    val path: mut List[String] = before |> slice_from(0)
     mut end: Source = s.current.source
+    s |> expect(TokenType::Identifier, TokenType::ParenOpen, TokenType::Asterisk)
+    if s.broken { return Pair(List::empty(), end) }
+    val path: mut List[String] = before |> slice_from(0)
     val single_result: Fun() -> Pair[List[Pair[String, List[String]]], Source]
         = || Pair(List::of(Pair(path |> at(-1), path)), end)
-    if s |> expect(TokenType::Identifier) { return single_result() }
     val ended: Bool = Stream::new[Token](|| s.current)
         |> take_until(|t| t.type != TokenType::Identifier || s.broken)
         |> map[Token, Bool](|_| {
