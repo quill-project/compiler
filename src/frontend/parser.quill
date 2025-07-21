@@ -6,10 +6,13 @@ use quill::token::(Token, TokenType)
 use quill::ast::UntypedNode
 
 pub struct Parser(
-    current: Token, 
+    seen: Option[mut List[Token]],
+    current: Token,
+    buffered: mut List[Token],
     after: mut Stream[Token],
     broken: Bool,
-    messages: mut List[Message]
+    messages: mut List[Message],
+    macros: mut Map[String, Fun(List[Token]) -> List[Token]]
 )
 
 // Creates a new parser over the given token stream, reporting messages
@@ -18,13 +21,36 @@ pub struct Parser(
 // to be included in 'tokens'.
 pub fun Parser::from(
     tokens: mut Stream[Token], messages: mut List[Message]
-) -> mut Parser
-    = Parser(tokens |> next(), tokens, false, messages)
+) -> mut Parser = Parser(
+    Option::None, 
+    tokens |> next(), 
+    List::empty(),
+    tokens, 
+    false, 
+    messages,
+    Map::of(
+        Pair("debug", |i| {
+            i |> values() 
+                |> map[Token, String](|t| t.content) 
+                |> join(" ") 
+                |> println()
+            return i
+        })
+    )
+)
 
 // Discards the 'current' token and replaces it with the next token from the
 // contained token stream.
 pub fun Parser::advance(self: mut Parser) {
-    self.current = self.after |> next()
+    match self.seen {
+        Some(s) { s |> push(self.current) }
+        None {}
+    }
+    if self.buffered |> is_empty() {
+        self.current = self.after |> next()
+    } else {
+        self.current = self.buffered |> remove(0)
+    }
 }
 
 // Asserts that the type of the 'current' token in 'self' is contained in the
@@ -43,6 +69,77 @@ pub fun Parser::expect(
         self.messages |> push(Message::unexpected_token(self.current, types))
     }
     self.broken = true
+    return true
+}
+
+
+
+// Attempts to parse a macro invocation at the current position.
+// If the invocation uses parentheses (e.g. '@derive(eq)') the macro is simply
+// invoked.
+// If the invocation does not use parentheses (e.g. '@macro') the given
+// function is used to parse the following node.
+// The function returns a boolean representing whether an invocation has been
+// parsed successfully.
+pub fun parse_macro_inv(s: mut Parser, p: Fun()) -> Bool {
+    if s.broken { return false }
+    if s.current.type != TokenType::At { return false }
+    val prev_seen: Option[mut List[Token]] = s.seen
+    s.seen = Option::None
+    s |> advance()
+    if s |> expect(TokenType::Identifier) { return false }
+    val name: Token = s.current
+    s |> advance()
+    mut args: List[Token] = List::empty()
+    if s.current.type == TokenType::ParenOpen {
+        s |> advance()
+        mut depth: Int = 0
+        args = Stream::new[Token](|| s.current)
+            |> take_until(|c| depth == 0 && c.type == TokenType::ParenClose)
+            |> map[Token, Token](|c| {
+                match c.type {
+                    ParenOpen | BraceOpen | BracketOpen { 
+                        depth = depth + 1 
+                    }
+                    ParenClose | BraceClose | BracketClose {
+                        depth = depth - 1
+                    }
+                    _ {}
+                }
+                s |> advance()
+                return c
+            })
+            |> List::collect()
+        if s |> expect(TokenType::ParenClose) { return false }
+        s |> advance()
+    } else {
+        s.seen = Option::Some(List::empty())
+        p()
+        args = s.seen
+            |> expect("seen list should not be removed by other invocations")
+            |> slice_from(0)
+    }
+    mut result: List[Token] = List::empty()
+    match s.macros |> get(name.content) {
+        Some(m) {
+            result = m(args)
+        }
+        None {
+            s.messages |> push(
+                Message::unknown_macro(name.content, name.source)
+            )
+            s.broken = true
+            return false
+        }
+    }
+    if !(result |> is_empty()) {
+        // (C) [B B B B B] ...
+        // (X) [X X X C B B B B B] ...
+        s.buffered |> insert(0, s.current)
+        s.buffered = result |> slice_from(1) |> concat(s.buffered)
+        s.current = result |> at(0)
+    }
+    s.seen = prev_seen
     return true
 }
 
@@ -147,6 +244,7 @@ pub fun parse_name_list(s: mut Parser, end: TokenType) -> Option[List[String]]
 // Parses a value, meaning either a literal or a unary operator, 
 // e.g. '5', '-10.0'
 pub fun parse_value(s: mut Parser) -> UntypedNode {
+    while s |> parse_macro_inv(|| { s |> parse_value() }) {}
     if s.broken { return make_inv(s) }
     val start: Token = s.current
     val value: String = start.content
@@ -285,8 +383,9 @@ pub fun parse_value(s: mut Parser) -> UntypedNode {
 
 // Parses an expression, including literals, unary operators and binary operators,
 // e.g. '5 + 5', 'true', '!(3 < 4)'
-pub fun parse_expression(s: mut Parser, parent_prec: Int) -> UntypedNode
-    = Sequence::new[Int](|| BINARY_OPERATOR_PREC |> get(s.current.type))
+pub fun parse_expression(s: mut Parser, parent_prec: Int) -> UntypedNode {
+    while s |> parse_macro_inv(|| { s |> parse_expression(parent_prec) }) {}
+    return Sequence::new[Int](|| BINARY_OPERATOR_PREC |> get(s.current.type))
     |> take_until(|curr_prec| curr_prec >= parent_prec || s.broken)
     |> fold(parse_value(s), |lhs, curr_prec| {
         if s.broken { return make_inv(s) }
@@ -377,10 +476,12 @@ pub fun parse_expression(s: mut Parser, parent_prec: Int) -> UntypedNode
             _ { return panic("Unhandled token type in 'parse_expression'") }
         }
     })
+}
 
 
 // Parses a type, such as a named type or a function type
 pub fun parse_type(s: mut Parser) -> UntypedNode {
+    while s |> parse_macro_inv(|| { s |> parse_type() }) {}
     if s.broken { return make_inv(s) }
     val start: Token = s.current
     if s.current.content == "Fun" {
@@ -519,6 +620,8 @@ pub fun parse_statement(s: mut Parser) -> UntypedNode {
         s.broken = s.current.type == TokenType::EndOfFile
         if s.broken { return make_inv(s) }
     }
+    while s |> parse_macro_inv(|| { s |> parse_statement() }) {}
+    if s.broken { return make_inv(s) }
     val start: Token = s.current
     match s.current.type {
         // val a = 5
@@ -812,6 +915,8 @@ pub fun parse_declaration(s: mut Parser) -> UntypedNode {
             |> for_each(|_| s |> advance())
         s.broken = false
     }
+    while s |> parse_macro_inv(|| { s |> parse_declaration() }) {}
+    if s.broken { return make_inv(s) }
     val start: Token = s.current
     mut public: Bool = s.current.type == TokenType::KeywordPub
     if public {

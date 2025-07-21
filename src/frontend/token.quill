@@ -46,6 +46,7 @@ pub enum TokenType(
     ExclamationMark,
     Dot,
     Pipe,
+    At,
 
     KeywordIf,
     KeywordElse,
@@ -118,6 +119,7 @@ pub fun TokenType::as_string(self: TokenType) -> String {
         ExclamationMark { return "'!'" }
         Dot { return "'.'" }
         Pipe { return "'|'" }
+        At { return "'@'" }
         KeywordIf { return "'if'" }
         KeywordElse { return "'else'" }
         KeywordExt { return "'ext'" }
@@ -181,24 +183,25 @@ pub fun TokenType::as_hash(self: TokenType) -> Int {
         ExclamationMark { return 36 }
         Dot { return 37 }
         Pipe { return 38 }
-        KeywordIf { return 39 }
-        KeywordElse { return 40 }
-        KeywordExt { return 41 }
-        KeywordFun { return 42 }
-        KeywordReturn { return 43 }
-        KeywordContinue { return 44 }
-        KeywordBreak { return 45 }
-        KeywordVal { return 46 }
-        KeywordMut { return 47 }
-        KeywordMod { return 48 }
-        KeywordUse { return 49 }
-        KeywordAs { return 50 }
-        KeywordPub { return 51 }
-        KeywordStruct { return 52 }
-        KeywordEnum { return 53 }
-        KeywordMatch { return 54 }
-        KeywordWhile { return 55 }
-        KeywordFor { return 56 }
+        At { return 39 }
+        KeywordIf { return 40 }
+        KeywordElse { return 41 }
+        KeywordExt { return 42 }
+        KeywordFun { return 43 }
+        KeywordReturn { return 44 }
+        KeywordContinue { return 45 }
+        KeywordBreak { return 46 }
+        KeywordVal { return 47 }
+        KeywordMut { return 48 }
+        KeywordMod { return 49 }
+        KeywordUse { return 50 }
+        KeywordAs { return 51 }
+        KeywordPub { return 52 }
+        KeywordStruct { return 53 }
+        KeywordEnum { return 54 }
+        KeywordMatch { return 55 }
+        KeywordWhile { return 56 }
+        KeywordFor { return 57 }
     }
 }
 

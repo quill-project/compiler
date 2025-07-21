@@ -159,6 +159,7 @@ pub fun tokenize_all(
             Pair("!", _) { return coll_token(TokenType::ExclamationMark, 1) }
             Pair(".", _) { return coll_token(TokenType::Dot, 1) }
             Pair("|", _) { return coll_token(TokenType::Pipe, 1) }
+            Pair("@", _) { return coll_token(TokenType::At, 1) }
             _ {}
         }
         if is_numeric(current.first) {

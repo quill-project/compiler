@@ -241,6 +241,12 @@ pub fun Message::non_call_pipe(at: Source) -> Message
         Message::Section::Code(at)
     ))
 
+pub fun Message::unknown_macro(name: String, at: Source) -> Message
+    = Message(List::of(
+        Message::Section::Error("Invocation of unknown macro '_'" |> fmt(name)),
+        Message::Section::Code(at)
+    ))
+
 // Type checking
 
 pub fun Message::duplicate_symbol(path: List[String], prev: Source, dupl: Source) -> Message 
