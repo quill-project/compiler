@@ -8,12 +8,12 @@ use quill::codegen::*
 // Turns a Quill path and instance id into a valid C symbol name.
 // This function makes sure that the same combination of path and id will always
 // result in the same, unique name.
-pub fun mangle_path(path: List[String], id: Int) -> String
+pub fun mangle_path(path: List[String], id: String) -> String
     = path |> values()
     |> map[String, String](|s| s |> replace("_", "__"))
     |> join("_")
     |> concat("_")
-    |> concat(id |> as_string())
+    |> concat(id)
 
 // Turns a Quill type into a valid C type name.
 pub fun emit_type(t: Type) -> String {
@@ -52,7 +52,7 @@ fun emit_type_members(members: List[Pair[String, TypedNode]]) -> String {
 fun emit_func_signature(
     path: List[String], id: Int, 
     args: List[Pair[String, TypedNode]], ret: Option[TypedNode],
-    source: Source
+    source: Source, dyn: Bool
 ) -> String {
     val ret_t: Type = ret
         |> map[TypedNode, Type](|r| r.type)
@@ -64,9 +64,11 @@ fun emit_func_signature(
             i |> as_string()
         ))
         |> join(", ")
-    return "static _ _(_)" |> fmt(
+    return "_ _(___)" |> fmt(
         emit_type(ret_t), 
-        mangle_path(path, id),
+        mangle_path(path, if dyn { "dyn" } else { id |> as_string() }),
+        if dyn { "quill_alloc_t *ctx" } else { "" },
+        if dyn && !(args_s |> is_empty()) { ", " } else { "" },
         args_s
     )
 }
@@ -80,27 +82,27 @@ pub fun emit_declarations(symbols: List[Symbol]) -> String
         Structure(ast::CustomType(path, _, _, members)) {
             return "typedef struct {\n_\n} _;\n\n" |> fmt(
                 emit_type_members(members),
-                mangle_path(path, i.second)
+                mangle_path(path, i.second |> as_string())
             )
         }
         Enumeration(ast::CustomType(path, _, _, members)) {
             return "typedef struct {\n_ tag;\nunion {\n_\n} value;\n} _;\n\n" |> fmt(
                 "uint32_t",
                 emit_type_members(members),
-                mangle_path(path, i.second)
+                mangle_path(path, i.second |> as_string())
             )
         }
         ast::Variant::Function(ast::Function(path, _, _, args, _, _, ret, _)) |
         ExternalFunction(ast::ExternalFunction(path, _, _, args, _, ret, _)) {
             return emit_func_signature(
-                    path, i.second, args, ret, i.first.source
+                    path, i.second, args, ret, i.first.source, false
                 ) 
                 |> concat(";\n\n")
         }
         GlobalVariable(ast::GlobalVariable(path, _, _, type, _, _)) {
             return "static _ _ = _;\n\n" |> fmt(
                 emit_type(type.type),
-                mangle_path(path, i.second),
+                mangle_path(path, i.second |> as_string()),
                 emit_default_value(type.type)
             )
         }
@@ -205,7 +207,7 @@ pub fun emit_type_destructors(symbols: List[Symbol]) -> String {
     return all_instances_of(symbols |> values())
         |> map[Triplet[TypedNode, Int, List[Type]], String](|i| { match i.first.value {
             Structure(ast::CustomType(path, _, _, members)) {
-                val p: String = mangle_path(path, i.second)
+                val p: String = mangle_path(path, i.second |> as_string())
                 val body_start: String = "_ *m = (_ *) alloc->data;\n"
                     |> fmt(p, p)
                 val body_mems: String = members 
@@ -217,7 +219,7 @@ pub fun emit_type_destructors(symbols: List[Symbol]) -> String {
                 return emit_decl(p, body_start |> concat(body_mems))
             }
             Enumeration(ast::CustomType(path, _, _, members)) {
-                val p: String = mangle_path(path, i.second)
+                val p: String = mangle_path(path, i.second |> as_string())
                 val body_start: String = "_ *m = (_ *) alloc->data;\n"
                     |> fmt(p, p)
                 val branches: String = members
@@ -325,7 +327,7 @@ pub fun expand_external_body(
             Some(inst) {
                 val inst_info: Triplet[TypedNode, Int, List[Type]] 
                     = find_instance_with(inst.path, inst.type_args, g.table)
-                return mangle_path(inst.path, inst_info.second)
+                return mangle_path(inst.path, inst_info.second |> as_string())
             }
         }
     })
@@ -337,57 +339,94 @@ pub fun expand_external_body(
 // Emits the full implementations of the given symbols.
 pub fun emit_func_implementations(
     g: mut Generator, symbols: List[Symbol], includes: mut Set[String]
-) -> String 
-    = symbols |> values() |> map[Symbol, String](
-        |s| s.instances |> values() |> map[Triplet[TypedNode, Int, List[Type]], String](
-            |i| { match i.first.value {
-                ast::Variant::Function(ast::Function(
-                    path, _, _, args, _, args_captured, ret, body
-                )) {
-                    val signature: String = emit_func_signature(
-                        path, i.second, args, ret, i.first.source
+) -> String {
+    val emit_func: Fun(Symbol, Triplet[TypedNode, Int, List[Type]]) -> String = |s, i| {
+        match i.first.value {
+            ast::Variant::Function(ast::Function(
+                path, _, _, args, _, args_captured, ret, body
+            )) {
+                val signature: String = emit_func_signature(
+                    path, i.second, args, ret, i.first.source, false
+                )
+                val ret_type: Type = ret
+                    |> map[TypedNode, Type](|t| t.type)
+                    |> unwrap_or_else(
+                        || Type(Variant::Unit, !IS_MUTABLE, i.first.source)
                     )
-                    val ret_type: Type = ret
-                        |> map[TypedNode, Type](|t| t.type)
-                        |> unwrap_or_else(
-                            || Type(Variant::Unit, !IS_MUTABLE, i.first.source)
-                        )
-                    val gen = Generator::in_context_of(g)
-                    gen |> setup_return(ret_type)
-                    args |> indices() |> for_each(|arg_i| {
-                        val arg: Pair[String, TypedNode] = args |> at(arg_i)
-                        val arg_t: Type = arg.second.type
-                        val captured: Bool = (args_captured |> at(arg_i)).value
-                        val n: String = gen 
-                            |> alloc_named(arg.first, arg_t, captured)
-                        val v: String = "param" |> concat(arg_i |> as_string())
-                        gen |> assign_to(n, arg_t, v)
-                    })
-                    gen |> emit_statement_list(body)
-                    return signature |> concat(" {\n")
-                        |> concat(gen |> output())
-                        |> concat("}\n\n")
+                val gen = Generator::in_context_of(g)
+                gen |> setup_return(ret_type)
+                args |> indices() |> for_each(|arg_i| {
+                    val arg: Pair[String, TypedNode] = args |> at(arg_i)
+                    val arg_t: Type = arg.second.type
+                    val captured: Bool = (args_captured |> at(arg_i)).value
+                    val n: String = gen 
+                        |> alloc_named(arg.first, arg_t, captured)
+                    val v: String = "param" |> concat(arg_i |> as_string())
+                    gen |> assign_to(n, arg_t, v)
+                })
+                gen |> emit_statement_list(body)
+                return signature |> concat(" {\n")
+                    |> concat(gen |> output())
+                    |> concat("}\n\n")
+            }
+            ExternalFunction(ast::ExternalFunction(
+                path, _, t_arg_names, args, _, ret, body
+            )) {
+                val signature: String = emit_func_signature(
+                    path, i.second, args, ret, i.first.source, false
+                )
+                val t_args: mut Map[String, Type] = t_arg_names |> values()
+                    |> zip(i.third |> values(), |n, t| Pair(n, t))
+                    |> Map::collect()
+                val body_s: String = expand_external_body(
+                    body, args, t_args, s.context, g, includes
+                )
+                return signature |> concat(" {")
+                    |> concat(body_s)
+                    |> concat("}\n\n")
+            }
+            _ { return "" }
+        }
+    }
+    return symbols 
+        |> values() 
+        |> map[Symbol, String](|s| {
+            val normal: String = s.instances
+                |> values()
+                |> map[Triplet[TypedNode, Int, List[Type]], String](
+                    |i| emit_func(s, i)
+                )
+                |> join("")
+            mut dyn: String = ""
+            if s.type_args |> is_empty() {
+                val i: Triplet[TypedNode, Int, List[Type]] = s.instances
+                    |> values() 
+                    |> next()
+                    |> expect("missing base instance of non-templated function")
+                match i.first.value {
+                    ast::Variant::Function(ast::Function(path, _, _, args, _, _, ret, _)) |
+                    ExternalFunction(ast::ExternalFunction(path, _, _, args, _, ret, _)) {
+                        val mp: String = mangle_path(path, i.second |> as_string())
+                        val ea: String = args 
+                            |> indices() 
+                            |> map[Int, String](|i| "param" |> concat(i |> as_string()))
+                            |> join(", ")
+                        dyn = "QUILL_DYN_EXPORT "
+                            |> concat(emit_func_signature(
+                                path, i.second, args, ret, i.first.source, true
+                            ))
+                            |> concat(" {\n")
+                            |> concat("    (void) ctx;\n")
+                            |> concat("    return _(_);\n" |> fmt(mp, ea))
+                            |> concat("}\n\n")
+                    }
+                    _ {}
                 }
-                ExternalFunction(ast::ExternalFunction(
-                    path, _, t_arg_names, args, _, ret, body
-                )) {
-                    val signature: String = emit_func_signature(
-                        path, i.second, args, ret, i.first.source
-                    )
-                    val t_args: mut Map[String, Type] = t_arg_names |> values()
-                        |> zip(i.third |> values(), |n, t| Pair(n, t))
-                        |> Map::collect()
-                    val body_s: String = expand_external_body(
-                        body, args, t_args, s.context, g, includes
-                    )
-                    return signature |> concat(" {")
-                        |> concat(body_s)
-                        |> concat("}\n\n")
-                }
-                _ { return "" }
-            } }
-        ) |> join("")
-    ) |> join("")
+            }
+            return normal |> concat(dyn)
+        }) 
+        |> join("")
+}
 
 // Emits a singular global variable and all of its dependencies.
 fun emit_global_init(
@@ -415,7 +454,7 @@ fun emit_global_init(
                 emit_global_init(dep, queued, emitted, g, out)
             })
             val gen = Generator::in_context_of(g)
-            val dest: String = mangle_path(path, instance.second)
+            val dest: String = mangle_path(path, instance.second |> as_string())
             gen |> emit_expression(value, dest)
             out |> push(gen.start |> as_string())
             out |> push(gen.body |> as_string())
@@ -608,7 +647,7 @@ pub fun emit_pattern_path(
         StructMember(Pair(member, i)) {
             val instance: Triplet[TypedNode, Int, List[Type]] 
                 = find_instance_with(i.path, i.type_args, gen.table)
-            val layout: String = mangle_path(i.path, instance.second)
+            val layout = mangle_path(i.path, instance.second |> as_string())
             return "((_ *) (_)->data)->m__"
                 |> fmt(layout, from, "_", member)
                 |> emit_pattern_path(path |> slice_from(1), gen)
@@ -616,7 +655,7 @@ pub fun emit_pattern_path(
         EnumMember(Pair(member, i)) {
             val instance: Triplet[TypedNode, Int, List[Type]] 
                 = find_instance_with(i.path, i.type_args, gen.table)
-            val layout: String = mangle_path(i.path, instance.second)
+            val layout = mangle_path(i.path, instance.second |> as_string())
             return "((_ *) (_)->data)->value.m__"
                 |> fmt(layout, from, "_", member)
                 |> emit_pattern_path(path |> slice_from(1), gen)
@@ -688,11 +727,14 @@ pub fun emit_statement(gen: mut Generator, node: TypedNode) {
                 |> expect("Attempt to use 'For' with a non-sequence")
             val seq_instance: Triplet[TypedNode, Int, List[Type]] 
                 = find_instance_with(seq_path, seq_t_args, gen.table)
-            val seq_layout: String = mangle_path(seq_path, seq_instance.second)
+            val seq_layout: String = mangle_path(
+                seq_path, seq_instance.second |> as_string()
+            )
             val opt_val_instance: Triplet[TypedNode, Int, List[Type]] 
                 = find_instance_with(opt_val_path, seq_t_args, gen.table)
-            val opt_val_layout: String 
-                = mangle_path(opt_val_path, opt_val_instance.second)
+            val opt_val_layout: String = mangle_path(
+                opt_val_path, opt_val_instance.second |> as_string()
+            )
             val get_opt_member_idx: Fun(String) -> Int = |member| { 
                 match opt_val_instance.first.value {
                     Enumeration(ast::CustomType(_, _, _, members)) {
@@ -753,7 +795,9 @@ pub fun emit_statement(gen: mut Generator, node: TypedNode) {
                             EnumVariant(Pair(name, i)) {
                                 val instance: Triplet[TypedNode, Int, List[Type]] 
                                     = find_instance_with(i.path, i.type_args, gen.table)
-                                val layout: String = mangle_path(i.path, instance.second)
+                                val layout: String = mangle_path(
+                                    i.path, instance.second |> as_string()
+                                )
                                 val enum_members: Fun() -> List[Pair[String, TypedNode]] = || {
                                     match instance.first.value {
                                         Enumeration(ast::CustomType(
@@ -774,7 +818,9 @@ pub fun emit_statement(gen: mut Generator, node: TypedNode) {
                             Value(Pair(eq_i, value)) {
                                 val eq_instance: Triplet[TypedNode, Int, List[Type]] 
                                     = find_instance_with(eq_i.path, eq_i.type_args, gen.table)
-                                val eq_name: String = mangle_path(eq_i.path, eq_instance.second)
+                                val eq_name: String = mangle_path(
+                                    eq_i.path, eq_instance.second |> as_string()
+                                )
                                 val v_cmp: String = gen |> alloc(value.type)
                                 gen |> emit_expression(value, v_cmp)
                                 return "_(_, _)"
@@ -1032,7 +1078,7 @@ pub fun emit_expression(gen: mut Generator, node: TypedNode, into: String) {
             val instance: Triplet[TypedNode, Int, List[Type]] 
                 = find_instance_with(path, t_args, gen.table)
             val called: String 
-                = mangle_path(path, instance.second)
+                = mangle_path(path, instance.second |> as_string())
             val get_uses_va: Fun() -> Bool = || { match instance.first.value {
                 Function(ast::Function(_, _, _, _, va, _, _, _)) |
                 ExternalFunction(ast::ExternalFunction(_, _, _, _, va, _, _)) {
@@ -1082,8 +1128,9 @@ pub fun emit_expression(gen: mut Generator, node: TypedNode, into: String) {
                     = find_instance_with(
                         destruct_path, List::of(va_elem_t), gen.table
                     )
-                val destruct: String 
-                    = mangle_path(destruct_path, destruct_inst.second)
+                val destruct: String = mangle_path(
+                    destruct_path, destruct_inst.second |> as_string()
+                )
                 va_args_arr = gen |> alloc(va_list_t)
                 gen |> in_body("_ = _(sizeof(_), &_);\n" |> fmt(
                     va_args_arr, "quill_malloc", "quill_list_layout_t", destruct
@@ -1139,7 +1186,9 @@ pub fun emit_expression(gen: mut Generator, node: TypedNode, into: String) {
                 }
                 _ { return panic("initialized non-struct with 'StructInit'") }
             } }
-            val layout: String = mangle_path(path, instance.second)
+            val layout: String = mangle_path(
+                path, instance.second |> as_string()
+            )
             val r: String = gen |> alloc(node.type)
             gen |> in_body("_ = _(sizeof(_), &__);\n"
                 |> fmt(r, "quill_malloc", layout, layout, "_destruct")
@@ -1174,7 +1223,9 @@ pub fun emit_expression(gen: mut Generator, node: TypedNode, into: String) {
                 }
                 _ { return panic("initialized non-enum with 'EnumInit'") }
             } }
-            val layout: String = mangle_path(path, instance.second)
+            val layout: String = mangle_path(
+                path, instance.second |> as_string()
+            )
             val r: String = gen |> alloc(node.type)
             gen |> in_body("_ = _(sizeof(_), &__);\n"
                 |> fmt(r, "quill_malloc", layout, layout, "_destruct")
@@ -1229,7 +1280,7 @@ pub fun emit_assignable(gen: mut Generator, node: TypedNode) -> String {
                 |> List::collect()
             val i: Triplet[TypedNode, Int, List[Type]] 
                 = find_instance_with(path, t_args, gen.table)
-            return mangle_path(path, i.second)
+            return mangle_path(path, i.second |> as_string())
         }
         VariableRef(name) {
             return gen.locals |> get(name) 
@@ -1242,7 +1293,7 @@ pub fun emit_assignable(gen: mut Generator, node: TypedNode) -> String {
                     gen |> emit_expression(accessed, a)
                     val i: Triplet[TypedNode, Int, List[Type]] 
                         = find_instance_with(s_path, s_t_args, gen.table)
-                    val layout: String = mangle_path(s_path, i.second)
+                    val layout = mangle_path(s_path, i.second |> as_string())
                     return "((_ *) _->data)->m_"
                         |> fmt(layout, a)
                         |> concat(name)
@@ -1307,9 +1358,18 @@ pub val HEADER: String = "
 
 "
 
+pub val DYN_MAIN_SIG: String = "QUILL_DYN_EXPORT void quill_init_dyn(quill_list_t args)"
 pub val RUNTIME_INIT: String = "quill_runtime_init_global"
+pub val RUNTIME_INIT_DYN: String = "quill_runtime_init_dyn"
 pub val GLOBALS_INIT: String = "quill_init_globals"
 pub val RUNTIME_DSTR: String = "quill_runtime_destruct_global"
+
+pub val DYN_MAIN: String = "
+_ {
+    _(args);
+    _();
+}
+"
 
 pub val MAIN: String = "
 int main(int argc, char **argv) {
@@ -1324,16 +1384,13 @@ int main(int argc, char **argv) {
 // Quill C runtime.
 pub fun combine_results(
     results: List[TaskResult], table: SymbolTable, 
-    main: List[String], messages: mut List[Message]
+    main: Option[List[String]], messages: mut List[Message]
 ) -> String {
     results |> values() |> for_each(|r| {
         r.messages |> values() |> for_each(|m| { messages |> push(m) })
     })
     val globals_gen = Generator::new(table, messages)
     val global_inits: String = emit_global_inits(globals_gen, GLOBALS_INIT)
-    val main_call: String = get_main_instance(table, main, messages)
-        |> map[Int, String](|id| mangle_path(main, id) |> concat("();"))
-        |> unwrap_or("")
     val includes: mut Sequence[String] = results |> values()
         |> map[TaskResult, mut Sequence[String]](|r| r.includes |> values())
         |> flatten()
@@ -1355,9 +1412,23 @@ pub fun combine_results(
     result |> push(globals_gen.closure_bodies |> as_string())
     add_results(|r| r.func_decls)
     result |> push(global_inits)
-    result |> push(MAIN |> fmt(
-        RUNTIME_INIT, GLOBALS_INIT, main_call, RUNTIME_DSTR
-    ))
+    match main {
+        Some(main_path) {
+            val main_call: String = get_main_instance(table, main_path, messages)
+                |> map[Int, String](
+                    |id| mangle_path(main_path, id |> as_string()) |> concat("();")
+                )
+                |> unwrap_or("")
+            result |> push(MAIN |> fmt(
+                RUNTIME_INIT, GLOBALS_INIT, main_call, RUNTIME_DSTR
+            ))
+        }
+        None {
+            result |> push(DYN_MAIN |> fmt(
+                DYN_MAIN_SIG, RUNTIME_INIT_DYN, GLOBALS_INIT
+            ))
+        }
+    }
     return result |> as_string()
 }
 
@@ -1370,5 +1441,5 @@ pub fun emit(
         |> next()
         |> expect("Requested one task")
     val results: List[TaskResult] = List::of(task())
-    return results |> combine_results(table, main, messages)
+    return results |> combine_results(table, Option::Some(main), messages)
 }
