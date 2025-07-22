@@ -1358,8 +1358,8 @@ pub val HEADER: String = "
 
 "
 
-pub val DYN_MAIN_SIG: String = "QUILL_DYN_EXPORT void quill_init_dyn(quill_alloc_t *ctx, quill_list_t args)"
-pub val DYN_DSTR_SIG: String = "QUILL_DYN_EXPORT void quill_dstr_dyn(quill_alloc_t *ctx)"
+pub val DYN_MAIN_SIG: String = "QUILL_DYN_EXPORT void quill_init_dyn(quill_list_t args)"
+pub val DYN_DSTR_SIG: String = "QUILL_DYN_EXPORT void quill_dstr_dyn(void)"
 pub val RUNTIME_INIT: String = "quill_runtime_init_global"
 pub val RUNTIME_INIT_DYN: String = "quill_runtime_init_dyn"
 pub val GLOBALS_INIT: String = "quill_init_globals"
@@ -1368,13 +1368,11 @@ pub val RUNTIME_DSTR_DYN: String = "quill_runtime_destruct_dyn"
 
 pub val DYN_MAIN: String = "
 _ {
-    (void) ctx;
     _(args);
     _();
 }
 
 _ {
-    (void) ctx;
     _();
 }
 "
