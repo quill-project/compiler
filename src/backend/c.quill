@@ -1025,7 +1025,7 @@ pub fun emit_expression(gen: mut Generator, node: TypedNode, into: String) {
             gen |> in_body("_.alloc = _(sizeof(_) * _, &___);\n" |> fmt(
                 into, "quill_malloc", "quill_capture_t", 
                 capture_c |> as_string(),
-                "quill_closure_", capture_c |> as_string(), "_destruct"
+                "quill_closure_", closure_id |> as_string(), "_destruct"
             ))
             captures |> indices() |> for_each(|capt_i| {
                 val dest: String = "((_ *) _.alloc->data)[_]"
@@ -1334,7 +1334,7 @@ pub fun create_tasks(
             val msgs: mut List[Message] = List::empty()
             val includes: mut Set[String] = Set::empty()
             val g = Generator::new(table, msgs)
-            g.next_closure_id.value = task_i * TASK_ID_DELTA
+            g.next_closure_id.value = (task_i + 1) * TASK_ID_DELTA
             val decls: String
                 = emit_declarations(task_symbols)
             val type_destr: String
