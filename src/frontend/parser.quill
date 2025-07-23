@@ -12,7 +12,7 @@ pub struct Parser(
     after: mut Stream[Token],
     broken: Bool,
     messages: mut List[Message],
-    macros: mut Map[String, Fun(List[Token]) -> List[Token]]
+    macros: mut Map[String, Fun(List[Token], Source) -> List[Token]]
 )
 
 // Creates a new parser over the given token stream, reporting messages
@@ -28,15 +28,7 @@ pub fun Parser::from(
     tokens, 
     false, 
     messages,
-    Map::of(
-        Pair("debug", |i| {
-            i |> values() 
-                |> map[Token, String](|t| t.content) 
-                |> join(" ") 
-                |> println()
-            return i
-        })
-    )
+    Map::empty()
 )
 
 // Discards the 'current' token and replaces it with the next token from the
@@ -122,7 +114,7 @@ pub fun parse_macro_inv(s: mut Parser, p: Fun()) -> Bool {
     mut result: List[Token] = List::empty()
     match s.macros |> get(name.content) {
         Some(m) {
-            result = m(args)
+            result = m(args, name.source)
         }
         None {
             s.messages |> push(
